@@ -10,26 +10,39 @@ import { useTheme } from '../theme/ThemeContext';
 
 const STEPS = ['About You', 'Practice', 'Availability', 'Visibility', 'Preview'];
 
-const VISIBILITY_PLANS = [
+const SUBSCRIPTION_PLANS = [
   {
-    key: 'usa',       icon: '🇺🇸', label: 'In Your Country (USA)',
-    sub: 'Profile shown to immigrants currently in the United States',
-    price: 9.99, required: true,
+    key: 'free',
+    name: 'Free',
+    price: 0,
+    icon: '🌱',
+    badge: null,
+    color: '#8B8FA8',
+    tagline: 'Get started at no cost',
+    features: ['Basic text listing', 'Appears at bottom of results', 'External contact link only'],
+    locked:   ['Profile photo', 'Verified ✓ badge', 'Priority placement', 'Message inbox', 'Booking button', 'Analytics'],
   },
   {
-    key: 'local',     icon: '📍', label: 'Local Boost',
-    sub: 'Extra visibility to patients near your clinic location',
-    price: 5.99, required: false,
+    key: 'pro',
+    name: 'Pro',
+    price: 29,
+    icon: '⭐',
+    badge: 'Most Popular',
+    color: '#5B8DEF',
+    tagline: '7-day free trial · Cancel anytime',
+    features: ['Profile photo', 'Verified ✓ badge', 'Priority placement in results', 'Direct message inbox from patients'],
+    locked:   ['Featured at top', 'Booking button', 'Analytics dashboard'],
   },
   {
-    key: 'worldwide', icon: '🌏', label: 'Worldwide — Your Country',
-    sub: 'Visible to your countrymen living in any country',
-    price: 6.99, required: false,
-  },
-  {
-    key: 'global',    icon: '🌍', label: 'Global',
-    sub: 'Your profile visible to everyone on Zabroad worldwide',
-    price: 8.99, required: false,
+    key: 'premium',
+    name: 'Premium',
+    price: 59,
+    icon: '🏆',
+    badge: 'Best Value',
+    color: '#3EC878',
+    tagline: '7-day free trial · Cancel anytime',
+    features: ['Everything in Pro', 'Featured at top of results', 'In-app booking button', 'Analytics — views & contacts', 'Priority support'],
+    locked:   [],
   },
 ];
 
@@ -93,19 +106,8 @@ export default function ListDoctorScreen({ navigation }) {
   const [responseTime, setResponseTime] = useState('');
   const [acceptsNew,   setAcceptsNew]   = useState(true);
 
-  // Step 3 — Visibility
-  const [visibilityPlans, setVisibilityPlans] = useState(['usa']);
-
-  const totalPrice = VISIBILITY_PLANS
-    .filter(p => visibilityPlans.includes(p.key))
-    .reduce((sum, p) => sum + p.price, 0);
-
-  const togglePlan = (key) => {
-    if (key === 'usa') return;
-    setVisibilityPlans(prev =>
-      prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
-    );
-  };
+  // Step 3 — Subscription plan
+  const [selectedPlan, setSelectedPlan] = useState('pro');
 
   const [step, setStep] = useState(0);
   const [submitted, setSubmitted] = useState(false);
@@ -152,6 +154,13 @@ export default function ListDoctorScreen({ navigation }) {
               <Text style={s.previewRow}>🏥 {clinic} · {location}</Text>
               <Text style={s.previewRow}>🩺 {specialties.slice(0, 2).join(' · ')}</Text>
               <Text style={s.previewRow}>🗣 {languages.slice(0, 3).join(' · ')}</Text>
+              {(() => { const p = SUBSCRIPTION_PLANS.find(pl => pl.key === selectedPlan); return p ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: C.border }}>
+                  <Text style={{ fontSize: 13 }}>{p.icon}</Text>
+                  <Text style={{ fontSize: 12, color: p.color, fontWeight: '700' }}>{p.name} Plan</Text>
+                  <Text style={{ fontSize: 12, color: C.c35 }}>· {p.price === 0 ? 'Free' : `$${p.price}/mo`}</Text>
+                </View>
+              ) : null; })()}
             </View>
             <TouchableOpacity style={[s.doneBtn, { backgroundColor: C.teal }]} onPress={() => navigation.goBack()}>
               <Text style={s.doneBtnTxt}>Done ✓</Text>
@@ -328,57 +337,74 @@ export default function ListDoctorScreen({ navigation }) {
             </View>
           )}
 
-          {/* ── STEP 3: Visibility & Pricing ─────────────────── */}
+          {/* ── STEP 3: Choose Plan ───────────────────────────── */}
           {step === 3 && (
             <View style={{ gap: 0 }}>
-              <Text style={s.stepTitle}>Visibility & Pricing</Text>
-              <Text style={s.stepSub}>Choose where your profile appears. Start with the base plan and expand your reach anytime.</Text>
+              <Text style={s.stepTitle}>Choose Your Plan</Text>
+              <Text style={s.stepSub}>Upgrade anytime from your profile. All paid plans include a 7-day free trial.</Text>
 
-              {VISIBILITY_PLANS.map(plan => {
-                const selected = visibilityPlans.includes(plan.key);
+              {SUBSCRIPTION_PLANS.map(plan => {
+                const active = selectedPlan === plan.key;
                 return (
                   <TouchableOpacity
                     key={plan.key}
-                    style={[s.planCard, selected && { borderColor: C.teal + '66', backgroundColor: C.tealD }, plan.required && { borderColor: C.teal + '44' }]}
-                    onPress={() => togglePlan(plan.key)}
-                    activeOpacity={plan.required ? 1 : 0.85}
+                    style={[s.planCard, active && { borderColor: plan.color + '99', shadowColor: plan.color, shadowOpacity: 0.18, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 4 }]}
+                    onPress={() => setSelectedPlan(plan.key)}
+                    activeOpacity={0.85}
                   >
-                    <Text style={{ fontSize: 26 }}>{plan.icon}</Text>
-                    <View style={{ flex: 1 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <Text style={[s.planLabel, selected && { color: C.teal }]}>{plan.label}</Text>
-                        {plan.required && (
-                          <View style={[s.requiredBadge, { backgroundColor: C.tealD, borderColor: C.teal + '44' }]}>
-                            <Text style={[s.requiredBadgeTxt, { color: C.teal }]}>Required</Text>
-                          </View>
-                        )}
+                    {/* Active background tint */}
+                    {active && <View style={[StyleSheet.absoluteFillObject, { backgroundColor: plan.color + '0D', borderRadius: 16 }]} />}
+
+                    {/* Top row: icon + name + badge + price */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                      <View style={[s.planIconWrap, { backgroundColor: plan.color + '18' }]}>
+                        <Text style={{ fontSize: 20 }}>{plan.icon}</Text>
                       </View>
-                      <Text style={s.planSub}>{plan.sub}</Text>
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
+                          <Text style={[s.planName, active && { color: plan.color }]}>{plan.name}</Text>
+                          {plan.badge && (
+                            <View style={[s.planBadge, { backgroundColor: plan.color + '22', borderColor: plan.color + '55' }]}>
+                              <Text style={[s.planBadgeTxt, { color: plan.color }]}>{plan.badge}</Text>
+                            </View>
+                          )}
+                        </View>
+                        <Text style={s.planTagline}>{plan.tagline}</Text>
+                      </View>
+                      <View style={{ alignItems: 'flex-end' }}>
+                        {plan.price === 0
+                          ? <Text style={[s.planPriceMain, { color: plan.color }]}>Free</Text>
+                          : <><Text style={[s.planPriceMain, active && { color: plan.color }]}>${plan.price}</Text>
+                             <Text style={s.planPricePer}>/mo</Text></>
+                        }
+                      </View>
+                      <View style={[s.planRadio, active && { borderColor: plan.color, backgroundColor: plan.color }]}>
+                        {active && <View style={s.planRadioDot} />}
+                      </View>
                     </View>
-                    <View style={{ alignItems: 'flex-end', gap: 4 }}>
-                      <Text style={[s.planPrice, selected && { color: C.teal }]}>
-                        {plan.required ? '$9.99' : `+$${plan.price.toFixed(2)}`}
-                      </Text>
-                      <Text style={s.planPeriod}>/mo</Text>
-                    </View>
-                    <View style={[s.planCheck, selected && { backgroundColor: C.teal, borderColor: C.teal }]}>
-                      {selected && <Text style={{ fontSize: 10, color: '#fff', fontWeight: '800' }}>✓</Text>}
+
+                    {/* Features */}
+                    <View style={{ gap: 5 }}>
+                      {plan.features.map(f => (
+                        <View key={f} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <Text style={{ fontSize: 12, color: plan.color, fontWeight: '700' }}>✓</Text>
+                          <Text style={{ fontSize: 12, color: C.c60 }}>{f}</Text>
+                        </View>
+                      ))}
+                      {plan.locked.map(f => (
+                        <View key={f} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <Text style={{ fontSize: 12, color: C.c35 }}>✕</Text>
+                          <Text style={{ fontSize: 12, color: C.c35 }}>{f}</Text>
+                        </View>
+                      ))}
                     </View>
                   </TouchableOpacity>
                 );
               })}
 
-              <View style={[s.planTotal, { borderColor: C.teal + '33' }]}>
-                <Text style={s.planTotalLabel}>Total</Text>
-                <View style={{ alignItems: 'flex-end' }}>
-                  <Text style={[s.planTotalPrice, { color: C.teal }]}>${totalPrice.toFixed(2)}/mo</Text>
-                  <Text style={s.planSub}>7-day free trial · Cancel anytime</Text>
-                </View>
-              </View>
-
-              <View style={{ backgroundColor: C.greenD, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: C.green + '33', flexDirection: 'row', gap: 10 }}>
+              <View style={{ backgroundColor: C.card, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: C.border, flexDirection: 'row', gap: 10, marginTop: 4 }}>
                 <Text style={{ fontSize: 16 }}>💡</Text>
-                <Text style={{ flex: 1, fontSize: 12, color: C.green, lineHeight: 18 }}>You can upgrade or downgrade your plan at any time from your profile settings.</Text>
+                <Text style={{ flex: 1, fontSize: 12, color: C.c35, lineHeight: 18 }}>You can upgrade, downgrade, or cancel anytime from your profile settings. No long-term commitment.</Text>
               </View>
             </View>
           )}
@@ -446,7 +472,11 @@ export default function ListDoctorScreen({ navigation }) {
             disabled={!canNext[step]}
           >
             <Text style={[s.nextBtnTxt, { color: canNext[step] ? '#0D0F1A' : C.c35 }]}>
-              {step < STEPS.length - 1 ? `Continue →` : 'Submit Profile →'}
+              {step < STEPS.length - 1
+                ? step === 3
+                  ? selectedPlan === 'free' ? 'Continue with Free →' : `Start Free Trial — ${SUBSCRIPTION_PLANS.find(p => p.key === selectedPlan)?.name} →`
+                  : 'Continue →'
+                : 'Submit Profile →'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -486,17 +516,16 @@ const getStyles = (C) => StyleSheet.create({
   summaryKey:    { fontSize: 12, color: C.c35 },
   summaryVal:    { fontSize: 12, color: C.cream, fontWeight: '600' },
   noteCard:      { backgroundColor: C.card, borderWidth: 1, borderRadius: 14, padding: 14 },
-  planCard:         { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 16, padding: 14, marginBottom: 10 },
-  planLabel:        { fontSize: 14, fontWeight: '700', color: C.cream },
-  planSub:          { fontSize: 11, color: C.c35, marginTop: 2 },
-  planPrice:        { fontSize: 16, fontWeight: '800', color: C.cream },
-  planPeriod:       { fontSize: 10, color: C.c35 },
-  planCheck:        { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: C.border, alignItems: 'center', justifyContent: 'center' },
-  requiredBadge:    { borderRadius: 50, paddingHorizontal: 7, paddingVertical: 2, borderWidth: 1 },
-  requiredBadgeTxt: { fontSize: 9, fontWeight: '700' },
-  planTotal:        { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: C.card2, borderRadius: 14, padding: 16, marginTop: 4, marginBottom: 12, borderWidth: 1 },
-  planTotalLabel:   { fontSize: 14, fontWeight: '700', color: C.cream },
-  planTotalPrice:   { fontSize: 22, fontWeight: '900' },
+  planCard:       { backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 16, padding: 14, marginBottom: 12, overflow: 'hidden' },
+  planIconWrap:   { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  planName:       { fontSize: 16, fontWeight: '800', color: C.cream },
+  planTagline:    { fontSize: 11, color: C.c35, marginTop: 1 },
+  planBadge:      { borderRadius: 50, paddingHorizontal: 7, paddingVertical: 2, borderWidth: 1 },
+  planBadgeTxt:   { fontSize: 9, fontWeight: '800', letterSpacing: 0.5 },
+  planPriceMain:  { fontSize: 20, fontWeight: '900', color: C.cream },
+  planPricePer:   { fontSize: 10, color: C.c35, textAlign: 'right' },
+  planRadio:      { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: C.border, alignItems: 'center', justifyContent: 'center' },
+  planRadioDot:   { width: 7, height: 7, borderRadius: 4, backgroundColor: 'white' },
   footer:        { paddingHorizontal: 20, paddingBottom: 24, paddingTop: 12, borderTopWidth: 1, borderTopColor: C.border, backgroundColor: C.bg },
   nextBtn:       { borderRadius: 16, paddingVertical: 15, alignItems: 'center' },
   nextBtnTxt:    { fontSize: 15, fontWeight: '800' },

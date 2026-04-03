@@ -36,36 +36,59 @@ import UserProfileScreen       from '../screens/UserProfileScreen';
 import ListAttorneyScreen      from '../screens/ListAttorneyScreen';
 import PostJobScreen           from '../screens/PostJobScreen';
 import ListDoctorScreen        from '../screens/ListDoctorScreen';
+import EventsScreen            from '../screens/EventsScreen';
 
 const Tab   = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
-const TABS = [
-  { name: 'Home',       icon: '🏠',  label: 'Home'      },
-  { name: 'Chat',       icon: '💬',  label: 'Chat'      },
-  { name: 'Healthcare', icon: '🩺',  label: 'Health'    },
-  { name: 'Attorney',   icon: '⚖️',  label: 'Attorney'  },
-  { name: 'Profile',    icon: '👤',  label: 'Profile'   },
-];
 
 function CustomTabBar({ state, navigation }) {
   const { colors: C } = useTheme();
   const s = useMemo(() => getStyles(C), [C]);
 
+  // Order: Home · AI · [+] · Chat · Profile
+  const allTabs = [
+    { type: 'tab', name: 'Home',        icon: '🏠', label: 'Home'    },
+    { type: 'tab', name: 'AIAssistant', icon: '🤖', label: 'AI'      },
+    { type: 'fab' },
+    { type: 'tab', name: 'Chat',        icon: '💬', label: 'Chat'    },
+    { type: 'tab', name: 'Profile',     icon: '👤', label: 'Profile' },
+  ];
+
   return (
     <View style={s.tabBar}>
-      {TABS.map((tab) => {
-        const routeIndex = state.routes.findIndex(r => r.name === tab.name);
+      {allTabs.map((item) => {
+        if (item.type === 'fab') {
+          return (
+            <TouchableOpacity key="fab" style={s.fab} onPress={() => navigation.navigate('CreatePost')} activeOpacity={0.85}>
+              <Text style={s.fabIcon}>+</Text>
+            </TouchableOpacity>
+          );
+        }
+        if (item.type === 'nav') {
+          return (
+            <TouchableOpacity
+              key={item.name}
+              style={s.tabItem}
+              onPress={() => navigation.navigate(item.name)}
+              activeOpacity={0.7}
+            >
+              <Text style={s.tabIcon}>{item.icon}</Text>
+              <Text style={s.tabLabel}>{item.label}</Text>
+            </TouchableOpacity>
+          );
+        }
+        const routeIndex = state.routes.findIndex(r => r.name === item.name);
         const isActive   = state.index === routeIndex;
         return (
           <TouchableOpacity
-            key={tab.name}
+            key={item.name}
             style={[s.tabItem, isActive && s.tabItemActive]}
-            onPress={() => navigation.navigate(tab.name)}
+            onPress={() => navigation.navigate(item.name)}
             activeOpacity={0.7}
           >
-            <Text style={s.tabIcon}>{tab.icon}</Text>
-            <Text style={[s.tabLabel, isActive && s.tabLabelActive]}>{tab.label}</Text>
+            <Text style={s.tabIcon}>{item.icon}</Text>
+            <Text style={[s.tabLabel, isActive && s.tabLabelActive]}>{item.label}</Text>
           </TouchableOpacity>
         );
       })}
@@ -76,11 +99,9 @@ function CustomTabBar({ state, navigation }) {
 function MainTabs() {
   return (
     <Tab.Navigator tabBar={(props) => <CustomTabBar {...props} />} screenOptions={{ headerShown: false }}>
-      <Tab.Screen name="Home"       component={HomeScreen} />
-      <Tab.Screen name="Chat"       component={ChatScreen} />
-      <Tab.Screen name="Healthcare" component={HealthcareScreen} />
-      <Tab.Screen name="Attorney"   component={AttorneyScreen} />
-      <Tab.Screen name="Profile"    component={ProfileScreen} />
+      <Tab.Screen name="Home"    component={HomeScreen} />
+      <Tab.Screen name="Chat"    component={ChatScreen} />
+      <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
   );
 }
@@ -118,6 +139,7 @@ export default function AppNavigator() {
         <Stack.Screen name="PostJob"          component={PostJobScreen} />
         <Stack.Screen name="ListDoctor"       component={ListDoctorScreen} />
         <Stack.Screen name="CreatePost"       component={CreatePostScreen} />
+        <Stack.Screen name="Events"           component={EventsScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );
@@ -129,10 +151,10 @@ const getStyles = (C) => StyleSheet.create({
     backgroundColor: C.nav, borderTopWidth: 1, borderTopColor: C.border,
     paddingBottom: 24, paddingTop: 10, paddingHorizontal: 8, height: 82,
   },
-  tabItem: { alignItems: 'center', gap: 3, paddingHorizontal: 14, paddingVertical: 6, borderRadius: 14 },
+  tabItem: { alignItems: 'center', gap: 2, paddingHorizontal: 6, paddingVertical: 6, borderRadius: 14 },
   tabItemActive: { backgroundColor: C.vividD },
-  tabIcon: { fontSize: 20 },
-  tabLabel: { fontSize: 9, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', color: C.c35 },
+  tabIcon: { fontSize: 18 },
+  tabLabel: { fontSize: 8, fontWeight: '700', letterSpacing: 0.4, textTransform: 'uppercase', color: C.c35 },
   tabLabelActive: { color: C.vivid },
   fab: {
     width: 50, height: 50, borderRadius: 17, backgroundColor: C.vivid,

@@ -10,26 +10,39 @@ import { useTheme } from '../theme/ThemeContext';
 
 const STEPS = ['About You', 'Practice', 'Availability', 'Visibility', 'Preview'];
 
-const VISIBILITY_PLANS = [
+const SUBSCRIPTION_PLANS = [
   {
-    key: 'usa',       icon: '🇺🇸', label: 'In Your Country (USA)',
-    sub: 'Profile shown to immigrants currently in the United States',
-    price: 9.99, required: true,
+    key: 'free',
+    name: 'Free',
+    price: 0,
+    icon: '🌱',
+    badge: null,
+    color: '#8B8FA8',
+    tagline: 'Get started at no cost',
+    features: ['Basic text listing', 'Appears at bottom of results', 'External contact link only'],
+    locked:   ['Profile photo', 'Verified ✓ badge', 'Priority placement', 'Message inbox', 'Consultation booking', 'Featured by visa type', 'Analytics'],
   },
   {
-    key: 'local',     icon: '📍', label: 'Local Boost',
-    sub: 'Extra visibility to people near your office location',
-    price: 5.99, required: false,
+    key: 'pro',
+    name: 'Pro',
+    price: 49,
+    icon: '⭐',
+    badge: 'Most Popular',
+    color: '#9B72EF',
+    tagline: '7-day free trial · Cancel anytime',
+    features: ['Profile photo', 'Verified bar license ✓ badge', 'Priority placement in results', 'Direct message inbox', 'Consultation booking link'],
+    locked:   ['Featured by visa type', 'Case intake form', 'Analytics dashboard'],
   },
   {
-    key: 'worldwide', icon: '🌏', label: 'Worldwide — Your Country',
-    sub: 'Visible to your countrymen living in any country',
-    price: 6.99, required: false,
-  },
-  {
-    key: 'global',    icon: '🌍', label: 'Global',
-    sub: 'Your profile visible to everyone on Zabroad worldwide',
-    price: 8.99, required: false,
+    key: 'premium',
+    name: 'Premium',
+    price: 99,
+    icon: '🏆',
+    badge: 'Best Value',
+    color: '#5B8DEF',
+    tagline: '7-day free trial · Cancel anytime',
+    features: ['Everything in Pro', 'Featured by visa type — appear first in H-1B, Asylum, Green Card searches', 'Case intake form before contact', 'Analytics — views, contacts & bookings', 'Priority support'],
+    locked:   [],
   },
 ];
 
@@ -81,24 +94,13 @@ export default function ListAttorneyScreen({ navigation }) {
   const [acceptsNew,  setAcceptsNew]  = useState(true);
   const [responseTime,setResponseTime]= useState('24 hours');
 
-  // Step 3 — Visibility
-  const [visibilityPlans, setVisibilityPlans] = useState(['usa']);
+  // Step 3 — Subscription plan
+  const [selectedPlan, setSelectedPlan] = useState('pro');
 
   // Submit
   const [submitted, setSubmitted] = useState(false);
   const successScale   = useRef(new Animated.Value(0)).current;
   const successOpacity = useRef(new Animated.Value(0)).current;
-
-  const totalPrice = VISIBILITY_PLANS
-    .filter(p => visibilityPlans.includes(p.key))
-    .reduce((sum, p) => sum + p.price, 0);
-
-  const togglePlan = (key) => {
-    if (key === 'usa') return; // required, cannot deselect
-    setVisibilityPlans(prev =>
-      prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
-    );
-  };
 
   const canNext = [
     fullName.trim().length >= 2 && location.trim().length >= 2 && email.includes('@') && barState !== '',
@@ -130,6 +132,13 @@ export default function ListAttorneyScreen({ navigation }) {
             <Text style={s.successName}>{fullName || 'Attorney'}</Text>
             <Text style={s.successFirm}>{firmName || 'Private Practice'}</Text>
             <Text style={s.successSub}>Your listing is under review. We verify all attorney credentials before publishing. You'll hear from us within 24–48 hours.</Text>
+            {(() => { const p = SUBSCRIPTION_PLANS.find(pl => pl.key === selectedPlan); return p ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: p.color + '18', borderRadius: 50, paddingHorizontal: 14, paddingVertical: 6, borderWidth: 1, borderColor: p.color + '44' }}>
+                <Text style={{ fontSize: 13 }}>{p.icon}</Text>
+                <Text style={{ fontSize: 12, color: p.color, fontWeight: '700' }}>{p.name} Plan</Text>
+                <Text style={{ fontSize: 12, color: C.c35 }}>· {p.price === 0 ? 'Free' : `$${p.price}/mo`}</Text>
+              </View>
+            ) : null; })()}
             <View style={s.successStats}>
               {[
                 { icon: '⚖️', val: areas.length,    label: 'Specialties' },
@@ -365,57 +374,73 @@ export default function ListAttorneyScreen({ navigation }) {
             </>
           )}
 
-          {/* ── STEP 3: VISIBILITY & PRICING ── */}
+          {/* ── STEP 3: CHOOSE PLAN ── */}
           {step === 3 && (
             <>
-              <Text style={s.fieldLabel}>CHOOSE YOUR VISIBILITY PLAN</Text>
-              <Text style={[s.optionSub, { marginBottom: 16 }]}>Start with the base plan and boost your reach as needed. All plans include a 7-day free trial.</Text>
+              <Text style={s.fieldLabel}>CHOOSE YOUR PLAN</Text>
+              <Text style={[s.optionSub, { marginBottom: 16 }]}>All paid plans include a 7-day free trial. Upgrade or cancel anytime.</Text>
 
-              {VISIBILITY_PLANS.map(plan => {
-                const selected = visibilityPlans.includes(plan.key);
+              {SUBSCRIPTION_PLANS.map(plan => {
+                const active = selectedPlan === plan.key;
                 return (
                   <TouchableOpacity
                     key={plan.key}
-                    style={[s.planCard, selected && s.planCardActive, plan.required && s.planCardRequired]}
-                    onPress={() => togglePlan(plan.key)}
-                    activeOpacity={plan.required ? 1 : 0.85}
+                    style={[s.planCard, active && { borderColor: plan.color + '99', shadowColor: plan.color, shadowOpacity: 0.18, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 4 }]}
+                    onPress={() => setSelectedPlan(plan.key)}
+                    activeOpacity={0.85}
                   >
-                    <Text style={{ fontSize: 26 }}>{plan.icon}</Text>
-                    <View style={{ flex: 1 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <Text style={[s.planLabel, selected && { color: C.purple }]}>{plan.label}</Text>
-                        {plan.required && (
-                          <View style={s.requiredBadge}>
-                            <Text style={s.requiredBadgeTxt}>Required</Text>
-                          </View>
-                        )}
+                    {active && <View style={[StyleSheet.absoluteFillObject, { backgroundColor: plan.color + '0D', borderRadius: 16 }]} />}
+
+                    {/* Top row */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                      <View style={[s.planIconWrap, { backgroundColor: plan.color + '18' }]}>
+                        <Text style={{ fontSize: 20 }}>{plan.icon}</Text>
                       </View>
-                      <Text style={s.planSub}>{plan.sub}</Text>
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
+                          <Text style={[s.planName, active && { color: plan.color }]}>{plan.name}</Text>
+                          {plan.badge && (
+                            <View style={[s.planBadge, { backgroundColor: plan.color + '22', borderColor: plan.color + '55' }]}>
+                              <Text style={[s.planBadgeTxt, { color: plan.color }]}>{plan.badge}</Text>
+                            </View>
+                          )}
+                        </View>
+                        <Text style={s.planTagline}>{plan.tagline}</Text>
+                      </View>
+                      <View style={{ alignItems: 'flex-end' }}>
+                        {plan.price === 0
+                          ? <Text style={[s.planPriceMain, { color: plan.color }]}>Free</Text>
+                          : <><Text style={[s.planPriceMain, active && { color: plan.color }]}>${plan.price}</Text>
+                             <Text style={s.planPricePer}>/mo</Text></>
+                        }
+                      </View>
+                      <View style={[s.planRadio, active && { borderColor: plan.color, backgroundColor: plan.color }]}>
+                        {active && <View style={s.planRadioDot} />}
+                      </View>
                     </View>
-                    <View style={{ alignItems: 'flex-end', gap: 6 }}>
-                      <Text style={[s.planPrice, selected && { color: C.purple }]}>
-                        {plan.required ? '$9.99' : `+$${plan.price.toFixed(2)}`}
-                      </Text>
-                      <Text style={s.planPeriod}>/mo</Text>
-                    </View>
-                    <View style={[s.planCheck, selected && { backgroundColor: C.purple, borderColor: C.purple }]}>
-                      {selected && <Text style={{ fontSize: 10, color: '#fff', fontWeight: '800' }}>✓</Text>}
+
+                    {/* Features */}
+                    <View style={{ gap: 5 }}>
+                      {plan.features.map(f => (
+                        <View key={f} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
+                          <Text style={{ fontSize: 12, color: plan.color, fontWeight: '700', marginTop: 1 }}>✓</Text>
+                          <Text style={{ fontSize: 12, color: C.c60, flex: 1 }}>{f}</Text>
+                        </View>
+                      ))}
+                      {plan.locked.map(f => (
+                        <View key={f} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
+                          <Text style={{ fontSize: 12, color: C.c35, marginTop: 1 }}>✕</Text>
+                          <Text style={{ fontSize: 12, color: C.c35, flex: 1 }}>{f}</Text>
+                        </View>
+                      ))}
                     </View>
                   </TouchableOpacity>
                 );
               })}
 
-              <View style={s.planTotal}>
-                <Text style={s.planTotalLabel}>Total</Text>
-                <View style={{ alignItems: 'flex-end' }}>
-                  <Text style={s.planTotalPrice}>${totalPrice.toFixed(2)}/mo</Text>
-                  <Text style={[s.planSub, { marginTop: 2 }]}>7-day free trial · Cancel anytime</Text>
-                </View>
-              </View>
-
-              <View style={[s.verifyNote, { borderColor: C.green + '33', backgroundColor: C.greenD }]}>
+              <View style={[s.verifyNote, { marginTop: 4 }]}>
                 <Text style={{ fontSize: 16 }}>💡</Text>
-                <Text style={[s.verifyTxt, { color: C.green }]}>You can upgrade or downgrade your plan at any time from your profile settings.</Text>
+                <Text style={s.verifyTxt}>One new client from Zabroad typically covers months of subscription. You can upgrade or cancel anytime from your profile.</Text>
               </View>
             </>
           )}
@@ -489,7 +514,11 @@ export default function ListAttorneyScreen({ navigation }) {
           activeOpacity={0.85}
         >
           <Text style={s.nextBtnTxt}>
-            {step === STEPS.length - 1 ? '✅ Submit for Review' : `Continue → ${STEPS[step + 1]}`}
+            {step === STEPS.length - 1
+              ? '✅ Submit for Review'
+              : step === 3
+                ? selectedPlan === 'free' ? 'Continue with Free →' : `Start Free Trial — ${SUBSCRIPTION_PLANS.find(p => p.key === selectedPlan)?.name} →`
+                : `Continue → ${STEPS[step + 1]}`}
           </Text>
         </TouchableOpacity>
       </View>
@@ -565,19 +594,16 @@ const getStyles = (C) => StyleSheet.create({
   freeConsult:   { backgroundColor: C.greenD, borderColor: C.green + '44' },
   paidConsult:   { backgroundColor: C.goldD, borderColor: C.gold + '44' },
   previewConsultTxt: { fontSize: 11, fontWeight: '700' },
-  planCard:         { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 16, padding: 14, marginBottom: 10 },
-  planCardActive:   { borderColor: C.purple + '66', backgroundColor: C.purpleD },
-  planCardRequired: { borderColor: C.purple + '44' },
-  planLabel:        { fontSize: 14, fontWeight: '700', color: C.cream },
-  planSub:          { fontSize: 11, color: C.c35, marginTop: 2 },
-  planPrice:        { fontSize: 16, fontWeight: '800', color: C.cream },
-  planPeriod:       { fontSize: 10, color: C.c35 },
-  planCheck:        { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: C.border, alignItems: 'center', justifyContent: 'center' },
-  requiredBadge:    { backgroundColor: C.purpleD, borderRadius: 50, paddingHorizontal: 7, paddingVertical: 2, borderWidth: 1, borderColor: C.purple + '44' },
-  requiredBadgeTxt: { fontSize: 9, fontWeight: '700', color: C.purple },
-  planTotal:        { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: C.card2, borderRadius: 14, padding: 16, marginTop: 4, marginBottom: 12, borderWidth: 1, borderColor: C.purple + '33' },
-  planTotalLabel:   { fontSize: 14, fontWeight: '700', color: C.cream },
-  planTotalPrice:   { fontSize: 22, fontWeight: '900', color: C.purple },
+  planCard:      { backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 16, padding: 14, marginBottom: 12, overflow: 'hidden' },
+  planIconWrap:  { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  planName:      { fontSize: 16, fontWeight: '800', color: C.cream },
+  planTagline:   { fontSize: 11, color: C.c35, marginTop: 1 },
+  planBadge:     { borderRadius: 50, paddingHorizontal: 7, paddingVertical: 2, borderWidth: 1 },
+  planBadgeTxt:  { fontSize: 9, fontWeight: '800', letterSpacing: 0.5 },
+  planPriceMain: { fontSize: 20, fontWeight: '900', color: C.cream },
+  planPricePer:  { fontSize: 10, color: C.c35, textAlign: 'right' },
+  planRadio:     { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: C.border, alignItems: 'center', justifyContent: 'center' },
+  planRadioDot:  { width: 7, height: 7, borderRadius: 4, backgroundColor: 'white' },
   summaryCard: { backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 16, overflow: 'hidden' },
   summaryRow:  { flexDirection: 'row', justifyContent: 'space-between', padding: 12, borderBottomWidth: 1, borderBottomColor: C.border },
   summaryLabel:{ fontSize: 12, color: C.c35, fontWeight: '600' },

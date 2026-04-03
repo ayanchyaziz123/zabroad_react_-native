@@ -8,12 +8,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../theme/ThemeContext';
 
-const REACH_OPTIONS = [
-  { icon: '🇧🇩', label: 'Bangladeshis in USA',  sub: 'My country · same country',  key: 'my_country' },
-  { icon: '🌏',  label: 'All Bangladeshis',      sub: 'Worldwide countrymen',        key: 'all_country' },
-  { icon: '📍',  label: 'Local — Queens, NY',    sub: 'People near me',              key: 'local'       },
-  { icon: '🌍',  label: 'Global Feed',            sub: 'Everyone on Zabroad',         key: 'global'      },
-];
 
 const TOPICS = ['#OPT', '#H1B', '#Housing', '#Jobs', '#Healthcare', '#Legal', '#Community', '#Eid2026'];
 
@@ -42,11 +36,11 @@ export default function CreatePostScreen({ navigation }) {
     { icon: '🗓️', label: 'Event',     color: C.purple, bg: C.purpleD },
   ], [C]);
 
-  const [postType,           setPostType]           = useState(0);
-  const [title,              setTitle]              = useState('');
-  const [text,               setText]               = useState('');
-  const [selectedReach,  setSelectedReach]  = useState(0);
-  const [selectedTopics,     setSelectedTopics]     = useState([]);
+  const [postType,       setPostType]       = useState(0);
+  const [title,          setTitle]          = useState('');
+  const [text,           setText]           = useState('');
+  const [location,       setLocation]       = useState('');
+  const [selectedTopics, setSelectedTopics] = useState([]);
   const [isAnonymous,        setIsAnonymous]        = useState(false);
   const [posted,             setPosted]             = useState(false);
   const successScale = useRef(new Animated.Value(0)).current;
@@ -93,7 +87,7 @@ export default function CreatePostScreen({ navigation }) {
               <Text style={{ fontSize: 40 }}>{active.icon}</Text>
             </LinearGradient>
             <Text style={s.successTitle}>Posted!</Text>
-            <Text style={s.successSub}>Your {active.label} is now live in{'\n'}{REACH_OPTIONS[selectedReach].icon} {REACH_OPTIONS[selectedReach].label}</Text>
+            <Text style={s.successSub}>Your {active.label} is now live{location ? `\n📍 ${location}` : ''}</Text>
 
             <View style={[s.successCard, { borderColor: active.color + '44' }]}>
               {title ? <Text style={s.previewTitle}>{title}</Text> : null}
@@ -168,7 +162,7 @@ export default function CreatePostScreen({ navigation }) {
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={s.authorName}>{isAnonymous ? 'Anonymous' : 'Azizur Rahman'}</Text>
-                <Text style={s.authorSub}>Reach: {REACH_OPTIONS[selectedReach].icon} {REACH_OPTIONS[selectedReach].label}</Text>
+                <Text style={s.authorSub}>{location ? `📍 ${location}` : 'Azizur Rahman · Queens, NY'}</Text>
               </View>
               <TouchableOpacity
                 style={[s.anonToggle, isAnonymous && s.anonActive]}
@@ -229,32 +223,23 @@ export default function CreatePostScreen({ navigation }) {
             )}
           </View>
 
-          {/* Reach / Audience */}
+          {/* Location */}
           <View style={s.section}>
-            <Text style={s.label}>Who Can See This</Text>
-            <View style={s.reachGrid}>
-              {REACH_OPTIONS.map((opt, i) => {
-                const sel = i === selectedReach;
-                return (
-                  <TouchableOpacity
-                    key={i}
-                    style={[s.reachCard, sel && { backgroundColor: active.bg, borderColor: active.color + '66' }]}
-                    onPress={() => setSelectedReach(i)}
-                    activeOpacity={0.8}
-                  >
-                    <View style={s.reachCardLeft}>
-                      <Text style={s.reachIcon}>{opt.icon}</Text>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[s.reachLabel, sel && { color: active.color, fontWeight: '700' }]}>{opt.label}</Text>
-                        <Text style={s.reachSub}>{opt.sub}</Text>
-                      </View>
-                    </View>
-                    <View style={[s.reachRadio, sel && { borderColor: active.color, backgroundColor: active.color }]}>
-                      {sel && <View style={s.reachRadioDot} />}
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
+            <Text style={s.label}>Location</Text>
+            <View style={[s.locationBox, { borderColor: location ? active.color + '55' : C.border }]}>
+              <Text style={s.locationPin}>📍</Text>
+              <TextInput
+                style={s.locationInput}
+                placeholder="Add a location (optional)"
+                placeholderTextColor={C.c35}
+                value={location}
+                onChangeText={setLocation}
+              />
+              {location.length > 0 && (
+                <TouchableOpacity onPress={() => setLocation('')} activeOpacity={0.7}>
+                  <Text style={{ fontSize: 14, color: C.c35 }}>✕</Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
 
@@ -334,14 +319,9 @@ const getStyles = (C) => StyleSheet.create({
   textInput: { paddingHorizontal: 18, paddingTop: 16, paddingBottom: 40, fontSize: 15, color: C.cream, lineHeight: 24, minHeight: 160 },
   charCount: { position: 'absolute', bottom: 12, right: 14, fontSize: 11 },
   charWarn: { fontSize: 11, fontWeight: '600', marginTop: 4 },
-  reachGrid:      { gap: 8 },
-  reachCard:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12 },
-  reachCardLeft:  { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
-  reachIcon:      { fontSize: 22 },
-  reachLabel:     { fontSize: 13, fontWeight: '600', color: C.cream },
-  reachSub:       { fontSize: 11, color: C.c35, marginTop: 1 },
-  reachRadio:     { width: 18, height: 18, borderRadius: 9, borderWidth: 2, borderColor: C.border, alignItems: 'center', justifyContent: 'center' },
-  reachRadioDot:  { width: 8, height: 8, borderRadius: 4, backgroundColor: 'white' },
+  locationBox:   { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: C.card, borderWidth: 1, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 13 },
+  locationPin:   { fontSize: 16 },
+  locationInput: { flex: 1, fontSize: 14, color: C.cream },
   topicsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   topicPill: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 50, borderWidth: 1, borderColor: C.border, backgroundColor: C.card },
   topicTxt: { fontSize: 12, color: C.c35 },
