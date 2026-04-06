@@ -7,6 +7,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../theme/ThemeContext';
+import { useAuthStore } from '../../store/authStore';
+import { FontAwesome } from '@expo/vector-icons';
 
 function Field({ label, value, onChange, placeholder, secure, showPass, onTogglePass, inputRef, next, error, keyboardType, C }) {
   return (
@@ -40,13 +42,15 @@ function Field({ label, value, onChange, placeholder, secure, showPass, onToggle
 
 export default function LoginScreen({ navigation }) {
   const { colors: C } = useTheme();
-  const [email,    setEmail]    = useState('');
-  const [password, setPassword] = useState('');
-  const [showPass, setShowPass] = useState(false);
-  const [errors,   setErrors]   = useState({});
-  const [loading,  setLoading]  = useState(false);
+  const login = useAuthStore(s => s.login);
+
+  const [email,      setEmail]      = useState('');
+  const [password,   setPassword]   = useState('');
+  const [showPass,   setShowPass]   = useState(false);
+  const [errors,     setErrors]     = useState({});
+  const [loading,    setLoading]    = useState(false);
   const [forgotSent, setForgotSent] = useState(false);
-  const passRef = useRef(null);
+  const passRef   = useRef(null);
   const shakeAnim = useRef(new Animated.Value(0)).current;
 
   const shake = () => {
@@ -67,13 +71,18 @@ export default function LoginScreen({ navigation }) {
     return Object.keys(e).length === 0;
   };
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     if (!validate()) { shake(); return; }
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      await login({ email, password });
       navigation.replace('AppMain');
-    }, 1200);
+    } catch (e) {
+      setErrors({ password: e.message });
+      shake();
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleForgot = () => {
@@ -118,12 +127,14 @@ export default function LoginScreen({ navigation }) {
 
           {/* Social */}
           <View style={styles.socialRow}>
-            {[{ icon: '🍎', label: 'Apple' }, { icon: '🔵', label: 'Google' }].map((s, i) => (
-              <TouchableOpacity key={i} style={[styles.socialBtn, { backgroundColor: C.card, borderColor: C.border }]} activeOpacity={0.8} onPress={handleLogin}>
-                <Text style={{ fontSize: 18 }}>{s.icon}</Text>
-                <Text style={[styles.socialTxt, { color: C.cream }]}>Continue with {s.label}</Text>
-              </TouchableOpacity>
-            ))}
+            <TouchableOpacity style={[styles.socialBtn, { backgroundColor: C.card, borderColor: C.border }]} activeOpacity={0.8} onPress={handleLogin}>
+              <FontAwesome name="google" size={18} color="#DB4437" />
+              <Text style={[styles.socialTxt, { color: C.cream }]}>Continue with Google</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.socialBtn, { backgroundColor: C.card, borderColor: C.border }]} activeOpacity={0.8} onPress={handleLogin}>
+              <FontAwesome name="facebook" size={20} color="#1877F2" />
+              <Text style={[styles.socialTxt, { color: C.cream }]}>Continue with Facebook</Text>
+            </TouchableOpacity>
           </View>
 
           <View style={styles.divider}>

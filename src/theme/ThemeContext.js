@@ -2,13 +2,13 @@ import React, { createContext, useContext, useState } from 'react';
 import { darkColors, lightColors } from './colors';
 
 const ThemeContext = createContext({
-  isDark: true,
-  colors: darkColors,
+  isDark: false,
+  colors: lightColors,
   toggleTheme: () => {},
 });
 
 export function ThemeProvider({ children }) {
-  const [isDark, setIsDark] = useState(true);
+  const [isDark, setIsDark] = useState(false);
 
   const toggleTheme = () => setIsDark(prev => !prev);
 

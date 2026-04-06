@@ -228,9 +228,6 @@ function FeedCard({ item, navigation, C, s }) {
             {item.location && <Text style={s.feedMeta}>· 📍 {item.location}</Text>}
           </View>
         </View>
-        <View style={[s.tagPill, { backgroundColor: item.tagColor + '18' }]}>
-          <Text style={[s.tagTxt, { color: item.tagColor }]}>{item.tag}</Text>
-        </View>
       </View>
 
       {/* Body text */}
@@ -516,7 +513,11 @@ export default function HomeScreen({ navigation }) {
 
         {/* ── NEARBY RESOURCES ────────────────────────────────────── */}
         <View style={s.sectionHeader}>
-          <Text style={s.sectionTitle}>📍 Near {(user.livesIn || 'You').split(',')[0]}</Text>
+          <Text style={s.sectionTitle}>
+            {activeScope === 'my'
+              ? `${country.flag} ${country.name} Community Near You`
+              : `🌍 All Communities Near ${(user.livesIn || 'You').split(',')[0]}`}
+          </Text>
         </View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 14, gap: 8, paddingBottom: 4 }}>
           {NEARBY_RESOURCES.map(r => (

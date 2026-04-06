@@ -19,7 +19,7 @@ const FEATURES = [
 ];
 
 export default function WelcomeScreen({ navigation }) {
-  const { colors: C } = useTheme();
+  const { colors: C, isDark } = useTheme();
   const fadeAnim   = useRef(new Animated.Value(0)).current;
   const slideAnim  = useRef(new Animated.Value(40)).current;
   const scaleAnim  = useRef(new Animated.Value(0.85)).current;
@@ -35,14 +35,14 @@ export default function WelcomeScreen({ navigation }) {
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <LinearGradient
-        colors={['#1A0A0E', '#0D0F1A', C.bg]}
+        colors={isDark ? ['#1A0A0E', '#0D0F1A', C.bg] : [C.bg, C.bg]}
         locations={[0, 0.4, 1]}
         style={StyleSheet.absoluteFill}
       />
 
-      {/* Background glow orbs */}
-      <View style={[styles.orb1, { backgroundColor: C.vivid }]} />
-      <View style={[styles.orb2, { backgroundColor: C.purple }]} />
+      {/* Background glow orbs — only in dark mode */}
+      {isDark && <View style={[styles.orb1, { backgroundColor: C.vivid }]} />}
+      {isDark && <View style={[styles.orb2, { backgroundColor: C.purple }]} />}
 
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
         <Animated.View style={[styles.top, { opacity: fadeAnim, transform: [{ translateY: slideAnim }, { scale: scaleAnim }] }]}>
@@ -52,7 +52,8 @@ export default function WelcomeScreen({ navigation }) {
               <Text style={{ fontSize: 36 }}>🌍</Text>
             </LinearGradient>
             <Text style={[styles.logoText, { color: C.cream }]}>
-              <Text style={{ color: C.vivid }}>Z</Text>abroad
+              <Text style={{ color: C.vivid }}>Z</Text>
+              <Text style={{ color: C.cream }}>abroad</Text>
             </Text>
             <Text style={[styles.logoTagline, { color: C.c35 }]}>Your life abroad, simplified.</Text>
           </View>

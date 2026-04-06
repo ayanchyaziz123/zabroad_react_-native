@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
   Animated, Dimensions,
@@ -7,13 +7,17 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../theme/ThemeContext';
 import { useUser } from '../../context/UserContext';
+import { useAuthStore } from '../../store/authStore';
 
 const { width } = Dimensions.get('window');
 
 export default function AllDoneScreen({ navigation, route }) {
   const { colors: C } = useTheme();
   const { updateUser } = useUser();
+  const register = useAuthStore(s => s.register);
   const userData = route.params || {};
+  const [registering, setRegistering] = useState(false);
+  const [regError,    setRegError]    = useState(null);
   const scaleAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim  = useRef(new Animated.Value(0)).current;
   const bounceAnim = useRef(new Animated.Value(0)).current;
@@ -121,21 +125,56 @@ export default function AllDoneScreen({ navigation, route }) {
 
         {/* Enter App Button */}
         <Animated.View style={[styles.footer, { opacity: fadeAnim }]}>
+          {regError && (
+            <Text style={{ color: '#E8364A', textAlign: 'center', marginBottom: 8, fontSize: 13 }}>
+              {regError}
+            </Text>
+          )}
           <TouchableOpacity
-            onPress={() => {
-              updateUser({
-                homeCountry: userData.fromCountry || { flag: '🌍', name: 'Other' },
-                livesIn: userData.livesIn || '',
-                name: userData.name || 'User',
-              });
-              navigation.replace('AppMain');
+            onPress={async () => {
+              setRegError(null);
+              setRegistering(true);
+              try {
+                const nameParts  = (userData.name || 'User').trim().split(' ');
+                const firstName  = nameParts[0];
+                const lastName   = nameParts.slice(1).join(' ') || '';
+                const fromCountry = userData.fromCountry || { flag: '🌍', name: 'Other' };
+                const livesIn     = userData.livesIn?.name || 'Queens, NY';
+                // Build a handle from email or name
+                const handle = '@' + (userData.email?.split('@')[0] || firstName.toLowerCase()).replace(/\s+/g, '_');
+
+                await register({
+                  firstName,
+                  lastName,
+                  email:       userData.email,
+                  password:    userData.password,
+                  handle,
+                  homeCountry: fromCountry.name,
+                  countryFlag: fromCountry.flag,
+                  livesIn,
+                  visaStatus:  userData.visaStatus || 'OPT',
+                });
+
+                // Also sync into legacy UserContext so existing screens still work
+                updateUser({
+                  homeCountry: fromCountry,
+                  livesIn,
+                  name: userData.name || 'User',
+                });
+                navigation.replace('AppMain');
+              } catch (e) {
+                setRegError(e.message);
+              } finally {
+                setRegistering(false);
+              }
             }}
+            disabled={registering}
             activeOpacity={0.88}
             style={styles.enterBtn}
           >
-            <LinearGradient colors={[C.vivid, '#B82838']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.enterGrad}>
-              <Text style={styles.enterTxt}>Enter Zabroad</Text>
-              <Text style={{ fontSize: 18, color: 'white' }}>🚀</Text>
+            <LinearGradient colors={[C.vivid, '#B82838']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[styles.enterGrad, registering && { opacity: 0.7 }]}>
+              <Text style={styles.enterTxt}>{registering ? 'Creating account…' : 'Enter Zabroad'}</Text>
+              {!registering && <Text style={{ fontSize: 18, color: 'white' }}>🚀</Text>}
             </LinearGradient>
           </TouchableOpacity>
         </Animated.View>

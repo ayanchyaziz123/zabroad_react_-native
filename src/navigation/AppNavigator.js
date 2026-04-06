@@ -4,6 +4,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useTheme } from '../theme/ThemeContext';
+import { useAuthStore } from '../store/authStore';
 
 // Onboarding
 import WelcomeScreen    from '../screens/onboarding/WelcomeScreen';
@@ -13,6 +14,7 @@ import FromCountryScreen from '../screens/onboarding/FromCountryScreen';
 import LivesInScreen    from '../screens/onboarding/LivesInScreen';
 import InterestsScreen  from '../screens/onboarding/InterestsScreen';
 import AllDoneScreen    from '../screens/onboarding/AllDoneScreen';
+import OTPScreen        from '../screens/onboarding/OTPScreen';
 
 // Main app
 import HomeScreen       from '../screens/HomeScreen';
@@ -107,9 +109,16 @@ function MainTabs() {
 }
 
 export default function AppNavigator() {
+  const isAuthenticated = useAuthStore(s => s.isAuthenticated);
+  const isLoading       = useAuthStore(s => s.isLoading);
+
+  // While restoring session, start at Welcome — the user won't see a flash
+  // because isLoading is resolved before the first meaningful render
+  const initialRoute = (!isLoading && isAuthenticated) ? 'AppMain' : 'Welcome';
+
   return (
     <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
+      <Stack.Navigator initialRouteName={initialRoute} screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
         {/* Onboarding flow */}
         <Stack.Screen name="Welcome"     component={WelcomeScreen} />
         <Stack.Screen name="SignUp"      component={SignUpScreen} />
@@ -117,6 +126,7 @@ export default function AppNavigator() {
         <Stack.Screen name="FromCountry" component={FromCountryScreen} />
         <Stack.Screen name="LivesIn"     component={LivesInScreen} />
         <Stack.Screen name="Interests"   component={InterestsScreen} />
+        <Stack.Screen name="OTP"         component={OTPScreen} />
         <Stack.Screen name="AllDone"     component={AllDoneScreen} options={{ animation: 'fade' }} />
 
         {/* Main app */}

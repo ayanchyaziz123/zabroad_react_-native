@@ -70,7 +70,7 @@ export default function LivesInScreen({ navigation, route }) {
       <View style={styles.titleWrap}>
         <Text style={[styles.step, { color: C.vivid }]}>Step 3 of 4</Text>
         <Text style={[styles.title, { color: C.cream }]}>Where do{'\n'}you live now? 📍</Text>
-        <Text style={[styles.sub, { color: C.c35 }]}>Find doctors, lawyers, and communities near you</Text>
+        <Text style={[styles.sub, { color: C.c35 }]}>Select your city from the list or type it manually</Text>
       </View>
 
       {/* Search */}
