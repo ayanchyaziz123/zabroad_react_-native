@@ -22,38 +22,71 @@ async function deleteTokens() {
   await SecureStore.deleteItemAsync('refresh_token');
 }
 
-// ── Core request ──────────────────────────────────────────────────────────────
-async function request(endpoint, options = {}, token = null) {
+// ── Raw fetch — returns { ok, status, data } without throwing ─────────────────
+async function fetchJSON(endpoint, options = {}, token = null) {
   const headers = {
     'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
-
-  const res  = await fetch(`${BASE_URL}${endpoint}`, {
+  const res = await fetch(`${BASE_URL}${endpoint}`, {
     ...options,
     headers,
     body: options.body ? JSON.stringify(options.body) : undefined,
   });
-
   const data = await res.json();
-  if (!res.ok) {
-    const message =
-      data.detail ||
-      data.non_field_errors?.[0] ||
-      Object.values(data)[0]?.[0] ||
-      'Something went wrong';
-    throw new Error(message);
-  }
-  return data;
+  return { ok: res.ok, status: res.status, data };
+}
+
+function extractError(data) {
+  return (
+    data?.detail ||
+    data?.non_field_errors?.[0] ||
+    (data ? Object.values(data)[0]?.[0] : null) ||
+    'Something went wrong'
+  );
 }
 
 // ── Auth Store ────────────────────────────────────────────────────────────────
 export const useAuthStore = create((set, get) => ({
-  user:          null,   // { id, name, email, profile: { handle, avatar_emoji, home_country, country_flag, lives_in, visa_status, bio } }
-  accessToken:   null,
+  user:            null,   // { id, name, email, profile: { handle, avatar_emoji, home_country, country_flag, lives_in, visa_status, bio } }
+  accessToken:     null,
   isAuthenticated: false,
-  isLoading:     true,   // true while restoring session on app launch
-  error:         null,
+  isLoading:       true,   // true while restoring session on app launch
+  error:           null,
+
+  // ── Authenticated request with automatic token refresh ────────────────────
+  api: async (endpoint, options = {}) => {
+    const { accessToken } = get();
+
+    let { ok, status, data } = await fetchJSON(endpoint, options, accessToken);
+
+    if (status === 401) {
+      // Access token expired — try to silently refresh
+      const { refresh } = await loadTokens();
+      if (!refresh) {
+        await deleteTokens();
+        set({ user: null, accessToken: null, isAuthenticated: false });
+        throw new Error('Session expired. Please log in again.');
+      }
+      const refreshResult = await fetchJSON('/auth/token/refresh/', {
+        method: 'POST',
+        body: { refresh },
+      });
+      if (!refreshResult.ok) {
+        await deleteTokens();
+        set({ user: null, accessToken: null, isAuthenticated: false });
+        throw new Error('Session expired. Please log in again.');
+      }
+      const newAccess = refreshResult.data.access;
+      await saveTokens(newAccess, refresh);
+      set({ accessToken: newAccess });
+      // Retry the original request with the new token
+      ({ ok, data } = await fetchJSON(endpoint, options, newAccess));
+    }
+
+    if (!ok) throw new Error(extractError(data));
+    return data;
+  },
 
   // ── Restore session on app launch ──────────────────────────────────────────
   restoreSession: async () => {
@@ -63,22 +96,43 @@ export const useAuthStore = create((set, get) => ({
         set({ isLoading: false });
         return;
       }
-      // Verify token by fetching /me
-      const user = await request('/auth/me/', {}, access);
-      set({ user, accessToken: access, isAuthenticated: true, isLoading: false });
+
+      let { ok, status, data } = await fetchJSON('/auth/me/', {}, access);
+
+      // Access token expired — try refresh before giving up
+      if (status === 401 && refresh) {
+        const refreshResult = await fetchJSON('/auth/token/refresh/', {
+          method: 'POST',
+          body: { refresh },
+        });
+        if (refreshResult.ok) {
+          const newAccess = refreshResult.data.access;
+          await saveTokens(newAccess, refresh);
+          ({ ok, data } = await fetchJSON('/auth/me/', {}, newAccess));
+          if (ok) {
+            set({ user: data, accessToken: newAccess, isAuthenticated: true, isLoading: false });
+            return;
+          }
+        }
+      }
+
+      if (ok) {
+        set({ user: data, accessToken: access, isAuthenticated: true, isLoading: false });
+      } else {
+        await deleteTokens();
+        set({ isLoading: false });
+      }
     } catch {
-      // Token expired or invalid — clear and go to login
       await deleteTokens();
       set({ isLoading: false });
     }
   },
 
-  // ── Register (step 1 of onboarding — only name/email/password) ─────────────
-  // Full profile fields (handle, home_country etc.) are sent from AllDoneScreen
+  // ── Register ───────────────────────────────────────────────────────────────
   register: async ({ firstName, lastName, email, password, handle, homeCountry, countryFlag, livesIn, visaStatus }) => {
     set({ error: null });
     try {
-      const data = await request('/auth/register/', {
+      const { ok, data } = await fetchJSON('/auth/register/', {
         method: 'POST',
         body: {
           first_name:   firstName,
@@ -92,6 +146,7 @@ export const useAuthStore = create((set, get) => ({
           visa_status:  visaStatus,
         },
       });
+      if (!ok) throw new Error(extractError(data));
       await saveTokens(data.access, data.refresh);
       set({ user: data.user, accessToken: data.access, isAuthenticated: true });
       return data.user;
@@ -105,16 +160,19 @@ export const useAuthStore = create((set, get) => ({
   login: async ({ email, password }) => {
     set({ error: null });
     try {
-      // Django SimpleJWT login uses username field — we use email as username
-      const data = await request('/auth/login/', {
+      // Django SimpleJWT expects username field — we send email as username
+      const { ok: loginOk, data: loginData } = await fetchJSON('/auth/login/', {
         method: 'POST',
         body: { username: email, password },
       });
-      await saveTokens(data.access, data.refresh);
+      if (!loginOk) throw new Error(extractError(loginData));
+      await saveTokens(loginData.access, loginData.refresh);
+
       // Fetch full user profile
-      const user = await request('/auth/me/', {}, data.access);
-      set({ user, accessToken: data.access, isAuthenticated: true });
-      return user;
+      const { ok: meOk, data: meData } = await fetchJSON('/auth/me/', {}, loginData.access);
+      if (!meOk) throw new Error('Failed to load profile');
+      set({ user: meData, accessToken: loginData.access, isAuthenticated: true });
+      return meData;
     } catch (e) {
       set({ error: e.message });
       throw e;
@@ -125,9 +183,9 @@ export const useAuthStore = create((set, get) => ({
   logout: async () => {
     const { accessToken } = get();
     try {
-      const refresh = await SecureStore.getItemAsync('refresh_token');
+      const { refresh } = await loadTokens();
       if (refresh) {
-        await request('/auth/logout/', { method: 'POST', body: { refresh } }, accessToken);
+        await fetchJSON('/auth/logout/', { method: 'POST', body: { refresh } }, accessToken);
       }
     } catch {
       // Ignore — clear locally regardless
@@ -138,10 +196,9 @@ export const useAuthStore = create((set, get) => ({
 
   // ── Update profile ─────────────────────────────────────────────────────────
   updateProfile: async (fields) => {
-    const { accessToken } = get();
     set({ error: null });
     try {
-      const user = await request('/auth/me/', { method: 'PATCH', body: fields }, accessToken);
+      const user = await get().api('/auth/me/', { method: 'PATCH', body: fields });
       set({ user });
       return user;
     } catch (e) {

@@ -211,7 +211,7 @@ const styles = StyleSheet.create({
   divTxt: { fontSize: 12, fontWeight: '500' },
   fieldLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 8 },
   inputWrap: { flexDirection: 'row', alignItems: 'center', borderRadius: 16, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 14 },
-  input: { flex: 1, fontSize: 15 },
+  input: { flex: 1, fontSize: 15, backgroundColor: 'transparent' },
   errorTxt: { fontSize: 11, fontWeight: '600', marginTop: 4 },
   forgotRow: { alignItems: 'flex-end', marginTop: -8, marginBottom: 20 },
   forgotTxt: { fontSize: 13, fontWeight: '600' },

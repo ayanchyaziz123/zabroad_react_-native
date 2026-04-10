@@ -1,27 +1,33 @@
 import React, { useState, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  TextInput, ScrollView, KeyboardAvoidingView, Platform,
+  TextInput, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../theme/ThemeContext';
 import { FontAwesome } from '@expo/vector-icons';
 
+const BASE_URL = 'http://127.0.0.1:8000/api';
+
 export default function SignUpScreen({ navigation }) {
   const { colors: C } = useTheme();
 
-  // ── All input values in refs — zero re-renders while typing ──────────────
+  // ── Uncontrolled refs for non-sensitive fields (no re-render needed) ─────
   const firstNameVal = useRef('');
   const lastNameVal  = useRef('');
   const emailVal     = useRef('');
-  const passVal      = useRef('');
-  const confVal      = useRef('');
 
-  // ── Only UI state (doesn't affect inputs) ────────────────────────────────
-  const [showPass, setShowPass] = useState(false);
-  const [showConf, setShowConf] = useState(false);
-  const [errors,   setErrors]   = useState({});
+  // ── Controlled state for password fields — required to suppress iOS
+  //    autofill yellow tint (only affects controlled inputs) ─────────────────
+  const [passVal,   setPassVal]   = useState('');
+  const [confVal,   setConfVal]   = useState('');
+
+  // ── UI state ──────────────────────────────────────────────────────────────
+  const [showPass,  setShowPass]  = useState(false);
+  const [showConf,  setShowConf]  = useState(false);
+  const [errors,    setErrors]    = useState({});
+  const [sending,   setSending]   = useState(false);
 
   // ── Input element refs for focus chaining ────────────────────────────────
   const lastNameRef = useRef(null);
@@ -31,22 +37,38 @@ export default function SignUpScreen({ navigation }) {
 
   const validate = () => {
     const e = {};
-    if (!firstNameVal.current.trim())                       e.firstName = 'First name is required';
-    if (!lastNameVal.current.trim())                        e.lastName  = 'Last name is required';
-    if (!emailVal.current.includes('@'))                    e.email     = 'Enter a valid email';
-    if (passVal.current.length < 8)                        e.password  = 'Min. 8 characters';
-    if (confVal.current !== passVal.current)               e.confirm   = 'Passwords do not match';
+    if (!firstNameVal.current.trim())             e.firstName = 'First name is required';
+    if (!lastNameVal.current.trim())              e.lastName  = 'Last name is required';
+    if (!emailVal.current.includes('@'))          e.email     = 'Enter a valid email';
+    if (passVal.length < 8)                       e.password  = 'Min. 8 characters';
+    if (confVal !== passVal)                      e.confirm   = 'Passwords do not match';
     setErrors(e);
     return Object.keys(e).length === 0;
   };
 
-  const handleNext = () => {
-    if (validate()) {
-      navigation.navigate('FromCountry', {
+  const handleNext = async () => {
+    if (!validate()) return;
+    setSending(true);
+    try {
+      const res = await fetch(`${BASE_URL}/auth/otp/send/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: emailVal.current }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setErrors({ email: data.detail || 'Failed to send verification code' });
+        return;
+      }
+      navigation.navigate('OTP', {
         name:     `${firstNameVal.current.trim()} ${lastNameVal.current.trim()}`,
         email:    emailVal.current,
-        password: passVal.current,
+        password: passVal,
       });
+    } catch {
+      setErrors({ email: 'Network error. Check your connection.' });
+    } finally {
+      setSending(false);
     }
   };
 
@@ -156,14 +178,15 @@ export default function SignUpScreen({ navigation }) {
             <TextInput
               ref={passRef}
               style={[s.input, { color: C.cream }]}
-              onChangeText={v => { passVal.current = v; }}
+              value={passVal}
+              onChangeText={setPassVal}
               placeholder="Min. 8 characters"
               placeholderTextColor={C.c35}
               secureTextEntry={!showPass}
               autoCapitalize="none"
               autoCorrect={false}
               autoComplete="off"
-              textContentType="none"
+              textContentType="oneTimeCode"
               returnKeyType="next"
               onSubmitEditing={() => confRef.current?.focus()}
             />
@@ -179,14 +202,15 @@ export default function SignUpScreen({ navigation }) {
             <TextInput
               ref={confRef}
               style={[s.input, { color: C.cream }]}
-              onChangeText={v => { confVal.current = v; }}
+              value={confVal}
+              onChangeText={setConfVal}
               placeholder="Re-enter password"
               placeholderTextColor={C.c35}
               secureTextEntry={!showConf}
               autoCapitalize="none"
               autoCorrect={false}
               autoComplete="off"
-              textContentType="none"
+              textContentType="oneTimeCode"
               returnKeyType="done"
               onSubmitEditing={handleNext}
             />
@@ -205,10 +229,15 @@ export default function SignUpScreen({ navigation }) {
         </ScrollView>
 
         <View style={[s.footer, { borderTopColor: C.border }]}>
-          <TouchableOpacity onPress={handleNext} activeOpacity={0.88} style={s.nextBtn}>
-            <LinearGradient colors={[C.vivid, '#B82838']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.nextGrad}>
-              <Text style={s.nextTxt}>Continue</Text>
-              <Text style={{ fontSize: 16, color: 'white' }}>→</Text>
+          <TouchableOpacity onPress={handleNext} activeOpacity={0.88} style={s.nextBtn} disabled={sending}>
+            <LinearGradient colors={[C.vivid, '#B82838']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[s.nextGrad, sending && { opacity: 0.7 }]}>
+              {sending
+                ? <ActivityIndicator color="white" />
+                : <>
+                    <Text style={s.nextTxt}>Continue</Text>
+                    <Text style={{ fontSize: 16, color: 'white' }}>→</Text>
+                  </>
+              }
             </LinearGradient>
           </TouchableOpacity>
         </View>
@@ -238,7 +267,7 @@ const s = StyleSheet.create({
   nameRow:   { flexDirection: 'row', gap: 12 },
   label:     { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 8, marginTop: 14 },
   box:       { flexDirection: 'row', alignItems: 'center', borderRadius: 16, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 14 },
-  input:     { flex: 1, fontSize: 15 },
+  input:     { flex: 1, fontSize: 15, backgroundColor: 'transparent' },
   err:       { fontSize: 11, fontWeight: '600', marginTop: 4, marginBottom: 2 },
   terms:     { fontSize: 12, lineHeight: 18, textAlign: 'center', marginTop: 16 },
   footer:    { paddingHorizontal: 24, paddingVertical: 12, borderTopWidth: 1 },

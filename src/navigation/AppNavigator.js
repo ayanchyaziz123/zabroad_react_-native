@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -101,9 +101,10 @@ function CustomTabBar({ state, navigation }) {
 function MainTabs() {
   return (
     <Tab.Navigator tabBar={(props) => <CustomTabBar {...props} />} screenOptions={{ headerShown: false }}>
-      <Tab.Screen name="Home"    component={HomeScreen} />
-      <Tab.Screen name="Chat"    component={ChatScreen} />
-      <Tab.Screen name="Profile" component={ProfileScreen} />
+      <Tab.Screen name="Home"        component={HomeScreen} />
+      <Tab.Screen name="AIAssistant" component={AIAssistantScreen} />
+      <Tab.Screen name="Chat"        component={ChatScreen} />
+      <Tab.Screen name="Profile"     component={ProfileScreen} />
     </Tab.Navigator>
   );
 }
@@ -111,10 +112,19 @@ function MainTabs() {
 export default function AppNavigator() {
   const isAuthenticated = useAuthStore(s => s.isAuthenticated);
   const isLoading       = useAuthStore(s => s.isLoading);
+  const { colors: C }   = useTheme();
 
-  // While restoring session, start at Welcome — the user won't see a flash
-  // because isLoading is resolved before the first meaningful render
-  const initialRoute = (!isLoading && isAuthenticated) ? 'AppMain' : 'Welcome';
+  // Show a blank loading screen while the session is being restored so there's
+  // no flash of the wrong screen.
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: C.bg, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator size="large" color={C.vivid} />
+      </View>
+    );
+  }
+
+  const initialRoute = isAuthenticated ? 'AppMain' : 'Welcome';
 
   return (
     <NavigationContainer>
