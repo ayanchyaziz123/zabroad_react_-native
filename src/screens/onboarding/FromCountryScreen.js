@@ -60,7 +60,7 @@ export default function FromCountryScreen({ navigation, route }) {
   );
 
   const handleNext = () => {
-    if (selected) navigation.navigate('LivesIn', { ...userData, fromCountry: selected });
+    if (selected) navigation.navigate('Interests', { ...userData, fromCountry: selected });
   };
 
   return (
@@ -72,7 +72,7 @@ export default function FromCountryScreen({ navigation, route }) {
           <Text style={[styles.backTxt, { color: C.cream }]}>‹</Text>
         </TouchableOpacity>
         <View style={styles.progress}>
-          {[1,2,3,4].map(i => (
+          {[1,2,3].map(i => (
             <View key={i} style={[styles.progressDot, { backgroundColor: i <= 2 ? C.vivid : C.border }]} />
           ))}
         </View>
@@ -80,7 +80,7 @@ export default function FromCountryScreen({ navigation, route }) {
       </View>
 
       <View style={styles.titleWrap}>
-        <Text style={[styles.step, { color: C.vivid }]}>Step 2 of 4</Text>
+        <Text style={[styles.step, { color: C.vivid }]}>Step 2 of 3</Text>
         <Text style={[styles.title, { color: C.cream }]}>Where are{'\n'}you from? 🌍</Text>
         <Text style={[styles.sub, { color: C.c35 }]}>We'll connect you with people from your home country</Text>
       </View>

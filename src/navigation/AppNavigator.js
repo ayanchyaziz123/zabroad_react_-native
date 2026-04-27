@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -11,14 +12,12 @@ import WelcomeScreen    from '../screens/onboarding/WelcomeScreen';
 import SignUpScreen     from '../screens/onboarding/SignUpScreen';
 import LoginScreen      from '../screens/onboarding/LoginScreen';
 import FromCountryScreen from '../screens/onboarding/FromCountryScreen';
-import LivesInScreen    from '../screens/onboarding/LivesInScreen';
 import InterestsScreen  from '../screens/onboarding/InterestsScreen';
 import AllDoneScreen    from '../screens/onboarding/AllDoneScreen';
 import OTPScreen        from '../screens/onboarding/OTPScreen';
 
 // Main app
 import HomeScreen       from '../screens/HomeScreen';
-import ChatScreen       from '../screens/ChatScreen';
 import CreatePostScreen from '../screens/CreatePostScreen';
 import ProfileScreen    from '../screens/ProfileScreen';
 import HealthcareScreen from '../screens/HealthcareScreen';
@@ -39,6 +38,7 @@ import ListAttorneyScreen      from '../screens/ListAttorneyScreen';
 import PostJobScreen           from '../screens/PostJobScreen';
 import ListDoctorScreen        from '../screens/ListDoctorScreen';
 import EventsScreen            from '../screens/EventsScreen';
+import ChatScreen               from '../screens/ChatScreen';
 
 const Tab   = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -48,13 +48,13 @@ function CustomTabBar({ state, navigation }) {
   const { colors: C } = useTheme();
   const s = useMemo(() => getStyles(C), [C]);
 
-  // Order: Home · AI · [+] · Chat · Profile
+  // Order: Home · Chat · [+] · Notifications · Profile
   const allTabs = [
-    { type: 'tab', name: 'Home',        icon: '🏠', label: 'Home'    },
-    { type: 'tab', name: 'AIAssistant', icon: '🤖', label: 'AI'      },
+    { type: 'tab', name: 'Home',          icon: 'home-outline',          iconActive: 'home',          label: 'Home'    },
+    { type: 'tab', name: 'Chat',          icon: 'chatbubble-outline',    iconActive: 'chatbubble',    label: 'Chat'    },
     { type: 'fab' },
-    { type: 'tab', name: 'Chat',        icon: '💬', label: 'Chat'    },
-    { type: 'tab', name: 'Profile',     icon: '👤', label: 'Profile' },
+    { type: 'tab', name: 'Notifications', icon: 'notifications-outline', iconActive: 'notifications', label: 'Notifs'  },
+    { type: 'tab', name: 'Profile',       icon: 'person-outline',        iconActive: 'person',        label: 'Profile' },
   ];
 
   return (
@@ -63,20 +63,7 @@ function CustomTabBar({ state, navigation }) {
         if (item.type === 'fab') {
           return (
             <TouchableOpacity key="fab" style={s.fab} onPress={() => navigation.navigate('CreatePost')} activeOpacity={0.85}>
-              <Text style={s.fabIcon}>+</Text>
-            </TouchableOpacity>
-          );
-        }
-        if (item.type === 'nav') {
-          return (
-            <TouchableOpacity
-              key={item.name}
-              style={s.tabItem}
-              onPress={() => navigation.navigate(item.name)}
-              activeOpacity={0.7}
-            >
-              <Text style={s.tabIcon}>{item.icon}</Text>
-              <Text style={s.tabLabel}>{item.label}</Text>
+              <Ionicons name="add" size={24} color="white" />
             </TouchableOpacity>
           );
         }
@@ -89,7 +76,11 @@ function CustomTabBar({ state, navigation }) {
             onPress={() => navigation.navigate(item.name)}
             activeOpacity={0.7}
           >
-            <Text style={s.tabIcon}>{item.icon}</Text>
+            <Ionicons
+              name={isActive ? item.iconActive : item.icon}
+              size={19}
+              color={isActive ? C.vivid : C.c35}
+            />
             <Text style={[s.tabLabel, isActive && s.tabLabelActive]}>{item.label}</Text>
           </TouchableOpacity>
         );
@@ -101,10 +92,10 @@ function CustomTabBar({ state, navigation }) {
 function MainTabs() {
   return (
     <Tab.Navigator tabBar={(props) => <CustomTabBar {...props} />} screenOptions={{ headerShown: false }}>
-      <Tab.Screen name="Home"        component={HomeScreen} />
-      <Tab.Screen name="AIAssistant" component={AIAssistantScreen} />
-      <Tab.Screen name="Chat"        component={ChatScreen} />
-      <Tab.Screen name="Profile"     component={ProfileScreen} />
+      <Tab.Screen name="Home"          component={HomeScreen} />
+      <Tab.Screen name="Chat"   component={ChatScreen} />
+      <Tab.Screen name="Notifications" component={NotificationsScreen} />
+      <Tab.Screen name="Profile"       component={ProfileScreen} />
     </Tab.Navigator>
   );
 }
@@ -134,7 +125,6 @@ export default function AppNavigator() {
         <Stack.Screen name="SignUp"      component={SignUpScreen} />
         <Stack.Screen name="Login"       component={LoginScreen} />
         <Stack.Screen name="FromCountry" component={FromCountryScreen} />
-        <Stack.Screen name="LivesIn"     component={LivesInScreen} />
         <Stack.Screen name="Interests"   component={InterestsScreen} />
         <Stack.Screen name="OTP"         component={OTPScreen} />
         <Stack.Screen name="AllDone"     component={AllDoneScreen} options={{ animation: 'fade' }} />
@@ -169,17 +159,15 @@ const getStyles = (C) => StyleSheet.create({
   tabBar: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around',
     backgroundColor: C.nav, borderTopWidth: 1, borderTopColor: C.border,
-    paddingBottom: 24, paddingTop: 10, paddingHorizontal: 8, height: 82,
+    paddingBottom: 22, paddingTop: 8, paddingHorizontal: 4, height: 76,
   },
-  tabItem: { alignItems: 'center', gap: 2, paddingHorizontal: 6, paddingVertical: 6, borderRadius: 14 },
+  tabItem: { alignItems: 'center', gap: 2, paddingHorizontal: 5, paddingVertical: 5, borderRadius: 12 },
   tabItemActive: { backgroundColor: C.vividD },
-  tabIcon: { fontSize: 18 },
   tabLabel: { fontSize: 8, fontWeight: '700', letterSpacing: 0.4, textTransform: 'uppercase', color: C.c35 },
   tabLabelActive: { color: C.vivid },
   fab: {
-    width: 50, height: 50, borderRadius: 17, backgroundColor: C.vivid,
-    alignItems: 'center', justifyContent: 'center', marginBottom: 12,
+    width: 46, height: 46, borderRadius: 15, backgroundColor: C.vivid,
+    alignItems: 'center', justifyContent: 'center', marginBottom: 10,
     shadowColor: C.vivid, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.5, shadowRadius: 12, elevation: 8,
   },
-  fabIcon: { color: 'white', fontSize: 24, fontWeight: '300', lineHeight: 28 },
 });

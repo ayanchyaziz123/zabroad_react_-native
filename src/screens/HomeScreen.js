@@ -1,45 +1,23 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
   StyleSheet, Animated, Modal, TextInput,
+  ActivityIndicator, RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 import MapView, { Circle } from 'react-native-maps';
+import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 import { useUser } from '../context/UserContext';
+import { useAuthStore } from '../store/authStore';
 
 const NEARBY_RESOURCES = [
-  {
-    id: 'r1', category: 'Jobs', icon: '💼', color: '#3EC878', bg: '#0F2018',
-    title: 'OPT-Friendly Jobs Near You',
-    items: ['Junior Dev — TechCorp NYC', 'Data Analyst — Citibank', 'IT Support — Queens Hospital'],
-    count: 14, route: 'Jobs',
-  },
-  {
-    id: 'r2', category: 'Housing', icon: '🏠', color: '#F5A623', bg: '#1A1408',
-    title: 'No Credit Check Housing',
-    items: ['1BR Queens — $1,450/mo', 'Studio Flushing — $1,100/mo', 'Room Jackson Hts — $900/mo'],
-    count: 8, route: 'Housing',
-  },
-  {
-    id: 'r3', category: 'Doctors', icon: '🩺', color: '#5BCFEF', bg: '#0A1820',
-    title: 'Doctors Speak Your Language',
-    items: ['Dr. Karim — Primary Care, Queens', 'Dr. Hossain — Family Med, Flushing', 'Dr. Ahmed — Dentist, Bronx'],
-    count: 6, route: 'Healthcare',
-  },
-  {
-    id: 'r4', category: 'Attorneys', icon: '⚖️', color: '#9B72EF', bg: '#130F20',
-    title: 'Immigration Attorneys Near You',
-    items: ['Priya Mehta — OPT / H-1B', 'James Park — Asylum / Green Card', 'Aisha Law — Family Visa'],
-    count: 5, route: 'Attorney',
-  },
-  {
-    id: 'r5', category: 'Events', icon: '🗓️', color: '#F5A623', bg: '#1A1208',
-    title: 'Events Near You',
-    items: ['Legal Aid — Sat Apr 5, Queens', 'BD Meetup — Sun Apr 6, Flushing', 'Job Fair — Sat Apr 12, Manhattan'],
-    count: 9, route: 'Events',
-  },
+  { id: 'r1', category: 'Jobs',      icon: 'briefcase-outline',      color: '#3EC878', bg: '#0F2018', count: 14, route: 'Jobs'       },
+  { id: 'r2', category: 'Housing',   icon: 'home-outline',           color: '#F5A623', bg: '#1A1408', count: 8,  route: 'Housing'    },
+  { id: 'r3', category: 'Doctors',   icon: 'medkit-outline',         color: '#5BCFEF', bg: '#0A1820', count: 6,  route: 'Healthcare' },
+  { id: 'r4', category: 'Attorneys', icon: 'shield-checkmark-outline', color: '#9B72EF', bg: '#130F20', count: 5, route: 'Attorney'  },
+  { id: 'r5', category: 'Events',    icon: 'calendar-outline',       color: '#F5A623', bg: '#1A1208', count: 9,  route: 'Events'     },
+  { id: 'r6', category: 'Visa',      icon: 'document-text-outline',  color: '#FB7185', bg: '#200A10', count: 3,  route: 'Visa'       },
 ];
 
 const SUGGESTED_CITIES = [
@@ -62,201 +40,129 @@ const SUGGESTED_CITIES = [
   { name: 'Philadelphia, PA',  lat: 39.9526,  lng: -75.1652 },
 ];
 
-const FEED_DATA = [
-  {
-    id: 'f0', type: 'featured', scope: 'bd_usa',
-    avatar: '🤖', avatarBg: '#2D1B2E', name: 'Zabroad AI', handle: '@zabroad_ai',
-    time: 'Pinned', location: null, tag: 'AI TIP', tagColor: '#E8364A',
-    body: 'H-1B cap lottery opens April 1 — registration window is March 7–22. Make sure your employer has filed an LCA and your attorney has your docs ready.',
-    likes: 312, comments: 74, route: 'AIAssistant',
-    image: { emoji: '🤖', bg: ['#2D1B2E', '#1A0F1E'], label: 'H-1B Season 2026', sublabel: 'Act now · Deadline April 1' },
-  },
-  {
-    id: 'f1', type: 'post', scope: 'local',
-    avatar: '👨🏽', avatarBg: '#1A2035', name: 'Tanvir Hossain', handle: '@tanvir_h',
-    time: '18 min ago', location: 'Queens, NY', tag: 'Q&A', tagColor: '#5B8DEF',
-    body: 'Best OPT-friendly staffing agencies in NYC? TCS and Mastech keep ghosting me after phone screens. My EAD expires in 6 months 😟 Any leads?',
-    likes: 34, comments: 14, route: 'PostDetail', image: null,
-  },
-  {
-    id: 'f2', type: 'post', scope: 'local',
-    avatar: '👩🏾', avatarBg: '#0F2018', name: 'Aisha Kamara', handle: '@aisha_k',
-    time: '1h ago', location: 'Bronx, NY', tag: 'Win 🎉', tagColor: '#3EC878',
-    body: 'EAD APPROVED after 9 months of waiting, endless RFEs and two attorney calls 🎉 For anyone still waiting — keep faith. Happy to share my full timeline.',
-    likes: 224, comments: 61, route: 'PostDetail',
-    image: { emoji: '📄', bg: ['#0F2018', '#0A1810'], label: 'EAD Card Approved ✓', sublabel: '9 months · Queens, NY' },
-  },
-  {
-    id: 'f3', type: 'post', scope: 'local',
-    avatar: '👩🏻', avatarBg: '#0F1E25', name: 'Yuna Park', handle: '@yuna_nyc',
-    time: '2h ago', location: 'Flushing, NY', tag: 'Housing', tagColor: '#86EFAC',
-    body: 'Found a no-credit-check 1BR in Flushing! $1,450/mo · No SSN required · 1 month deposit · Close to 7 train. Landlord is immigrant-friendly. DM me for info.',
-    likes: 189, comments: 43, route: 'PostDetail',
-    image: { emoji: '🏠', bg: ['#0F2018', '#0A1A14'], label: 'Flushing, Queens', sublabel: '$1,450/mo · No credit check' },
-  },
-  {
-    id: 'f4', type: 'post', scope: 'bd_nearby',
-    avatar: '👨🏿', avatarBg: '#1E1225', name: 'Marcus Tesfaye', handle: '@marcus_t',
-    time: '3h ago', location: 'Manhattan, NY', tag: 'Legal', tagColor: '#C084FC',
-    body: 'Asylum case approved after 2.5 years. I want to share my journey for anyone going through this alone. It\'s brutal but possible. The key was a pro bono attorney.',
-    likes: 418, comments: 92, route: 'PostDetail', image: null,
-  },
-  {
-    id: 'f5', type: 'post', scope: 'global',
-    avatar: '👩🏽', avatarBg: '#201A08', name: 'Priya Sharma', handle: '@priya_s',
-    time: '4h ago', location: 'Jersey City, NJ', tag: 'Jobs', tagColor: '#FDB970',
-    body: 'Got my H-1B transfer approved! Moving to Google NYC 🎉 Petition filed Oct 1st, approved in 3 weeks on premium processing. The fear is worse than the process.',
-    likes: 502, comments: 108, route: 'PostDetail',
-    image: { emoji: '🔍', bg: ['#1A1A08', '#121208'], label: 'Google NYC · H-1B Transfer', sublabel: 'Approved in 3 weeks · Premium' },
-  },
-  {
-    id: 'f6', type: 'post', scope: 'local',
-    avatar: '👨🏽', avatarBg: '#0F1A2A', name: 'Carlos Mendez', handle: '@carlosm',
-    time: '5h ago', location: 'Brooklyn, NY', tag: 'Q&A', tagColor: '#5B8DEF',
-    body: 'Can I work part-time on F-1 OPT while waiting for H-1B approval? I have a full-time offer + a consulting gig. Would it affect my cap-gap extension?',
-    likes: 28, comments: 19, route: 'PostDetail', image: null,
-  },
-  {
-    id: 'f7', type: 'event', scope: 'bd_usa',
-    avatar: '⚖️', avatarBg: '#1A1025', name: 'Legal Aid NYC', handle: '@legalaidnyc',
-    time: 'This Saturday', location: 'Downtown Manhattan', tag: 'Event', tagColor: '#C084FC',
-    body: 'Free immigration consultation this Saturday! DACA renewals, asylum, visa renewals & green card. Walk-ins welcome. 10am–4pm at 199 Water St.',
-    likes: 320, comments: 88, route: 'Attorney',
-    image: { emoji: '⚖️', bg: ['#1A1025', '#100A18'], label: 'Free Legal Aid Event', sublabel: 'Sat 10am–4pm · 199 Water St' },
-  },
-  {
-    id: 'f8', type: 'post', scope: 'bd_nearby',
-    avatar: '👩🏾', avatarBg: '#0F2018', name: 'Fatima Rahman', handle: '@fatima_r',
-    time: '6h ago', location: 'Queens, NY', tag: 'Tip', tagColor: '#3EC878',
-    body: 'How I got Medicaid in NYC as an immigrant — step by step. A lot of people don\'t know you can qualify on certain visa types. Apply at your local HRA office with your I-94.',
-    likes: 276, comments: 53, route: 'PostDetail', image: null,
-  },
-  {
-    id: 'f9', type: 'post', scope: 'global',
-    avatar: '👩🏽', avatarBg: '#1A0F1E', name: 'Meera Iyer', handle: '@meera_nyc',
-    time: '10h ago', location: 'Hoboken, NJ', tag: 'Q&A', tagColor: '#5B8DEF',
-    body: 'Credit builder loan vs secured card for new immigrants? I moved here 4 months ago with zero credit history. Bank suggested secured card but I\'ve heard about Self. Which is better?',
-    likes: 61, comments: 24, route: 'PostDetail', image: null,
-  },
-  {
-    id: 'f10', type: 'post', scope: 'bd_usa',
-    avatar: '👩🏽', avatarBg: '#1A1A08', name: 'Nadia Osei', handle: '@nadia_o',
-    time: '14h ago', location: 'Queens, NY', tag: 'Housing', tagColor: '#86EFAC',
-    body: 'Roommate wanted in Jackson Heights — immigrant-friendly building. $900/mo, no credit check, landlord accepts ITIN. Female preferred. Move-in April 1.',
-    likes: 88, comments: 31, route: 'PostDetail',
-    image: { emoji: '🏘️', bg: ['#0F1A10', '#0A1208'], label: 'Jackson Heights, Queens', sublabel: '$900/mo · ITIN accepted' },
-  },
-  {
-    id: 'f11', type: 'post', scope: 'bd_all',
-    avatar: '👨🏽', avatarBg: '#0F1A2A', name: 'Rafiq Islam', handle: '@rafiq_dhaka',
-    time: '3h ago', location: 'London, UK', tag: 'Visa', tagColor: '#5B8DEF',
-    body: 'Just got my UK Skilled Worker visa approved after moving from Dhaka! The process took 6 weeks. Happy to answer questions for anyone applying from Bangladesh.',
-    likes: 203, comments: 47, route: 'PostDetail',
-    image: { emoji: '🇬🇧', bg: ['#0F1A2A', '#080F1A'], label: 'UK Skilled Worker Visa ✓', sublabel: 'London · 6 weeks processing' },
-  },
-  {
-    id: 'f12', type: 'post', scope: 'bd_all',
-    avatar: '👩🏽', avatarBg: '#1A1008', name: 'Sumaiya Akter', handle: '@sumaiya_ca',
-    time: '7h ago', location: 'Toronto, Canada', tag: 'Jobs', tagColor: '#FDB970',
-    body: 'Bangladeshi tech professionals in Canada — there\'s a growing community in Toronto. Just joined a BD engineers group here with 400+ members. DM for the invite link.',
-    likes: 156, comments: 62, route: 'PostDetail', image: null,
-  },
-];
+const AVATAR_BG_COLORS = ['#1A2035', '#0F2018', '#1A1408', '#0A1820', '#130F20', '#1A1025', '#1A1A08', '#0F1A2A'];
 
-// SCOPES built dynamically in HomeScreen from UserContext
+function getAvatarBg(handle) {
+  if (!handle) return AVATAR_BG_COLORS[0];
+  const idx = handle.charCodeAt(0) % AVATAR_BG_COLORS.length;
+  return AVATAR_BG_COLORS[idx];
+}
 
-function getGreeting() {
-  const h = new Date().getHours();
-  if (h >= 5  && h < 12) return 'Good morning ☀️';
-  if (h >= 12 && h < 17) return 'Good afternoon 🌤';
-  if (h >= 17 && h < 21) return 'Good evening 🌆';
-  return 'Good night 🌙';
+function formatTime(isoString) {
+  if (!isoString) return '';
+  const diff = Math.floor((Date.now() - new Date(isoString)) / 1000);
+  if (diff < 60)   return 'Just now';
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
 }
 
 
-function LikeButton({ count, s, C }) {
-  const [liked, setLiked] = useState(false);
-  const [likeCount, setLikeCount] = useState(count);
-  const scale = useRef(new Animated.Value(1)).current;
-  function onPress() {
-    setLiked(l => !l);
-    setLikeCount(c => liked ? c - 1 : c + 1);
+function FeedCard({ post, navigation, C, s, api }) {
+  const avatarBg = getAvatarBg(post.author_handle);
+  const [liked,  setLiked]  = useState(post.is_liked  || false);
+  const [likes,  setLikes]  = useState(post.likes_count || 0);
+  const [saved,  setSaved]  = useState(false);
+  const heartScale = useRef(new Animated.Value(1)).current;
+
+  async function onLike() {
+    const next = !liked;
+    setLiked(next);
+    setLikes(c => next ? c + 1 : c - 1);
     Animated.sequence([
-      Animated.spring(scale, { toValue: 1.5, useNativeDriver: true, speed: 50, bounciness: 16 }),
-      Animated.spring(scale, { toValue: 1,   useNativeDriver: true, speed: 20 }),
+      Animated.spring(heartScale, { toValue: 1.4, useNativeDriver: true, speed: 60, bounciness: 20 }),
+      Animated.spring(heartScale, { toValue: 1,   useNativeDriver: true, speed: 30 }),
     ]).start();
+    try {
+      await api(`/posts/${post.id}/like/`, { method: 'POST' });
+    } catch {
+      setLiked(liked);
+      setLikes(c => next ? c - 1 : c + 1);
+    }
   }
-  return (
-    <TouchableOpacity style={s.actionBtn} onPress={onPress} activeOpacity={0.7}>
-      <Animated.Text style={{ fontSize: 15, transform: [{ scale }] }}>{liked ? '❤️' : '🤍'}</Animated.Text>
-      <Text style={[s.actionTxt, liked && { color: '#FF6B6B' }]}>{likeCount}</Text>
-    </TouchableOpacity>
-  );
-}
 
-function SaveButton({ s, C }) {
-  const [saved, setSaved] = useState(false);
-  return (
-    <TouchableOpacity style={s.actionBtn} onPress={() => setSaved(v => !v)} activeOpacity={0.7}>
-      <Text style={{ fontSize: 15 }}>{saved ? '🔖' : '🏷️'}</Text>
-      <Text style={[s.actionTxt, saved && { color: C.gold }]}>{saved ? 'Saved' : 'Save'}</Text>
-    </TouchableOpacity>
-  );
-}
-
-function FeedCard({ item, navigation, C, s }) {
   function handlePress() {
-    navigation.navigate(item.route, item.route === 'PostDetail' ? { post: item } : undefined);
+    navigation.navigate('PostDetail', { post });
   }
 
   return (
-    <TouchableOpacity style={s.feedCard} onPress={handlePress} activeOpacity={0.96}>
+    <View style={s.feedCard}>
 
-      {/* Author row */}
+      {/* ── Header ─────────────────────────────────────────────── */}
       <View style={s.feedHeader}>
         <TouchableOpacity
-          style={[s.feedAvatar, { backgroundColor: item.avatarBg }]}
-          onPress={() => item.handle && navigation.navigate('UserProfile', { handle: item.handle })}
-          activeOpacity={0.8}
+          style={s.avatarRing}
+          onPress={() => post.author_handle && navigation.navigate('UserProfile', { handle: post.author_handle })}
+          activeOpacity={0.85}
         >
-          <Text style={{ fontSize: 19 }}>{item.avatar}</Text>
+          <View style={[s.feedAvatar, { backgroundColor: avatarBg }]}>
+            <Text style={{ fontSize: 20 }}>{post.author_avatar || '🧑‍💻'}</Text>
+          </View>
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
-          <Text style={s.feedName}>{item.name}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text style={s.feedName}>{post.author_name}</Text>
+            {post.author_country_flag ? <Text style={{ fontSize: 13 }}>{post.author_country_flag}</Text> : null}
+          </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 1 }}>
-            <Text style={s.feedMeta}>{item.time}</Text>
-            {item.location && <Text style={s.feedMeta}>· 📍 {item.location}</Text>}
+            <Text style={s.feedMeta}>{formatTime(post.created_at)}</Text>
+            {post.location ? <Text style={s.feedMeta}>· 📍 {post.location}</Text> : null}
           </View>
         </View>
+        <TouchableOpacity style={s.moreBtn} onPress={handlePress} activeOpacity={0.7}>
+          <Ionicons name="ellipsis-horizontal" size={20} color={C.c35} />
+        </TouchableOpacity>
       </View>
 
-      {/* Body text */}
-      <Text style={s.feedBody} numberOfLines={item.image ? 2 : 4}>{item.body}</Text>
+      {/* ── Body ───────────────────────────────────────────────── */}
+      <TouchableOpacity onPress={handlePress} activeOpacity={0.95}>
+        <Text style={s.feedBody} numberOfLines={6}>{post.body}</Text>
+      </TouchableOpacity>
 
-      {/* Image card */}
-      {item.image && (
-        <LinearGradient colors={item.image.bg} style={s.feedImage}>
-          <Text style={{ fontSize: 44 }}>{item.image.emoji}</Text>
-          <View>
-            <Text style={s.feedImageLabel}>{item.image.label}</Text>
-            <Text style={s.feedImageSub}>{item.image.sublabel}</Text>
-          </View>
-        </LinearGradient>
+      {/* ── Topics ─────────────────────────────────────────────── */}
+      {post.topics_list?.length > 0 && (
+        <View style={s.topicsRow}>
+          {post.topics_list.map(t => (
+            <View key={t} style={[s.topicChip, { backgroundColor: C.card2, borderColor: C.border }]}>
+              <Text style={[s.topicChipTxt, { color: C.c35 }]}>#{t}</Text>
+            </View>
+          ))}
+        </View>
       )}
 
-      {/* Actions */}
-      <View style={s.feedActions}>
-        <LikeButton count={item.likes} s={s} C={C} />
-        <TouchableOpacity style={s.actionBtn} onPress={handlePress} activeOpacity={0.7}>
-          <Text style={s.actionIcon}>💬</Text>
-          <Text style={s.actionTxt}>{item.comments}</Text>
+      {/* ── Instagram-style action bar ──────────────────────────── */}
+      <View style={s.igActions}>
+        <View style={s.igLeft}>
+          <TouchableOpacity onPress={onLike} activeOpacity={0.7} style={s.igBtn}>
+            <Animated.View style={{ transform: [{ scale: heartScale }] }}>
+              <Ionicons name={liked ? 'heart' : 'heart-outline'} size={26} color={liked ? '#FF3B5C' : C.c60} />
+            </Animated.View>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={handlePress} activeOpacity={0.7} style={s.igBtn}>
+            <Ionicons name="chatbubble-outline" size={24} color={C.c60} />
+          </TouchableOpacity>
+          <TouchableOpacity activeOpacity={0.7} style={s.igBtn}>
+            <Ionicons name="paper-plane-outline" size={24} color={C.c60} />
+          </TouchableOpacity>
+        </View>
+        <TouchableOpacity onPress={() => setSaved(v => !v)} activeOpacity={0.7} style={s.igBtn}>
+          <Ionicons name={saved ? 'bookmark' : 'bookmark-outline'} size={24} color={saved ? C.vivid : C.c60} />
         </TouchableOpacity>
-        <TouchableOpacity style={s.actionBtn} activeOpacity={0.7}>
-          <Text style={s.actionTxt}>Share</Text>
-        </TouchableOpacity>
-        <SaveButton s={s} C={C} />
       </View>
-    </TouchableOpacity>
+
+      {/* ── Counts ─────────────────────────────────────────────── */}
+      <View style={s.igCounts}>
+        {likes > 0 && <Text style={s.igCountTxt}>{likes.toLocaleString()} like{likes !== 1 ? 's' : ''}</Text>}
+        {post.comments_count > 0 && (
+          <TouchableOpacity onPress={handlePress} activeOpacity={0.7}>
+            <Text style={[s.igCountTxt, { color: C.c35 }]}>
+              {likes > 0 ? '  ·  ' : ''}{post.comments_count} comment{post.comments_count !== 1 ? 's' : ''}
+            </Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+    </View>
   );
 }
 
@@ -441,40 +347,69 @@ function LocationSheet({ visible, current, currentRadius, onSelect, onClose, C, 
 }
 
 export default function HomeScreen({ navigation }) {
-  const { colors: C, isDark } = useTheme();
+  const { colors: C } = useTheme();
   const { user, updateUser } = useUser();
+  const { api } = useAuthStore();
   const s = useMemo(() => getStyles(C), [C]);
 
   const [locationSheetOpen, setLocationSheetOpen] = useState(false);
-  const [radius, setRadius] = useState(25);
+  const [radius,            setRadius]            = useState(25);
+  const [activeScope,       setActiveScope]       = useState('all');
+  const [posts,             setPosts]             = useState([]);
+  const [loading,           setLoading]           = useState(true);
+  const [refreshing,        setRefreshing]        = useState(false);
+  const [fetchError,        setFetchError]        = useState('');
 
-  const country = user.homeCountry; // { flag, name }
+  const country   = user.homeCountry;              // { flag, name }
+  const livesIn   = user.livesIn || '';            // "Queens, NY"
+  const cityShort = livesIn.split(',')[0] || 'You';
 
   const SCOPES = [
-    { key: 'my',  label: `${country.flag} Mine` },
-    { key: 'all', label: '🌍 All' },
+    { key: 'country', label: `${country.flag} Community` },
+    { key: 'all',     label: '🌍 All' },
   ];
 
-  const [activeScope, setActiveScope] = useState('my');
+  const buildUrl = useCallback((scope) => {
+    if (scope === 'country' && country?.name) return `/posts/?country=${encodeURIComponent(country.name)}`;
+    return '/posts/';
+  }, [country]);
 
-  const filteredFeed = useMemo(() => {
-    if (activeScope === 'my') return FEED_DATA.filter(i => i.scope === 'bd_nearby' || i.scope === 'bd_usa' || i.scope === 'bd_all');
-    return FEED_DATA;
-  }, [activeScope]);
+  const fetchPosts = useCallback(async (scope, isRefresh = false) => {
+    if (!isRefresh) setLoading(true);
+    setFetchError('');
+    try {
+      const data = await api(buildUrl(scope));
+      setPosts(Array.isArray(data) ? data : (data.results || []));
+    } catch (e) {
+      setFetchError(e.message || 'Failed to load posts.');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [api, buildUrl]);
+
+  useEffect(() => {
+    fetchPosts(activeScope);
+  }, [activeScope, fetchPosts]);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchPosts(activeScope, true);
+  }, [activeScope, fetchPosts]);
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
       <LocationSheet
         visible={locationSheetOpen}
-        current={user.livesIn || 'Queens, NY'}
+        current={livesIn || 'Queens, NY'}
         currentRadius={radius}
         onSelect={(city, r) => { updateUser({ livesIn: city }); setRadius(r); }}
         onClose={() => setLocationSheetOpen(false)}
         C={C} s={s}
       />
+
       {/* ── HEADER ─────────────────────────────────────────────── */}
       <View style={s.header}>
-        {/* Left: avatar + name/location */}
         <View style={s.av}>
           <Text style={{ fontSize: 20 }}>🧑‍💻</Text>
           <View style={s.avOnline} />
@@ -482,12 +417,11 @@ export default function HomeScreen({ navigation }) {
         <TouchableOpacity onPress={() => setLocationSheetOpen(true)} activeOpacity={0.7} style={{ marginRight: 8 }}>
           <Text style={s.uname}>{user.name}</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 1 }}>
-            <Text style={s.locationChipTxt}>📍 {(user.livesIn || 'Set location').split(',')[0]} · {radius} mi</Text>
+            <Text style={s.locationChipTxt}>📍 {cityShort || 'Set location'} · {radius} mi</Text>
             <Text style={s.locationChevron}>▾</Text>
           </View>
         </TouchableOpacity>
 
-        {/* Right: filter pills + notif */}
         <View style={s.headerRight}>
           {SCOPES.map(sc => {
             const isActive = sc.key === activeScope;
@@ -502,24 +436,25 @@ export default function HomeScreen({ navigation }) {
               </TouchableOpacity>
             );
           })}
-          <TouchableOpacity style={s.notifBtn} onPress={() => navigation.navigate('Notifications')}>
-            <Text style={{ fontSize: 17 }}>🔔</Text>
-            <View style={s.notifDot} />
-          </TouchableOpacity>
         </View>
       </View>
 
-      <ScrollView style={s.scroll} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 28 }}>
+      <ScrollView
+        style={s.scroll}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 28 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.vivid} />}
+      >
 
         {/* ── NEARBY RESOURCES ────────────────────────────────────── */}
         <View style={s.sectionHeader}>
           <Text style={s.sectionTitle}>
-            {activeScope === 'my'
-              ? `${country.flag} ${country.name} Community Near You`
-              : `🌍 All Communities Near ${(user.livesIn || 'You').split(',')[0]}`}
+            {activeScope === 'country'
+              ? `${country.flag} ${country.name} Community`
+              : '🌍 All Communities'}
           </Text>
         </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 14, gap: 8, paddingBottom: 4 }}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 14, gap: 10, paddingBottom: 4 }}>
           {NEARBY_RESOURCES.map(r => (
             <TouchableOpacity
               key={r.id}
@@ -527,35 +462,62 @@ export default function HomeScreen({ navigation }) {
               onPress={() => navigation.navigate(r.route)}
               activeOpacity={0.85}
             >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                <View style={[s.resourceIconWrap, { backgroundColor: r.bg }]}>
-                  <Text style={{ fontSize: 18 }}>{r.icon}</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.resourceTitle} numberOfLines={1}>{r.category}</Text>
-                  <Text style={[s.resourceBadgeTxt, { color: r.color }]}>{r.count} near you</Text>
-                </View>
+              <View style={[s.resourceIconWrap, { backgroundColor: r.bg }]}>
+                <Ionicons name={r.icon} size={20} color={r.color} />
               </View>
-              {r.items.slice(0, 1).map((item, i) => (
-                <Text key={i} style={s.resourceItem} numberOfLines={1}>· {item}</Text>
-              ))}
-              <Text style={[s.resourceSeeAll, { color: r.color }]}>See all →</Text>
+              <Text style={s.resourceTitle} numberOfLines={1}>{r.category}</Text>
+              <Text style={[s.resourceBadgeTxt, { color: r.color }]}>{r.count} near you</Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
 
-
         {/* ── FEED ───────────────────────────────────────────────── */}
+        <View style={[s.sectionHeader, { marginTop: 20 }]}>
+          <Text style={s.sectionTitle}>
+            {activeScope === 'country' ? `${country.flag} ${country.name} posts` : '🌍 All posts'}
+          </Text>
+          {!loading && posts.length > 0 && (
+            <Text style={s.sectionSub}>{posts.length} post{posts.length !== 1 ? 's' : ''}</Text>
+          )}
+        </View>
+
         <View style={s.feedList}>
-          {filteredFeed.length === 0 && (
-            <View style={s.emptyState}>
-              <Text style={{ fontSize: 36 }}>📭</Text>
-              <Text style={s.emptyTitle}>Nothing here yet</Text>
-              <Text style={s.emptySubtitle}>Be the first to post in this scope!</Text>
+          {/* Loading */}
+          {loading && (
+            <View style={s.centerState}>
+              <ActivityIndicator size="large" color={C.vivid} />
+              <Text style={[s.emptySubtitle, { marginTop: 12 }]}>Loading posts…</Text>
             </View>
           )}
-          {filteredFeed.map(item => (
-            <FeedCard key={item.id} item={item} navigation={navigation} C={C} s={s} />
+
+          {/* Error */}
+          {!loading && fetchError ? (
+            <View style={s.centerState}>
+              <Text style={{ fontSize: 32 }}>⚠️</Text>
+              <Text style={s.emptyTitle}>{fetchError}</Text>
+              <TouchableOpacity onPress={() => fetchPosts(activeScope)} style={s.retryBtn}>
+                <Text style={s.retryTxt}>Retry</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+
+          {/* Empty */}
+          {!loading && !fetchError && posts.length === 0 && (
+            <View style={s.centerState}>
+              <Text style={{ fontSize: 36 }}>📭</Text>
+              <Text style={s.emptyTitle}>No posts yet</Text>
+              <Text style={s.emptySubtitle}>
+                {activeScope === 'country' ? `No posts from ${country.name} community yet.` : 'No posts yet. Be the first!'}
+              </Text>
+              <TouchableOpacity onPress={() => navigation.navigate('CreatePost')} style={s.retryBtn}>
+                <Text style={s.retryTxt}>Create a post</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Posts */}
+          {!loading && posts.map(post => (
+            <FeedCard key={post.id} post={post} navigation={navigation} C={C} s={s} api={api} />
           ))}
         </View>
 
@@ -576,65 +538,58 @@ const getStyles = (C) => StyleSheet.create({
   uname:          { fontSize: 13, fontWeight: '700', color: C.cream },
   locationChipTxt:{ fontSize: 10, color: C.c35 },
   locationChevron:{ fontSize: 9, color: C.c35 },
-  aiBtn:          { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 8, paddingVertical: 5, backgroundColor: C.vividD, borderWidth: 1, borderColor: C.vivid + '55', borderRadius: 20 },
-  aiBtnTxt:       { fontSize: 10, fontWeight: '800', color: C.vivid },
-  notifBtn:       { width: 34, height: 34, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
-  notifDot:       { position: 'absolute', top: 6, right: 6, width: 7, height: 7, backgroundColor: C.vivid, borderRadius: 4, borderWidth: 2, borderColor: C.bg },
-
-  // Compose bar
-  composeBar:     { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 14, marginTop: 8, marginBottom: 2, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 10 },
-  composeAv:      { width: 32, height: 32, borderRadius: 10, backgroundColor: C.vividD, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  composeTxt:     { flex: 1, fontSize: 13, color: C.c35 },
-  composeDivider: { width: 1, height: 20, backgroundColor: C.border },
 
   // Section headers
   sectionHeader:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, marginTop: 16, marginBottom: 10 },
   sectionTitle:    { fontSize: 13, fontWeight: '800', color: C.cream },
-  sectionSub:      { fontSize: 10, color: C.c35, marginTop: 1 },
-  sectionLink:     { fontSize: 11, fontWeight: '700', color: C.vivid },
+  sectionSub:      { fontSize: 10, color: C.c35 },
 
   // Nearby resources
-  resourceCard:      { backgroundColor: C.card, borderWidth: 1, borderRadius: 18, padding: 14, width: 190, gap: 6 },
-  resourceIconWrap:  { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  resourceBadge:     { alignSelf: 'flex-start', borderRadius: 50, paddingHorizontal: 9, paddingVertical: 3, borderWidth: 1 },
-  resourceBadgeTxt:  { fontSize: 10, fontWeight: '800' },
-  resourceTitle:     { fontSize: 13, fontWeight: '800', color: C.cream, lineHeight: 18 },
-  resourceItem:      { fontSize: 11, color: C.c35, lineHeight: 16 },
-  resourceSeeAll:    { fontSize: 11, fontWeight: '700', marginTop: 2 },
+  resourceCard:      { backgroundColor: C.card, borderWidth: 1, borderRadius: 16, padding: 12, width: 86, gap: 6, alignItems: 'center' },
+  resourceIconWrap:  { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  resourceBadgeTxt:  { fontSize: 9, fontWeight: '700', textAlign: 'center' },
+  resourceTitle:     { fontSize: 11, fontWeight: '800', color: C.cream, textAlign: 'center' },
 
-  scopeTab:          { alignItems: 'center', paddingHorizontal: 11, paddingVertical: 6, borderRadius: 50, borderWidth: 1, borderColor: C.border, backgroundColor: C.card },
+  // Scope tabs
+  scopeTab:          { alignItems: 'center', paddingHorizontal: 8, paddingVertical: 5, borderRadius: 50, borderWidth: 1, borderColor: C.border, backgroundColor: C.card },
   scopeTabActive:    { backgroundColor: C.vividD, borderColor: C.vivid + '66' },
-  scopeTabTxt:       { fontSize: 11, fontWeight: '600', color: C.c35 },
+  scopeTabTxt:       { fontSize: 10, fontWeight: '600', color: C.c35 },
   scopeTabTxtActive: { color: C.vivid, fontWeight: '700' },
 
   // Feed
-  feedList:       { gap: 1, marginTop: 8 },
-  feedCard:       { backgroundColor: C.card, borderTopWidth: 1, borderBottomWidth: 1, borderColor: C.border, paddingBottom: 4 },
-  feedHeader:     { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingTop: 14, paddingBottom: 10 },
-  feedAvatar:     { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  feedName:       { fontSize: 14, fontWeight: '700', color: C.cream },
+  feedList:       { gap: 12, marginTop: 8, paddingHorizontal: 0 },
+  feedCard:       { backgroundColor: C.card, borderTopWidth: 1, borderBottomWidth: 1, borderColor: C.border, paddingBottom: 10 },
+  feedHeader:     { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingTop: 12, paddingBottom: 10 },
+  avatarRing:     { width: 46, height: 46, borderRadius: 23, padding: 2, borderWidth: 2, borderColor: C.vivid, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  feedAvatar:     { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
+  feedName:       { fontSize: 13, fontWeight: '700', color: C.cream },
   feedMeta:       { fontSize: 11, color: C.c35 },
-  tagPill:        { paddingHorizontal: 9, paddingVertical: 3, borderRadius: 50, flexShrink: 0 },
-  tagTxt:         { fontSize: 10, fontWeight: '700' },
-  feedBody:       { fontSize: 14, color: C.c60, lineHeight: 21, paddingHorizontal: 14, marginBottom: 12 },
-  feedImage:      { marginHorizontal: 14, marginBottom: 12, borderRadius: 16, height: 160, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 16, overflow: 'hidden' },
-  feedImageLabel: { fontSize: 15, fontWeight: '700', color: '#fff' },
-  feedImageSub:   { fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 3 },
-  feedActions:    { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, paddingVertical: 4, borderTopWidth: 1, borderTopColor: C.border },
-  actionBtn:      { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 8 },
-  actionIcon:     { fontSize: 16 },
-  actionTxt:      { fontSize: 13, color: C.c35, fontWeight: '600' },
+  moreBtn:        { padding: 6 },
+  feedBody:       { fontSize: 14, color: C.c60, lineHeight: 22, paddingHorizontal: 14, marginBottom: 10 },
+  topicsRow:      { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: 14, marginBottom: 10 },
+  topicChip:      { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 50, borderWidth: 1 },
+  topicChipTxt:   { fontSize: 11, fontWeight: '600' },
+  // Instagram action bar
+  igActions:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 10, paddingTop: 4, paddingBottom: 2 },
+  igLeft:         { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  igBtn:          { padding: 8 },
+  igCounts:       { flexDirection: 'row', paddingHorizontal: 14, paddingBottom: 4 },
+  igCountTxt:     { fontSize: 13, fontWeight: '700', color: C.cream },
+
+  // Center states (loading / error / empty)
+  centerState:    { alignItems: 'center', paddingVertical: 50, gap: 8, paddingHorizontal: 20 },
+  emptyTitle:     { fontSize: 15, fontWeight: '700', color: C.cream, textAlign: 'center' },
+  emptySubtitle:  { fontSize: 13, color: C.c35, textAlign: 'center' },
+  retryBtn:       { marginTop: 8, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 12, backgroundColor: C.vivid },
+  retryTxt:       { fontSize: 13, fontWeight: '700', color: 'white' },
 
   // Location sheet
   sheetOverlay:     { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
   sheet:            { backgroundColor: C.nav, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 40, borderTopWidth: 1, borderColor: C.border },
   sheetHandle:      { width: 36, height: 4, backgroundColor: C.border, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
   sheetTitle:       { fontSize: 18, fontWeight: '800', color: C.cream, marginBottom: 4 },
-  sheetSub:         { fontSize: 12, color: C.c35, marginBottom: 16 },
   sheetSearch:      { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 14 },
   sheetInput:       { flex: 1, fontSize: 14, color: C.cream },
-  sheetCurrentRow:  { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
-  sheetCurrentLabel:{ fontSize: 11, fontWeight: '700', color: C.c35, letterSpacing: 1 },
   sheetCurrentPill: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: C.vividD, borderRadius: 50, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, borderColor: C.vivid + '44' },
   sheetCurrentTxt:  { fontSize: 12, color: C.vivid, fontWeight: '700' },
   sheetCity:        { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 11, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: C.border },
@@ -661,9 +616,4 @@ const getStyles = (C) => StyleSheet.create({
   radiusPillTxtActive: { color: C.vivid, fontWeight: '700' },
   radiusConfirm:    { backgroundColor: C.vivid, borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
   radiusConfirmTxt: { fontSize: 14, fontWeight: '800', color: '#fff' },
-
-  // Empty state
-  emptyState:    { alignItems: 'center', paddingVertical: 50, gap: 8 },
-  emptyTitle:    { fontSize: 15, fontWeight: '700', color: C.cream },
-  emptySubtitle: { fontSize: 13, color: C.c35 },
 });

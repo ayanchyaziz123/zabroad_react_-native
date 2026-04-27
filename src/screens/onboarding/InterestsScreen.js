@@ -47,7 +47,7 @@ export default function InterestsScreen({ navigation, route }) {
           <Text style={[styles.backTxt, { color: C.cream }]}>‹</Text>
         </TouchableOpacity>
         <View style={styles.progress}>
-          {[1,2,3,4].map(i => (
+          {[1,2,3].map(i => (
             <View key={i} style={[styles.progressDot, { backgroundColor: C.vivid }]} />
           ))}
         </View>
@@ -56,7 +56,7 @@ export default function InterestsScreen({ navigation, route }) {
 
       <ScrollView contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
         <View style={styles.titleWrap}>
-          <Text style={[styles.step, { color: C.vivid }]}>Step 4 of 4</Text>
+          <Text style={[styles.step, { color: C.vivid }]}>Step 3 of 3</Text>
           <Text style={[styles.title, { color: C.cream }]}>What do you{'\n'}need help with? ✨</Text>
           <Text style={[styles.sub, { color: C.c35 }]}>Pick at least 1 — we'll personalise your feed</Text>
         </View>
