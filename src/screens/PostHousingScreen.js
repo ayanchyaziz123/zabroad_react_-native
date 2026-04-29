@@ -8,7 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 import { useUser } from '../context/UserContext';
-import { useJobsStore } from '../store/jobsStore';
+import { useHousingStore } from '../store/housingStore';
 import { useAuthStore } from '../store/authStore';
 
 const PLANS = [
@@ -32,7 +32,7 @@ const PLANS = [
     features: [
       'Active for 30 days',
       'Priority placement in feed',
-      'Hot badge on your card',
+      'Highlighted listing card',
       'One-time payment',
     ],
   },
@@ -44,19 +44,26 @@ const PLANS = [
     features: [
       'Active for 60 days',
       'Featured at top of feed',
-      'Hot badge + highlighted card',
+      'Featured badge on card',
       'One-time payment',
     ],
   },
 ];
 
-export default function PostJobScreen({ navigation }) {
+export default function PostHousingScreen({ navigation }) {
   const { colors: C } = useTheme();
   const s = useMemo(() => getStyles(C), [C]);
-  const { user } = useUser();
-  const addJob   = useJobsStore(s => s.addJob);
-  const api      = useAuthStore(s => s.api);
+  const { user }     = useUser();
+  const addListing   = useHousingStore(s => s.addListing);
+  const api          = useAuthStore(s => s.api);
 
+  const [title,    setTitle]    = useState('');
+  const [price,    setPrice]    = useState('');
+  const [location, setLocation] = useState('');
+  const [desc,     setDesc]     = useState('');
+  const [plan,     setPlan]     = useState('free');
+
+  const [submitted,   setSubmitted]   = useState(false);
   const [paying,      setPaying]      = useState(false);
   const [showPayment, setShowPayment] = useState(false);
   const [cardNumber,  setCardNumber]  = useState('');
@@ -64,22 +71,15 @@ export default function PostJobScreen({ navigation }) {
   const [cvv,         setCvv]         = useState('');
   const [cardName,    setCardName]    = useState('');
 
-  const [title,    setTitle]    = useState('');
-  const [company,  setCompany]  = useState('');
-  const [location, setLocation] = useState('');
-  const [desc,     setDesc]     = useState('');
-  const [plan,     setPlan]     = useState('free');
-
-  const [submitted, setSubmitted] = useState(false);
   const successScale   = useRef(new Animated.Value(0)).current;
   const successOpacity = useRef(new Animated.Value(0)).current;
 
-  const canPost = title.trim().length > 2 && company.trim().length > 1 && location.trim().length > 1 && desc.trim().length >= 20;
+  const canPost = title.trim().length > 2 && price.trim().length > 0 && location.trim().length > 1 && desc.trim().length >= 20;
 
-  async function postJob() {
-    await addJob({
+  async function postListing() {
+    await addListing({
       title,
-      company,
+      price,
       location,
       desc,
       plan,
@@ -96,7 +96,7 @@ export default function PostJobScreen({ navigation }) {
 
   function handlePost() {
     if (plan === 'free') {
-      postJob().catch(() => alert('Failed to post job. Please try again.'));
+      postListing().catch(() => alert('Failed to post listing. Please try again.'));
     } else {
       setCardName(user.name || '');
       setShowPayment(true);
@@ -111,11 +111,9 @@ export default function PostJobScreen({ navigation }) {
     }
     setPaying(true);
     try {
-      // Create payment intent on backend
-      await api('/jobs/payment-intent/', { method: 'POST', body: { plan } });
-      // Payment intent created — post the job
+      await api('/housing/payment-intent/', { method: 'POST', body: { plan } });
       setShowPayment(false);
-      await postJob();
+      await postListing();
     } catch (e) {
       alert(e.message || 'Payment failed. Please try again.');
     } finally {
@@ -132,30 +130,36 @@ export default function PostJobScreen({ navigation }) {
     return clean.length >= 3 ? `${clean.slice(0, 2)}/${clean.slice(2)}` : clean;
   }
 
+  function resetAll() {
+    setSubmitted(false); setTitle(''); setPrice(''); setLocation('');
+    setDesc(''); setPlan('free'); setCardNumber(''); setExpiry(''); setCvv(''); setCardName('');
+    successScale.setValue(0); successOpacity.setValue(0);
+  }
+
   // ── Success screen ────────────────────────────────────────────────────────
   if (submitted) {
     const activePlan = PLANS.find(p => p.key === plan);
     return (
       <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
         <Animated.View style={[s.successWrap, { opacity: successOpacity, transform: [{ scale: successScale }] }]}>
-          <View style={[s.successCard, { backgroundColor: C.card, borderColor: C.green + '44' }]}>
-            <View style={[s.successIcon, { backgroundColor: C.greenD }]}>
-              <Ionicons name="briefcase" size={36} color={C.green} />
+          <View style={[s.successCard, { backgroundColor: C.card, borderColor: C.gold + '44' }]}>
+            <View style={[s.successIcon, { backgroundColor: C.goldD }]}>
+              <Ionicons name="home" size={36} color={C.gold} />
             </View>
-            <Text style={s.successTitle}>Job Posted!</Text>
-            <Text style={s.successJobTitle}>{title}</Text>
-            <Text style={s.successSub}>{company} · {location}</Text>
-            <View style={[s.successPlanBadge, { backgroundColor: (activePlan.color || C.green) + '22', borderColor: (activePlan.color || C.green) + '55' }]}>
-              <Ionicons name="checkmark-circle" size={13} color={activePlan.color || C.green} />
-              <Text style={[s.successPlanTxt, { color: activePlan.color || C.green }]}>{activePlan.label} Plan · {activePlan.price}</Text>
+            <Text style={s.successTitle}>Listing Posted!</Text>
+            <Text style={s.successListingTitle}>{title}</Text>
+            <Text style={s.successSub}>{price} · {location}</Text>
+            <View style={[s.successPlanBadge, { backgroundColor: (activePlan.color || C.gold) + '22', borderColor: (activePlan.color || C.gold) + '55' }]}>
+              <Ionicons name="checkmark-circle" size={13} color={activePlan.color || C.gold} />
+              <Text style={[s.successPlanTxt, { color: activePlan.color || C.gold }]}>{activePlan.label} Plan · {activePlan.price}</Text>
             </View>
             <Text style={s.successNote}>Your listing is now visible to your community.</Text>
-            <TouchableOpacity style={[s.doneBtn, { backgroundColor: C.green }]} onPress={() => navigation.navigate('Jobs')} activeOpacity={0.85}>
+            <TouchableOpacity style={[s.doneBtn, { backgroundColor: C.gold }]} onPress={() => navigation.navigate('Housing')} activeOpacity={0.85}>
               <Ionicons name="checkmark-circle" size={18} color="white" />
               <Text style={s.doneBtnTxt}>View Listings</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => { setSubmitted(false); setTitle(''); setCompany(''); setLocation(''); setDesc(''); setPlan('free'); }} style={{ marginTop: 12 }}>
-              <Text style={{ fontSize: 13, color: C.c35, fontWeight: '600' }}>Post another job</Text>
+            <TouchableOpacity onPress={resetAll} style={{ marginTop: 12 }}>
+              <Text style={{ fontSize: 13, color: C.c35, fontWeight: '600' }}>Post another listing</Text>
             </TouchableOpacity>
           </View>
         </Animated.View>
@@ -172,21 +176,21 @@ export default function PostJobScreen({ navigation }) {
         <TouchableOpacity style={s.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.8}>
           <Ionicons name="chevron-back" size={22} color={C.cream} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Share a Job</Text>
+        <Text style={s.headerTitle}>List a Home</Text>
         <View style={{ width: 38 }} />
       </View>
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={s.form}>
 
-          {/* Job Title */}
+          {/* Title */}
           <View style={s.fieldGroup}>
-            <Text style={s.fieldLabel}>JOB TITLE *</Text>
+            <Text style={s.fieldLabel}>LISTING TITLE *</Text>
             <View style={s.inputRow}>
-              <Ionicons name="briefcase-outline" size={16} color={C.c35} />
+              <Ionicons name="home-outline" size={16} color={C.c35} />
               <TextInput
                 style={s.input}
-                placeholder="e.g. Waiter, Driver, Cashier…"
+                placeholder="e.g. 1BR in Jackson Heights"
                 placeholderTextColor={C.c35}
                 value={title}
                 onChangeText={setTitle}
@@ -194,29 +198,29 @@ export default function PostJobScreen({ navigation }) {
             </View>
           </View>
 
-          {/* Company */}
+          {/* Price */}
           <View style={s.fieldGroup}>
-            <Text style={s.fieldLabel}>COMPANY / EMPLOYER *</Text>
+            <Text style={s.fieldLabel}>MONTHLY RENT *</Text>
             <View style={s.inputRow}>
-              <Ionicons name="business-outline" size={16} color={C.c35} />
+              <Ionicons name="cash-outline" size={16} color={C.c35} />
               <TextInput
                 style={s.input}
-                placeholder="e.g. Tandoori Nights, Self-employed…"
+                placeholder="e.g. $1,200/mo"
                 placeholderTextColor={C.c35}
-                value={company}
-                onChangeText={setCompany}
+                value={price}
+                onChangeText={setPrice}
               />
             </View>
           </View>
 
           {/* Location */}
           <View style={s.fieldGroup}>
-            <Text style={s.fieldLabel}>LOCATION *</Text>
+            <Text style={s.fieldLabel}>AREA / NEIGHBORHOOD *</Text>
             <View style={s.inputRow}>
               <Ionicons name="location-outline" size={16} color={C.c35} />
               <TextInput
                 style={s.input}
-                placeholder="e.g. Jackson Heights, NY"
+                placeholder="e.g. Astoria, Queens"
                 placeholderTextColor={C.c35}
                 value={location}
                 onChangeText={setLocation}
@@ -229,14 +233,14 @@ export default function PostJobScreen({ navigation }) {
             <Text style={s.fieldLabel}>DESCRIPTION *</Text>
             <TextInput
               style={s.textArea}
-              placeholder="Describe the role, hours, pay, who to contact, and any requirements…"
+              placeholder="Describe the space, who to contact, lease terms, any special notes…"
               placeholderTextColor={C.c35}
               value={desc}
               onChangeText={setDesc}
               multiline
               textAlignVertical="top"
             />
-            <Text style={[s.charCount, { color: desc.length >= 20 ? C.green : C.c35 }]}>
+            <Text style={[s.charCount, { color: desc.length >= 20 ? C.gold : C.c35 }]}>
               {desc.length} chars {desc.length < 20 && desc.length > 0 ? `· ${20 - desc.length} more needed` : desc.length >= 20 ? '· Looks good' : ''}
             </Text>
           </View>
@@ -247,8 +251,8 @@ export default function PostJobScreen({ navigation }) {
             <View style={s.plansCol}>
               {PLANS.map(p => {
                 const active  = plan === p.key;
-                const accent  = p.color || C.green;
-                const accentD = p.color ? p.color + '18' : C.greenD;
+                const accent  = p.color || C.gold;
+                const accentD = p.color ? p.color + '18' : C.goldD;
                 return (
                   <TouchableOpacity
                     key={p.key}
@@ -256,7 +260,6 @@ export default function PostJobScreen({ navigation }) {
                     onPress={() => setPlan(p.key)}
                     activeOpacity={0.85}
                   >
-                    {/* Plan header */}
                     <View style={s.planHeader}>
                       <View style={s.planLeft}>
                         <View style={[s.planRadio, active && { borderColor: accent, backgroundColor: accent }]}>
@@ -271,8 +274,6 @@ export default function PostJobScreen({ navigation }) {
                       </View>
                       <Text style={[s.planPrice, active && { color: accent }]}>{p.price}</Text>
                     </View>
-
-                    {/* Features */}
                     <View style={s.featuresCol}>
                       {p.features.map(f => (
                         <View key={f} style={s.featureRow}>
@@ -300,7 +301,7 @@ export default function PostJobScreen({ navigation }) {
         >
           <Ionicons name="paper-plane" size={16} color={canPost ? 'white' : C.c35} />
           <Text style={[s.postBtnTxt, !canPost && { color: C.c35 }]}>
-            {plan === 'free' ? 'Post Job — Free' : `Post Job — ${PLANS.find(p => p.key === plan).price}`}
+            {plan === 'free' ? 'Post Listing — Free' : `Post Listing — ${PLANS.find(p => p.key === plan).price}`}
           </Text>
         </TouchableOpacity>
       </View>
@@ -310,7 +311,6 @@ export default function PostJobScreen({ navigation }) {
         <View style={s.modalOverlay}>
           <View style={[s.modalCard, { backgroundColor: C.card }]}>
 
-            {/* Modal header */}
             <View style={s.modalHeader}>
               <View>
                 <Text style={s.modalTitle}>Card Details</Text>
@@ -323,7 +323,6 @@ export default function PostJobScreen({ navigation }) {
               </TouchableOpacity>
             </View>
 
-            {/* Card icon row */}
             <View style={s.cardIcons}>
               {['card', 'card-outline', 'wallet-outline'].map((ic, i) => (
                 <View key={i} style={[s.cardIconWrap, { backgroundColor: C.card2, borderColor: C.border }]}>
@@ -332,89 +331,42 @@ export default function PostJobScreen({ navigation }) {
               ))}
             </View>
 
-            {/* Cardholder name */}
             <View style={s.payFieldGroup}>
               <Text style={s.payLabel}>CARDHOLDER NAME</Text>
               <View style={[s.payInputRow, { backgroundColor: C.card2, borderColor: C.border }]}>
                 <Ionicons name="person-outline" size={15} color={C.c35} />
-                <TextInput
-                  style={[s.payInput, { color: C.cream }]}
-                  placeholder="Name on card"
-                  placeholderTextColor={C.c35}
-                  value={cardName}
-                  onChangeText={setCardName}
-                  autoCapitalize="words"
-                />
+                <TextInput style={[s.payInput, { color: C.cream }]} placeholder="Name on card" placeholderTextColor={C.c35} value={cardName} onChangeText={setCardName} autoCapitalize="words" />
               </View>
             </View>
 
-            {/* Card number */}
             <View style={s.payFieldGroup}>
               <Text style={s.payLabel}>CARD NUMBER</Text>
               <View style={[s.payInputRow, { backgroundColor: C.card2, borderColor: C.border }]}>
                 <Ionicons name="card-outline" size={15} color={C.c35} />
-                <TextInput
-                  style={[s.payInput, { color: C.cream }]}
-                  placeholder="1234 5678 9012 3456"
-                  placeholderTextColor={C.c35}
-                  value={cardNumber}
-                  onChangeText={v => setCardNumber(formatCardNumber(v))}
-                  keyboardType="number-pad"
-                  maxLength={19}
-                />
+                <TextInput style={[s.payInput, { color: C.cream }]} placeholder="1234 5678 9012 3456" placeholderTextColor={C.c35} value={cardNumber} onChangeText={v => setCardNumber(formatCardNumber(v))} keyboardType="number-pad" maxLength={19} />
               </View>
             </View>
 
-            {/* Expiry + CVV */}
             <View style={{ flexDirection: 'row', gap: 12 }}>
               <View style={[s.payFieldGroup, { flex: 1 }]}>
                 <Text style={s.payLabel}>EXPIRY</Text>
                 <View style={[s.payInputRow, { backgroundColor: C.card2, borderColor: C.border }]}>
                   <Ionicons name="calendar-outline" size={15} color={C.c35} />
-                  <TextInput
-                    style={[s.payInput, { color: C.cream }]}
-                    placeholder="MM/YY"
-                    placeholderTextColor={C.c35}
-                    value={expiry}
-                    onChangeText={v => setExpiry(formatExpiry(v))}
-                    keyboardType="number-pad"
-                    maxLength={5}
-                  />
+                  <TextInput style={[s.payInput, { color: C.cream }]} placeholder="MM/YY" placeholderTextColor={C.c35} value={expiry} onChangeText={v => setExpiry(formatExpiry(v))} keyboardType="number-pad" maxLength={5} />
                 </View>
               </View>
               <View style={[s.payFieldGroup, { flex: 1 }]}>
                 <Text style={s.payLabel}>CVV</Text>
                 <View style={[s.payInputRow, { backgroundColor: C.card2, borderColor: C.border }]}>
                   <Ionicons name="lock-closed-outline" size={15} color={C.c35} />
-                  <TextInput
-                    style={[s.payInput, { color: C.cream }]}
-                    placeholder="•••"
-                    placeholderTextColor={C.c35}
-                    value={cvv}
-                    onChangeText={v => setCvv(v.replace(/\D/g, '').slice(0, 4))}
-                    keyboardType="number-pad"
-                    secureTextEntry
-                    maxLength={4}
-                  />
+                  <TextInput style={[s.payInput, { color: C.cream }]} placeholder="•••" placeholderTextColor={C.c35} value={cvv} onChangeText={v => setCvv(v.replace(/\D/g, '').slice(0, 4))} keyboardType="number-pad" secureTextEntry maxLength={4} />
                 </View>
               </View>
             </View>
 
-            {/* Pay button */}
-            <TouchableOpacity
-              style={[s.payBtn, { backgroundColor: C.green }, paying && { opacity: 0.7 }]}
-              onPress={handlePay}
-              disabled={paying}
-              activeOpacity={0.85}
-            >
-              {paying ? (
-                <ActivityIndicator size="small" color="white" />
-              ) : (
-                <Ionicons name="lock-closed" size={15} color="white" />
-              )}
-              <Text style={s.payBtnTxt}>
-                {paying ? 'Processing…' : `Pay ${PLANS.find(p => p.key === plan)?.price}`}
-              </Text>
+            <TouchableOpacity style={[s.payBtn, { backgroundColor: C.gold }, paying && { opacity: 0.7 }]} onPress={handlePay} disabled={paying} activeOpacity={0.85}>
+              {paying ? <ActivityIndicator size="small" color="white" /> : <Ionicons name="lock-closed" size={15} color="white" />}
+              <Text style={s.payBtnTxt}>{paying ? 'Processing…' : `Pay ${PLANS.find(p => p.key === plan)?.price}`}</Text>
             </TouchableOpacity>
 
             <View style={s.secureRow}>
@@ -431,41 +383,36 @@ export default function PostJobScreen({ navigation }) {
 }
 
 const getStyles = (C) => StyleSheet.create({
-  safe:   { flex: 1, backgroundColor: C.bg },
-
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: C.border },
-  backBtn:{ width: 38, height: 38, borderRadius: 13, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, alignItems: 'center', justifyContent: 'center' },
+  safe:        { flex: 1, backgroundColor: C.bg },
+  header:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: C.border },
+  backBtn:     { width: 38, height: 38, borderRadius: 13, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 16, fontWeight: '800', color: C.cream },
 
-  form:       { padding: 20, gap: 20, paddingBottom: 40 },
-  fieldGroup: { gap: 8 },
-  fieldLabel: { fontSize: 10, fontWeight: '700', color: C.c35, letterSpacing: 1.5 },
+  form:        { padding: 20, gap: 20, paddingBottom: 40 },
+  fieldGroup:  { gap: 8 },
+  fieldLabel:  { fontSize: 10, fontWeight: '700', color: C.c35, letterSpacing: 1.5 },
+  inputRow:    { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 13 },
+  input:       { flex: 1, fontSize: 14, color: C.cream },
+  textArea:    { backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 13, fontSize: 14, color: C.cream, minHeight: 120, textAlignVertical: 'top' },
+  charCount:   { fontSize: 11, fontWeight: '600', textAlign: 'right' },
 
-  inputRow:   { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 13 },
-  input:      { flex: 1, fontSize: 14, color: C.cream },
+  plansCol:      { gap: 10 },
+  planCard:      { backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 16, padding: 14 },
+  planHeader:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
+  planLeft:      { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  planRadio:     { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: C.border, alignItems: 'center', justifyContent: 'center' },
+  planLabel:     { fontSize: 14, fontWeight: '800', color: C.cream },
+  planBadge:     { borderRadius: 50, borderWidth: 1, paddingHorizontal: 7, paddingVertical: 2 },
+  planBadgeTxt:  { fontSize: 9, fontWeight: '800', letterSpacing: 0.5 },
+  planPrice:     { fontSize: 16, fontWeight: '900', color: C.cream },
+  featuresCol:   { gap: 6 },
+  featureRow:    { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  featureTxt:    { fontSize: 12, color: C.c35, fontWeight: '500' },
 
-  textArea:   { backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 13, fontSize: 14, color: C.cream, minHeight: 120, textAlignVertical: 'top' },
-  charCount:  { fontSize: 11, fontWeight: '600', textAlign: 'right' },
-
-  // Plans
-  plansCol:     { gap: 10 },
-  planCard:     { backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 16, padding: 14 },
-  planHeader:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
-  planLeft:     { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  planRadio:    { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: C.border, alignItems: 'center', justifyContent: 'center' },
-  planLabel:    { fontSize: 14, fontWeight: '800', color: C.cream },
-  planBadge:    { borderRadius: 50, borderWidth: 1, paddingHorizontal: 7, paddingVertical: 2 },
-  planBadgeTxt: { fontSize: 9, fontWeight: '800', letterSpacing: 0.5 },
-  planPrice:    { fontSize: 16, fontWeight: '900', color: C.cream },
-  featuresCol:  { gap: 6 },
-  featureRow:   { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  featureTxt:   { fontSize: 12, color: C.c35, fontWeight: '500' },
-
-  footer:  { paddingHorizontal: 20, paddingBottom: 28, paddingTop: 12, borderTopWidth: 1, borderTopColor: C.border, backgroundColor: C.bg },
-  postBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: C.green, borderRadius: 16, paddingVertical: 15, shadowColor: C.green, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 6 },
+  footer:     { paddingHorizontal: 20, paddingBottom: 28, paddingTop: 12, borderTopWidth: 1, borderTopColor: C.border, backgroundColor: C.bg },
+  postBtn:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: C.gold, borderRadius: 16, paddingVertical: 15, shadowColor: C.gold, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 6 },
   postBtnTxt: { fontSize: 15, fontWeight: '800', color: 'white' },
 
-  // Payment modal
   modalOverlay:  { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.6)' },
   modalCard:     { borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, gap: 16 },
   modalHeader:   { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
@@ -483,16 +430,15 @@ const getStyles = (C) => StyleSheet.create({
   secureRow:     { flexDirection: 'row', alignItems: 'center', gap: 5, justifyContent: 'center', paddingBottom: 8 },
   secureTxt:     { fontSize: 11, color: C.c35, fontWeight: '500' },
 
-  // Success
-  successWrap:      { flex: 1, padding: 24, justifyContent: 'center' },
-  successCard:      { borderWidth: 1, borderRadius: 24, padding: 28, alignItems: 'center', gap: 8 },
-  successIcon:      { width: 80, height: 80, borderRadius: 24, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
-  successTitle:     { fontSize: 26, fontWeight: '900', color: C.cream, letterSpacing: -0.5 },
-  successJobTitle:  { fontSize: 16, fontWeight: '700', color: C.cream },
-  successSub:       { fontSize: 13, color: C.c35 },
-  successPlanBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderRadius: 50, paddingHorizontal: 12, paddingVertical: 5, marginTop: 4 },
-  successPlanTxt:   { fontSize: 12, fontWeight: '700' },
-  successNote:      { fontSize: 13, color: C.c35, textAlign: 'center', lineHeight: 19, marginTop: 4 },
-  doneBtn:          { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, paddingHorizontal: 28, paddingVertical: 13, borderRadius: 50 },
-  doneBtnTxt:       { fontSize: 15, fontWeight: '800', color: 'white' },
+  successWrap:       { flex: 1, padding: 24, justifyContent: 'center' },
+  successCard:       { borderWidth: 1, borderRadius: 24, padding: 28, alignItems: 'center', gap: 8 },
+  successIcon:       { width: 80, height: 80, borderRadius: 24, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
+  successTitle:      { fontSize: 26, fontWeight: '900', color: C.cream, letterSpacing: -0.5 },
+  successListingTitle:{ fontSize: 16, fontWeight: '700', color: C.cream },
+  successSub:        { fontSize: 13, color: C.c35 },
+  successPlanBadge:  { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderRadius: 50, paddingHorizontal: 12, paddingVertical: 5, marginTop: 4 },
+  successPlanTxt:    { fontSize: 12, fontWeight: '700' },
+  successNote:       { fontSize: 13, color: C.c35, textAlign: 'center', lineHeight: 19, marginTop: 4 },
+  doneBtn:           { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, paddingHorizontal: 28, paddingVertical: 13, borderRadius: 50 },
+  doneBtnTxt:        { fontSize: 15, fontWeight: '800', color: 'white' },
 });

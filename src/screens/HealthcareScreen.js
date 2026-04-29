@@ -6,6 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
+import { useUser } from '../context/UserContext';
 
 const DOCTORS = [
   {
@@ -14,7 +15,7 @@ const DOCTORS = [
     languages: ['English', 'Bangla'], insurance: 'OPT · Medicaid · Uninsured OK',
     location: 'Queens, NY · 0.8mi', avail: 'Tomorrow 3pm',
     color: '#3EC8C8', badge: 'Immigrant Friendly', filter: 'Primary Care',
-    initials: 'AK',
+    initials: 'AK', communities: ['Bangladesh'],
   },
   {
     id: '2', name: 'Dr. Rajesh Patel', clinic: 'Manhattan Internal Medicine',
@@ -22,7 +23,7 @@ const DOCTORS = [
     languages: ['English', 'Hindi', 'Gujarati'], insurance: 'OPT · Most plans',
     location: 'Manhattan, NY · 2.1mi', avail: 'Thu 10am',
     color: '#5B8DEF', badge: null, filter: 'Primary Care',
-    initials: 'RP',
+    initials: 'RP', communities: ['India', 'Nepal', 'Sri Lanka'],
   },
   {
     id: '3', name: 'Dr. Fatima Al-Hassan', clinic: 'Brooklyn Community Clinic',
@@ -30,7 +31,7 @@ const DOCTORS = [
     languages: ['English', 'Arabic', 'French'], insurance: 'Uninsured OK · Sliding scale',
     location: 'Brooklyn, NY · 3.4mi', avail: 'Fri 2pm',
     color: '#A855F7', badge: 'Sliding Scale', filter: 'Family Medicine',
-    initials: 'FA',
+    initials: 'FA', communities: ['Egypt', 'Pakistan', 'Nigeria'],
   },
   {
     id: '4', name: 'Dr. Chen Wei', clinic: 'Flushing Wellness Center',
@@ -38,7 +39,7 @@ const DOCTORS = [
     languages: ['English', 'Mandarin', 'Cantonese'], insurance: 'OPT · Telehealth available',
     location: 'Flushing, NY · 1.9mi', avail: 'Mon 4pm',
     color: '#7C6FF7', badge: 'Telehealth', filter: 'Mental Health',
-    initials: 'CW',
+    initials: 'CW', communities: ['China', 'Hong Kong', 'Taiwan'],
   },
   {
     id: '5', name: 'Dr. Maria Santos', clinic: "Bronx Women's Health",
@@ -46,7 +47,7 @@ const DOCTORS = [
     languages: ['English', 'Spanish', 'Portuguese'], insurance: 'Medicaid · OPT',
     location: 'Bronx, NY · 4.2mi', avail: 'Wed 11am',
     color: '#F5A623', badge: null, filter: 'OB/GYN',
-    initials: 'MS',
+    initials: 'MS', communities: ['Mexico', 'Colombia', 'Brazil'],
   },
   {
     id: '6', name: 'Dr. Samuel Okonkwo', clinic: 'Harlem Dental & Wellness',
@@ -54,7 +55,7 @@ const DOCTORS = [
     languages: ['English', 'Yoruba', 'Igbo'], insurance: 'Uninsured OK · Sliding scale',
     location: 'Harlem, NY · 1.2mi', avail: 'Sat 9am',
     color: '#3EC878', badge: 'Immigrant Friendly', filter: 'Dentist',
-    initials: 'SO',
+    initials: 'SO', communities: ['Nigeria', 'Ghana', 'Ethiopia'],
   },
 ];
 
@@ -178,10 +179,19 @@ function DoctorCard({ doc, navigation, C, s }) {
 
 export default function HealthcareScreen({ navigation }) {
   const { colors: C } = useTheme();
+  const { user }      = useUser();
   const s = useMemo(() => getStyles(C), [C]);
 
   const [search,       setSearch]       = useState('');
   const [activeFilter, setActiveFilter] = useState(0);
+  const [activeScope,  setActiveScope]  = useState('all');
+
+  const country = user.homeCountry || { flag: '🌍', name: '' };
+
+  const SCOPES = [
+    { key: 'community', label: `${country.flag} Community` },
+    { key: 'all',       label: '🌍 All' },
+  ];
 
   const filtered = DOCTORS.filter(d => {
     const q = search.toLowerCase();
@@ -190,7 +200,9 @@ export default function HealthcareScreen({ navigation }) {
       d.specialty.toLowerCase().includes(q) ||
       d.languages.some(l => l.toLowerCase().includes(q));
     const matchFilter = activeFilter === 0 || d.filter === FILTERS[activeFilter];
-    return matchSearch && matchFilter;
+    const matchScope  = activeScope === 'all' ||
+      d.communities.some(c => c.toLowerCase() === (country.name || '').toLowerCase());
+    return matchSearch && matchFilter && matchScope;
   });
 
   return (
@@ -205,10 +217,22 @@ export default function HealthcareScreen({ navigation }) {
           <Text style={s.title}>Healthcare</Text>
           <Text style={s.sub}>Multilingual doctors near you</Text>
         </View>
-        <TouchableOpacity style={s.listBtn} onPress={() => navigation.navigate('ListDoctor')} activeOpacity={0.85}>
-          <Ionicons name="add" size={14} color={C.teal} />
-          <Text style={s.listBtnTxt}>List Practice</Text>
-        </TouchableOpacity>
+        {/* Community / All scope tabs */}
+        <View style={s.scopeRow}>
+          {SCOPES.map(sc => {
+            const active = sc.key === activeScope;
+            return (
+              <TouchableOpacity
+                key={sc.key}
+                style={[s.scopeTab, active && s.scopeTabActive]}
+                onPress={() => setActiveScope(sc.key)}
+                activeOpacity={0.8}
+              >
+                <Text style={[s.scopeTabTxt, active && s.scopeTabTxtActive]}>{sc.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
       </View>
 
       {/* Search */}
@@ -230,7 +254,7 @@ export default function HealthcareScreen({ navigation }) {
         </View>
       </View>
 
-      {/* Filter pills */}
+      {/* Filter pills + List Practice */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filtersRow}>
         {FILTERS.map((f, i) => (
           <TouchableOpacity
@@ -242,17 +266,33 @@ export default function HealthcareScreen({ navigation }) {
             <Text style={[s.filterTxt, i === activeFilter && s.filterTxtActive]}>{f}</Text>
           </TouchableOpacity>
         ))}
+        <TouchableOpacity style={s.listBtn} onPress={() => navigation.navigate('ListDoctor')} activeOpacity={0.85}>
+          <Ionicons name="add" size={13} color={C.teal} />
+          <Text style={s.listBtnTxt}>List Practice</Text>
+        </TouchableOpacity>
       </ScrollView>
 
       {/* List */}
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.list}>
-        <Text style={s.sectionLabel}>{filtered.length} DOCTOR{filtered.length !== 1 ? 'S' : ''} NEAR YOU</Text>
+        <Text style={s.sectionLabel}>
+          {filtered.length} DOCTOR{filtered.length !== 1 ? 'S' : ''}
+          {activeScope === 'community' ? ` IN ${(country.name || '').toUpperCase()} COMMUNITY` : ' NEAR YOU'}
+        </Text>
 
         {filtered.length === 0 ? (
           <View style={s.emptyState}>
             <Ionicons name="medical-outline" size={40} color={C.c35} />
-            <Text style={s.emptyTxt}>No doctors found</Text>
+            <Text style={s.emptyTxt}>
+              {activeScope === 'community'
+                ? `No doctors in ${country.name} community yet`
+                : 'No doctors found'}
+            </Text>
             <Text style={s.emptySub}>Try a different filter or search term</Text>
+            {activeScope === 'community' && (
+              <TouchableOpacity style={[s.switchBtn, { backgroundColor: C.tealD, borderColor: C.teal + '44' }]} onPress={() => setActiveScope('all')} activeOpacity={0.8}>
+                <Text style={[s.switchBtnTxt, { color: C.teal }]}>View all doctors</Text>
+              </TouchableOpacity>
+            )}
           </View>
         ) : (
           filtered.map(doc => (
@@ -268,12 +308,19 @@ const getStyles = (C) => StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
 
   // Header
-  header:     { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 10 },
-  backBtn:    { width: 38, height: 38, borderRadius: 13, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, alignItems: 'center', justifyContent: 'center' },
-  title:      { fontSize: 20, fontWeight: '800', color: C.cream, letterSpacing: -0.5 },
-  sub:        { fontSize: 12, color: C.c35, marginTop: 1 },
+  header:     { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 10 },
+  backBtn:    { width: 38, height: 38, borderRadius: 13, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  title:      { fontSize: 16, fontWeight: '800', color: C.cream, letterSpacing: -0.3 },
+  sub:        { fontSize: 11, color: C.c35, marginTop: 1 },
   listBtn:    { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: C.tealD, borderWidth: 1, borderColor: C.teal + '55', borderRadius: 50, paddingHorizontal: 12, paddingVertical: 7 },
   listBtnTxt: { fontSize: 12, fontWeight: '700', color: C.teal },
+
+  // Scope tabs
+  scopeRow:          { flexDirection: 'row', gap: 5, flexShrink: 0 },
+  scopeTab:          { paddingHorizontal: 9, paddingVertical: 5, borderRadius: 50, borderWidth: 1, borderColor: C.border, backgroundColor: C.card },
+  scopeTabActive:    { backgroundColor: C.vividD, borderColor: C.vivid + '66' },
+  scopeTabTxt:       { fontSize: 10, fontWeight: '600', color: C.c35 },
+  scopeTabTxtActive: { color: C.vivid, fontWeight: '700' },
 
   // Search
   searchWrap:  { paddingHorizontal: 16, marginBottom: 10 },
@@ -292,9 +339,11 @@ const getStyles = (C) => StyleSheet.create({
   sectionLabel:{ fontSize: 10, fontWeight: '700', color: C.c35, letterSpacing: 1.5, marginBottom: 4 },
 
   // Empty
-  emptyState:  { alignItems: 'center', paddingVertical: 48, gap: 10 },
-  emptyTxt:    { fontSize: 15, fontWeight: '700', color: C.cream },
-  emptySub:    { fontSize: 13, color: C.c35 },
+  emptyState:   { alignItems: 'center', paddingVertical: 48, gap: 10 },
+  emptyTxt:     { fontSize: 15, fontWeight: '700', color: C.cream, textAlign: 'center' },
+  emptySub:     { fontSize: 13, color: C.c35 },
+  switchBtn:    { marginTop: 4, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 50, borderWidth: 1 },
+  switchBtnTxt: { fontSize: 13, fontWeight: '700' },
 
   // Doctor card
   docCard:     { backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 20, padding: 16 },

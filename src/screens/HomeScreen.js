@@ -12,12 +12,10 @@ import { useUser } from '../context/UserContext';
 import { useAuthStore } from '../store/authStore';
 
 const NEARBY_RESOURCES = [
-  { id: 'r1', category: 'Jobs',      icon: 'briefcase-outline',      color: '#3EC878', bg: '#0F2018', count: 14, route: 'Jobs'       },
-  { id: 'r2', category: 'Housing',   icon: 'home-outline',           color: '#F5A623', bg: '#1A1408', count: 8,  route: 'Housing'    },
-  { id: 'r3', category: 'Doctors',   icon: 'medkit-outline',         color: '#5BCFEF', bg: '#0A1820', count: 6,  route: 'Healthcare' },
-  { id: 'r4', category: 'Attorneys', icon: 'shield-checkmark-outline', color: '#9B72EF', bg: '#130F20', count: 5, route: 'Attorney'  },
-  { id: 'r5', category: 'Events',    icon: 'calendar-outline',       color: '#F5A623', bg: '#1A1208', count: 9,  route: 'Events'     },
-  { id: 'r6', category: 'Visa',      icon: 'document-text-outline',  color: '#FB7185', bg: '#200A10', count: 3,  route: 'Visa'       },
+  { id: 'r1', category: 'Jobs',      icon: 'briefcase-outline',        color: '#3EC878', bg: '#0F2018', count: 14, route: 'Jobs'       },
+  { id: 'r2', category: 'Housing',   icon: 'home-outline',             color: '#F5A623', bg: '#1A1408', count: 8,  route: 'Housing'    },
+  { id: 'r3', category: 'Doctors',   icon: 'medkit-outline',           color: '#5BCFEF', bg: '#0A1820', count: 6,  route: 'Healthcare' },
+  { id: 'r4', category: 'Attorneys', icon: 'shield-checkmark-outline', color: '#9B72EF', bg: '#130F20', count: 5,  route: 'Attorney'   },
 ];
 
 const SUGGESTED_CITIES = [

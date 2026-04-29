@@ -36,8 +36,10 @@ import CreateCommunityScreen   from '../screens/CreateCommunityScreen';
 import UserProfileScreen       from '../screens/UserProfileScreen';
 import ListAttorneyScreen      from '../screens/ListAttorneyScreen';
 import PostJobScreen           from '../screens/PostJobScreen';
+import PostHousingScreen       from '../screens/PostHousingScreen';
 import ListDoctorScreen        from '../screens/ListDoctorScreen';
 import EventsScreen            from '../screens/EventsScreen';
+import JobDetailScreen         from '../screens/JobDetailScreen';
 import ChatScreen               from '../screens/ChatScreen';
 
 const Tab   = createBottomTabNavigator();
@@ -147,9 +149,11 @@ export default function AppNavigator() {
         <Stack.Screen name="UserProfile"       component={UserProfileScreen} />
         <Stack.Screen name="ListAttorney"     component={ListAttorneyScreen} />
         <Stack.Screen name="PostJob"          component={PostJobScreen} />
+        <Stack.Screen name="PostHousing"      component={PostHousingScreen} />
         <Stack.Screen name="ListDoctor"       component={ListDoctorScreen} />
         <Stack.Screen name="CreatePost"       component={CreatePostScreen} />
         <Stack.Screen name="Events"           component={EventsScreen} />
+        <Stack.Screen name="JobDetail"        component={JobDetailScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );
