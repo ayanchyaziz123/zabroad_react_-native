@@ -7,12 +7,14 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useTheme } from '../theme/ThemeContext';
 import { useAuthStore } from '../store/authStore';
 import { useChatStore } from '../store/chatStore';
+import { useLocationStore } from '../store/locationStore';
 
 // Onboarding
 import WelcomeScreen    from '../screens/onboarding/WelcomeScreen';
 import SignUpScreen     from '../screens/onboarding/SignUpScreen';
 import LoginScreen      from '../screens/onboarding/LoginScreen';
 import FromCountryScreen from '../screens/onboarding/FromCountryScreen';
+import LivesInScreen    from '../screens/onboarding/LivesInScreen';
 import InterestsScreen  from '../screens/onboarding/InterestsScreen';
 import AllDoneScreen    from '../screens/onboarding/AllDoneScreen';
 import OTPScreen             from '../screens/onboarding/OTPScreen';
@@ -110,9 +112,12 @@ function CustomTabBar({ state, navigation }) {
 
 function MainTabs() {
   const fetchConversations = useChatStore(s => s.fetchConversations);
+  const detectLocation     = useLocationStore(s => s.detect);
 
-  // Fetch on mount so the unread badge is populated immediately
-  useEffect(() => { fetchConversations(); }, []);
+  useEffect(() => {
+    fetchConversations();
+    detectLocation();
+  }, []);
 
   return (
     <Tab.Navigator tabBar={(props) => <CustomTabBar {...props} />} screenOptions={{ headerShown: false }}>
@@ -149,6 +154,7 @@ export default function AppNavigator() {
         <Stack.Screen name="SignUp"      component={SignUpScreen} />
         <Stack.Screen name="Login"       component={LoginScreen} />
         <Stack.Screen name="FromCountry" component={FromCountryScreen} />
+        <Stack.Screen name="LivesIn"     component={LivesInScreen} />
         <Stack.Screen name="Interests"   component={InterestsScreen} />
         <Stack.Screen name="OTP"            component={OTPScreen} />
         <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />

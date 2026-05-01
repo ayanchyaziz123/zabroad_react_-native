@@ -8,7 +8,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import MapView, { Circle } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
-import { useUser } from '../context/UserContext';
 import { useAuthStore } from '../store/authStore';
 import UserAvatar from '../components/UserAvatar';
 
@@ -351,27 +350,40 @@ function LocationSheet({ visible, current, currentRadius, onSelect, onClose, C, 
 
 export default function HomeScreen({ navigation }) {
   const { colors: C } = useTheme();
-  const { user, updateUser } = useUser();
-  const { api, user: authUser } = useAuthStore();
+  const { api, user: authUser, updateProfile } = useAuthStore();
   const s = useMemo(() => getStyles(C), [C]);
 
+  // Location state — seeded from authStore profile, locally mutable
+  const [currentCity, setCurrentCity] = useState('');
+  const [radius,      setRadius]      = useState(25);
+
+  // Seed city from authStore once the profile is available
+  useEffect(() => {
+    const profileCity = authUser?.profile?.lives_in;
+    if (profileCity && !currentCity) setCurrentCity(profileCity);
+  }, [authUser?.profile?.lives_in]);
+
   const [locationSheetOpen, setLocationSheetOpen] = useState(false);
-  const [radius,            setRadius]            = useState(25);
   const [activeScope,       setActiveScope]       = useState('all');
   const [posts,             setPosts]             = useState([]);
   const [loading,           setLoading]           = useState(true);
   const [refreshing,        setRefreshing]        = useState(false);
   const [fetchError,        setFetchError]        = useState('');
 
-  const country   = user.homeCountry;              // { flag, name }
-  const livesIn   = user.livesIn || '';            // "Queens, NY"
-  const cityShort = livesIn.split(',')[0] || 'You';
+  // Derived display values — single source of truth: authStore
+  const homeCountry = authUser?.profile?.home_country || '';
+  const countryFlag = authUser?.profile?.country_flag || '🌍';
+  const cityShort   = currentCity.split(',')[0] || 'Set location';
+  const displayName = authUser?.name || '';
 
-
+  // Build the fetch URL — always include near_city for location sorting;
+  // flag scope adds country filter on top
   const buildUrl = useCallback((scope) => {
-    if (scope === 'country' && country?.name) return `/posts/?country=${encodeURIComponent(country.name)}`;
-    return '/posts/';
-  }, [country]);
+    const parts = [];
+    if (scope === 'country' && homeCountry) parts.push(`country=${encodeURIComponent(homeCountry)}`);
+    if (currentCity) parts.push(`near_city=${encodeURIComponent(currentCity)}`);
+    return parts.length ? `/posts/?${parts.join('&')}` : '/posts/';
+  }, [homeCountry, currentCity]);
 
   const fetchPosts = useCallback(async (scope, isRefresh = false) => {
     if (!isRefresh) setLoading(true);
@@ -387,6 +399,7 @@ export default function HomeScreen({ navigation }) {
     }
   }, [api, buildUrl]);
 
+  // Re-fetch when scope or city changes (city change → new buildUrl → new fetchPosts → effect fires)
   useEffect(() => {
     fetchPosts(activeScope);
   }, [activeScope, fetchPosts]);
@@ -396,13 +409,20 @@ export default function HomeScreen({ navigation }) {
     fetchPosts(activeScope, true);
   }, [activeScope, fetchPosts]);
 
+  // Update city: local state immediately (fast UI), persist to backend silently
+  function handleLocationSelect(city, r) {
+    setCurrentCity(city);
+    setRadius(r);
+    updateProfile({ lives_in: city }).catch(() => {});
+  }
+
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
       <LocationSheet
         visible={locationSheetOpen}
-        current={livesIn || 'Queens, NY'}
+        current={currentCity}
         currentRadius={radius}
-        onSelect={(city, r) => { updateUser({ livesIn: city }); setRadius(r); }}
+        onSelect={handleLocationSelect}
         onClose={() => setLocationSheetOpen(false)}
         C={C} s={s}
       />
@@ -421,9 +441,9 @@ export default function HomeScreen({ navigation }) {
           <View style={s.avOnline} />
         </View>
         <TouchableOpacity onPress={() => setLocationSheetOpen(true)} activeOpacity={0.7} style={{ marginRight: 8 }}>
-          <Text style={s.uname}>{user.name}</Text>
+          <Text style={s.uname}>{displayName}</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 1 }}>
-            <Text style={s.locationChipTxt}>📍 {cityShort || 'Set location'} · {radius} mi</Text>
+            <Text style={s.locationChipTxt}>📍 {cityShort} · {radius} mi</Text>
             <Text style={s.locationChevron}>▾</Text>
           </View>
         </TouchableOpacity>
@@ -438,10 +458,10 @@ export default function HomeScreen({ navigation }) {
           </TouchableOpacity>
           <TouchableOpacity
             style={[s.iconBtn, activeScope === 'country' && s.iconBtnActive]}
-            onPress={() => setActiveScope('country')}
+            onPress={() => setActiveScope(s => s === 'country' ? 'all' : 'country')}
             activeOpacity={0.75}
           >
-            <Text style={s.iconBtnEmoji}>{country.flag}</Text>
+            <Text style={s.iconBtnEmoji}>{countryFlag}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[s.iconBtn, activeScope === 'all' && s.iconBtnActive]}
@@ -464,7 +484,7 @@ export default function HomeScreen({ navigation }) {
         <View style={s.sectionHeader}>
           <Text style={s.sectionTitle}>
             {activeScope === 'country'
-              ? `${country.flag} ${country.name} Community`
+              ? `${countryFlag} ${homeCountry} Community`
               : '🌍 All Communities'}
           </Text>
         </View>
@@ -488,7 +508,7 @@ export default function HomeScreen({ navigation }) {
         {/* ── FEED ───────────────────────────────────────────────── */}
         <View style={[s.sectionHeader, { marginTop: 20 }]}>
           <Text style={s.sectionTitle}>
-            {activeScope === 'country' ? `${country.flag} ${country.name} posts` : '🌍 All posts'}
+            {activeScope === 'country' ? `${countryFlag} ${homeCountry} posts` : '🌍 All posts'}
           </Text>
           {!loading && posts.length > 0 && (
             <Text style={s.sectionSub}>{posts.length} post{posts.length !== 1 ? 's' : ''}</Text>
@@ -521,7 +541,7 @@ export default function HomeScreen({ navigation }) {
               <Text style={{ fontSize: 36 }}>📭</Text>
               <Text style={s.emptyTitle}>No posts yet</Text>
               <Text style={s.emptySubtitle}>
-                {activeScope === 'country' ? `No posts from ${country.name} community yet.` : 'No posts yet. Be the first!'}
+                {activeScope === 'country' ? `No posts from ${homeCountry} community yet.` : 'No posts yet. Be the first!'}
               </Text>
               <TouchableOpacity onPress={() => navigation.navigate('CreatePost')} style={s.retryBtn}>
                 <Text style={s.retryTxt}>Create a post</Text>

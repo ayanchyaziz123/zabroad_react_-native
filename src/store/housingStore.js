@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { useAuthStore } from './authStore';
+import { useLocationStore } from './locationStore';
 
 function normalize(l) {
   return {
@@ -36,9 +37,11 @@ export const useHousingStore = create((set, get) => ({
   fetchListings: async () => {
     set({ loading: true, error: null });
     try {
-      const api  = useAuthStore.getState().api;
-      const data = await api('/housing/');
-      const list = Array.isArray(data) ? data : (data.results ?? []);
+      const api      = useAuthStore.getState().api;
+      const nearCity = useLocationStore.getState().nearCityParam();
+      const url      = nearCity ? `/housing/?${nearCity}` : '/housing/';
+      const data     = await api(url);
+      const list     = Array.isArray(data) ? data : (data.results ?? []);
       set({ listings: list.map(normalize), loading: false });
     } catch (e) {
       set({ error: e.message, loading: false });

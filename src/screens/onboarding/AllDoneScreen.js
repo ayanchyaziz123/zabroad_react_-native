@@ -25,30 +25,34 @@ export default function AllDoneScreen({ navigation, route }) {
   const fromCountry = userData.fromCountry;
   const name        = userData.name?.split(' ')[0] || 'Friend';
 
-  // ── Detect location on mount ───────────────────────────────────────────────
+  // ── Seed confirmed city from LivesIn step; GPS fills in only if missing ────
   useEffect(() => {
+    // userData.livesIn comes from the user's selection on LivesInScreen
+    const confirmedCity = userData.livesIn?.name;
+    if (confirmedCity) {
+      setDetectedCity(confirmedCity);
+      return; // user already confirmed — no need to request GPS again
+    }
+    // Fallback: try GPS silently (user skipped LivesIn somehow)
     (async () => {
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') return; // silently skip — fallback used at register
-
+        if (status !== 'granted') return;
         const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
         const [place] = await Location.reverseGeocodeAsync({
           latitude:  loc.coords.latitude,
           longitude: loc.coords.longitude,
         });
-
         if (place) {
-          // Build "City, State" or "City, Country" depending on what's available
-          const city  = place.city || place.subregion || place.district || '';
+          const city   = place.city || place.subregion || place.district || '';
           const region = place.region || place.country || '';
           setDetectedCity(city ? `${city}, ${region}` : region);
         }
       } catch {
-        // Location unavailable — fallback handled at register time
+        // remain null — register will use 'Unknown' as last resort
       }
     })();
-  }, []);
+  }, [userData.livesIn]);
 
   // ── Entrance animation ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -69,8 +73,11 @@ export default function AllDoneScreen({ navigation, route }) {
       const firstName   = nameParts[0];
       const lastName    = nameParts.slice(1).join(' ') || '';
       const fromCountry = userData.fromCountry || { flag: '🌍', name: 'Other' };
-      const livesIn     = detectedCity || 'Unknown';
-      const handle      = '@' + (userData.email?.split('@')[0] || firstName.toLowerCase()).replace(/\s+/g, '_');
+      // Use confirmed city from LivesIn step; GPS detection is the backup
+      const livesIn     = userData.livesIn?.name || detectedCity || 'Unknown';
+      const rawHandle   = (userData.email?.split('@')[0] || firstName.toLowerCase())
+        .replace(/[^a-z0-9_]/gi, '_').replace(/_+/g, '_').replace(/^_|_$/g, '').toLowerCase();
+      const handle      = rawHandle || 'user';
 
       await register({
         firstName,
@@ -174,7 +181,7 @@ export default function AllDoneScreen({ navigation, route }) {
             <Text style={[styles.nextTitle, { color: C.cream }]}>What's waiting for you:</Text>
             {[
               `Community groups from ${fromCountry?.name || 'your country'}`,
-              `Local services near ${detectedCity?.split(',')[0] || 'your city'}`,
+              `Local services near ${(userData.livesIn?.name || detectedCity)?.split(',')[0] || 'your city'}`,
               'Personalised visa & job updates',
               'AI assistant ready to answer questions',
             ].map((item, i) => (

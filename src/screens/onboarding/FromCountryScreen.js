@@ -60,7 +60,7 @@ export default function FromCountryScreen({ navigation, route }) {
   );
 
   const handleNext = () => {
-    if (selected) navigation.navigate('Interests', { ...userData, fromCountry: selected });
+    if (selected) navigation.navigate('LivesIn', { ...userData, fromCountry: selected });
   };
 
   return (

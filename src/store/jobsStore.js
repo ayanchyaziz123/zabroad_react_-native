@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { useAuthStore } from './authStore';
+import { useLocationStore } from './locationStore';
 
 // Normalize backend job → frontend shape
 function normalize(j) {
@@ -35,8 +36,10 @@ export const useJobsStore = create((set, get) => ({
   fetchJobs: async () => {
     set({ loading: true, error: null });
     try {
-      const api  = useAuthStore.getState().api;
-      const data = await api('/jobs/');
+      const api          = useAuthStore.getState().api;
+      const nearCity     = useLocationStore.getState().nearCityParam();
+      const url          = nearCity ? `/jobs/?${nearCity}` : '/jobs/';
+      const data         = await api(url);
       const list = Array.isArray(data) ? data : (data.results ?? []);
       set({ jobs: list.map(normalize), loading: false });
     } catch (e) {
