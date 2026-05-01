@@ -8,6 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 import { useAuthStore } from '../store/authStore';
+import UserAvatar from '../components/UserAvatar';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function formatTime(iso) {
@@ -39,13 +40,13 @@ function CommentRow({ comment, C, s, onReply, api }) {
   return (
     <View style={s.commentRow}>
       {/* Avatar */}
-      <TouchableOpacity
-        style={[s.commentAv, { backgroundColor: avatarBg }]}
-        onPress={() => comment.author_handle && onReply && null}
-        activeOpacity={0.8}
-      >
-        <Text style={{ fontSize: 17 }}>{comment.author_avatar || '🧑‍💻'}</Text>
-      </TouchableOpacity>
+      <UserAvatar
+        uri={comment.author_avatar_url}
+        emoji={comment.author_avatar}
+        name={comment.author_name}
+        size={36}
+        bg={avatarBg}
+      />
 
       {/* Content */}
       <View style={s.commentContent}>
@@ -81,11 +82,12 @@ export default function PostDetailScreen({ navigation, route }) {
   const { user, api } = useAuthStore();
 
   // The post object passed from HomeScreen (full API shape)
-  const post = route?.params?.post || {};
+  const initialPost = route?.params?.post || {};
 
-  const [liked,       setLiked]       = useState(post.is_liked || false);
-  const [likeCount,   setLikeCount]   = useState(post.likes_count || 0);
-  const [saved,       setSaved]       = useState(false);
+  const [post,        setPost]        = useState(initialPost);
+  const [liked,       setLiked]       = useState(initialPost.is_liked || false);
+  const [likeCount,   setLikeCount]   = useState(initialPost.likes_count || 0);
+  const [saved,       setSaved]       = useState(initialPost.is_saved || false);
   const [comments,    setComments]    = useState([]);
   const [loadingCmts, setLoadingCmts] = useState(true);
   const [input,       setInput]       = useState('');
@@ -96,19 +98,30 @@ export default function PostDetailScreen({ navigation, route }) {
   const scrollRef  = useRef(null);
   const inputRef   = useRef(null);
 
+  // ── Fetch fresh post (gets up-to-date is_liked, is_saved, counts) ───────
+  useEffect(() => {
+    if (!initialPost.id) return;
+    api(`/posts/${initialPost.id}/`).then(fresh => {
+      setPost(fresh);
+      setLiked(fresh.is_liked || false);
+      setLikeCount(fresh.likes_count || 0);
+      setSaved(fresh.is_saved || false);
+    }).catch(() => {});
+  }, [initialPost.id]);
+
   // ── Fetch comments ──────────────────────────────────────────────────────
   const fetchComments = useCallback(async () => {
-    if (!post.id) return;
+    if (!initialPost.id) return;
     setLoadingCmts(true);
     try {
-      const data = await api(`/posts/${post.id}/comments/`);
+      const data = await api(`/posts/${initialPost.id}/comments/`);
       setComments(Array.isArray(data) ? data : (data.results || []));
     } catch {
       // silently fail — comments not critical
     } finally {
       setLoadingCmts(false);
     }
-  }, [api, post.id]);
+  }, [api, initialPost.id]);
 
   useEffect(() => { fetchComments(); }, [fetchComments]);
 
@@ -122,7 +135,9 @@ export default function PostDetailScreen({ navigation, route }) {
       Animated.spring(heartScale, { toValue: 1,   useNativeDriver: true, speed: 30 }),
     ]).start();
     try {
-      await api(`/posts/${post.id}/like/`, { method: 'POST' });
+      const res = await api(`/posts/${initialPost.id}/like/`, { method: 'POST' });
+      setLiked(res.liked);
+      setLikeCount(res.likes_count);
     } catch {
       setLiked(liked);
       setLikeCount(c => next ? c - 1 : c + 1);
@@ -135,7 +150,7 @@ export default function PostDetailScreen({ navigation, route }) {
     if (!text || sending) return;
     setSending(true);
     try {
-      const newCmt = await api(`/posts/${post.id}/comments/`, {
+      const newCmt = await api(`/posts/${initialPost.id}/comments/`, {
         method: 'POST',
         body: { body: text },
       });
@@ -158,15 +173,16 @@ export default function PostDetailScreen({ navigation, route }) {
 
   const totalComments = comments.length;
 
-  // ── Author info ─────────────────────────────────────────────────────────
-  const authorName   = post.author_name   || post.name   || 'User';
-  const authorHandle = post.author_handle || post.handle || '';
-  const authorAvatar = post.author_avatar || post.avatar || '🧑‍💻';
+  // ── Author info (read from refreshed post state) ────────────────────────
+  const authorName   = post.author_name   || 'User';
+  const authorAvatar = post.author_avatar || '🧑‍💻';
   const authorFlag   = post.author_country_flag || '';
-  const postTime     = post.created_at ? formatTime(post.created_at) : (post.time || '');
+  const authorId     = post.author_id || null;
+  const postTime     = post.created_at ? formatTime(post.created_at) : '';
   const postLocation = post.location || '';
   const topics       = post.topics_list || [];
   const postBody     = post.body || '';
+  const isOwnPost    = authorId && user?.id && authorId === user.id;
 
   return (
     <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
@@ -178,7 +194,7 @@ export default function PostDetailScreen({ navigation, route }) {
         </TouchableOpacity>
         <Text style={s.headerTitle}>Post</Text>
         <TouchableOpacity style={s.headerBtn} activeOpacity={0.7}>
-          <Ionicons name="paper-plane-outline" size={20} color={C.cream} />
+          <Ionicons name="ellipsis-horizontal" size={20} color={C.cream} />
         </TouchableOpacity>
       </View>
 
@@ -196,21 +212,38 @@ export default function PostDetailScreen({ navigation, route }) {
 
             {/* Author */}
             <View style={s.postAuthorRow}>
-              <View style={s.avatarRing}>
-                <View style={[s.postAvatar, { backgroundColor: '#1A2035' }]}>
-                  <Text style={{ fontSize: 20 }}>{authorAvatar}</Text>
+              <TouchableOpacity
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}
+                onPress={() => authorId && navigation.navigate('UserProfile', { userId: authorId })}
+                activeOpacity={authorId ? 0.75 : 1}
+                disabled={!authorId}
+              >
+                <View style={s.avatarRing}>
+                  <UserAvatar
+                    uri={post.author_avatar_url}
+                    emoji={authorAvatar}
+                    name={authorName}
+                    size={38}
+                    bg="#1A2035"
+                  />
                 </View>
-              </View>
-              <View style={{ flex: 1 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={s.postAuthorName}>{authorName}</Text>
-                  {authorFlag ? <Text style={{ fontSize: 14 }}>{authorFlag}</Text> : null}
+                <View style={{ flex: 1 }}>
+                  <Text style={s.postAuthorName} numberOfLines={1}>{authorName}{authorFlag ? `  ${authorFlag}` : ''}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                    <Text style={s.postMeta}>{postTime}</Text>
+                    {postLocation ? <Text style={s.postMeta}>· 📍 {postLocation}</Text> : null}
+                  </View>
                 </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
-                  <Text style={s.postMeta}>{postTime}</Text>
-                  {postLocation ? <Text style={s.postMeta}>· 📍 {postLocation}</Text> : null}
-                </View>
-              </View>
+              </TouchableOpacity>
+              {authorId && !isOwnPost && (
+                <TouchableOpacity
+                  style={s.msgBtn}
+                  onPress={() => navigation.navigate('AppMain', { screen: 'Chat', params: { userId: authorId } })}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="chatbubble-ellipses-outline" size={17} color={C.vivid} />
+                </TouchableOpacity>
+              )}
               <TouchableOpacity style={s.moreBtn} activeOpacity={0.7}>
                 <Ionicons name="ellipsis-horizontal" size={20} color={C.c35} />
               </TouchableOpacity>
@@ -230,36 +263,33 @@ export default function PostDetailScreen({ navigation, route }) {
               </View>
             )}
 
-            {/* ── Instagram action bar ───────────────────────── */}
-            <View style={s.igActions}>
-              <View style={s.igLeft}>
-                <TouchableOpacity onPress={onLikePost} activeOpacity={0.7} style={s.igBtn}>
-                  <Animated.View style={{ transform: [{ scale: heartScale }] }}>
-                    <Ionicons name={liked ? 'heart' : 'heart-outline'} size={26} color={liked ? '#FF3B5C' : C.c60} />
-                  </Animated.View>
-                </TouchableOpacity>
-                <TouchableOpacity style={s.igBtn} onPress={() => inputRef.current?.focus()} activeOpacity={0.7}>
-                  <Ionicons name="chatbubble-outline" size={24} color={C.c60} />
-                </TouchableOpacity>
-                <TouchableOpacity style={s.igBtn} activeOpacity={0.7}>
-                  <Ionicons name="paper-plane-outline" size={24} color={C.c60} />
-                </TouchableOpacity>
-              </View>
-              <TouchableOpacity onPress={() => setSaved(v => !v)} activeOpacity={0.7} style={s.igBtn}>
-                <Ionicons name={saved ? 'bookmark' : 'bookmark-outline'} size={24} color={saved ? C.vivid : C.c60} />
-              </TouchableOpacity>
-            </View>
-
-            {/* Counts */}
-            <View style={s.countsRow}>
-              {likeCount > 0 && (
-                <Text style={s.countTxt}>{likeCount.toLocaleString()} like{likeCount !== 1 ? 's' : ''}</Text>
-              )}
-              {totalComments > 0 && (
-                <Text style={[s.countTxt, { color: C.c35 }]}>
-                  {likeCount > 0 ? '  ·  ' : ''}{totalComments} comment{totalComments !== 1 ? 's' : ''}
+            {/* ── Action bar ─────────────────────────────────── */}
+            <View style={s.actionBar}>
+              <TouchableOpacity onPress={onLikePost} activeOpacity={0.75} style={s.actionBtn}>
+                <Animated.View style={{ transform: [{ scale: heartScale }] }}>
+                  <Ionicons name={liked ? 'heart' : 'heart-outline'} size={16} color={liked ? '#FF3B5C' : C.c35} />
+                </Animated.View>
+                <Text style={[s.actionTxt, liked && { color: '#FF3B5C' }]}>
+                  {likeCount > 0 ? `${likeCount.toLocaleString()} ` : ''}{liked ? 'Liked' : 'Like'}
                 </Text>
-              )}
+              </TouchableOpacity>
+
+              <TouchableOpacity onPress={() => inputRef.current?.focus()} activeOpacity={0.75} style={s.actionBtn}>
+                <Ionicons name="chatbubble-ellipses-outline" size={16} color={C.c35} />
+                <Text style={s.actionTxt}>
+                  {totalComments > 0 ? `${totalComments} ` : ''}Comment
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity onPress={async () => {
+                const next = !saved;
+                setSaved(next);
+                try { await api(`/posts/${initialPost.id}/save/`, { method: 'POST' }); }
+                catch { setSaved(!next); }
+              }} activeOpacity={0.75} style={s.actionBtn}>
+                <Ionicons name={saved ? 'bookmark' : 'bookmark-outline'} size={16} color={saved ? C.vivid : C.c35} />
+                <Text style={[s.actionTxt, saved && { color: C.vivid }]}>{saved ? 'Saved' : 'Save'}</Text>
+              </TouchableOpacity>
             </View>
           </View>
 
@@ -328,9 +358,13 @@ export default function PostDetailScreen({ navigation, route }) {
             </View>
           )}
           <View style={s.inputRow}>
-            <View style={[s.inputAvatar, { backgroundColor: C.vividD }]}>
-              <Text style={{ fontSize: 15 }}>{user?.profile?.avatar_emoji || '🧑‍💻'}</Text>
-            </View>
+            <UserAvatar
+              uri={user?.profile?.avatar_url}
+              emoji={user?.profile?.avatar_emoji}
+              name={user?.name}
+              size={34}
+              bg={C.vividD}
+            />
             <TextInput
               ref={inputRef}
               style={s.textInput}
@@ -377,17 +411,16 @@ const getStyles = (C) => StyleSheet.create({
   postAuthorName: { fontSize: 14, fontWeight: '700', color: C.cream },
   postMeta:       { fontSize: 11, color: C.c35 },
   moreBtn:        { padding: 6 },
+  msgBtn:         { width: 36, height: 36, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: C.vividD, borderWidth: 1, borderColor: C.vivid + '44' },
   postBody:       { fontSize: 15, color: C.c60, lineHeight: 24, paddingHorizontal: 14, paddingBottom: 12 },
   topicsRow:      { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: 14, paddingBottom: 12 },
   topicChip:      { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 50, borderWidth: 1 },
   topicTxt:       { fontSize: 11, fontWeight: '700' },
 
-  // IG actions
-  igActions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 6, paddingTop: 2 },
-  igLeft:    { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  igBtn:     { padding: 8 },
-  countsRow: { flexDirection: 'row', paddingHorizontal: 14, paddingBottom: 12 },
-  countTxt:  { fontSize: 13, fontWeight: '700', color: C.cream },
+  // Action bar
+  actionBar: { flexDirection: 'row', borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.border, marginTop: 6 },
+  actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12 },
+  actionTxt: { fontSize: 12, fontWeight: '600', color: C.c35 },
 
   // AI card
   aiCard:     { flexDirection: 'row', alignItems: 'center', gap: 12, margin: 14, padding: 14, borderRadius: 16, borderWidth: 1, borderColor: C.vivid + '33', backgroundColor: C.vividD },

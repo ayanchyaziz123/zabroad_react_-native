@@ -35,7 +35,7 @@ export default function WelcomeScreen({ navigation }) {
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <LinearGradient
-        colors={isDark ? ['#1A0A0E', '#0D0F1A', C.bg] : [C.bg, C.bg]}
+        colors={isDark ? ['#1A0A0E', '#0D0F1A', C.bg] : [C.bg, C.bg, C.bg]}
         locations={[0, 0.4, 1]}
         style={StyleSheet.absoluteFill}
       />

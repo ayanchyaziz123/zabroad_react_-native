@@ -2,10 +2,12 @@ import React, { useMemo, useState, useRef, useEffect, useCallback } from 'react'
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   Modal, Alert, TextInput, KeyboardAvoidingView, Platform,
-  ActivityIndicator, Animated,
+  ActivityIndicator, Animated, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import UserAvatar from '../components/UserAvatar';
 import { useTheme } from '../theme/ThemeContext';
 import { useUser } from '../context/UserContext';
 import { useAuthStore } from '../store/authStore';
@@ -99,13 +101,83 @@ export default function ProfileScreen({ navigation }) {
   const [editModal,     setEditModal]     = useState(false);
   const [posts,         setPosts]         = useState([]);
   const [loadingPosts,  setLoadingPosts]  = useState(true);
+  const [savedPosts,    setSavedPosts]    = useState([]);
+  const [loadingSaved,  setLoadingSaved]  = useState(false);
   const [saving,        setSaving]        = useState(false);
+  const [avatarUrl,     setAvatarUrl]     = useState(null);
+  const [coverUrl,      setCoverUrl]      = useState(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [uploadingCover,  setUploadingCover]  = useState(false);
 
   const nameRef   = useRef('');
   const handleRef = useRef('');
   const bioRef    = useRef('');
 
   const country = user.homeCountry || { flag: '🇧🇩', name: 'Bangladesh' };
+
+  // Seed photo URLs from server on mount
+  useEffect(() => {
+    if (authUser?.profile?.avatar_url) setAvatarUrl(authUser.profile.avatar_url);
+    if (authUser?.profile?.cover_url)  setCoverUrl(authUser.profile.cover_url);
+  }, [authUser]);
+
+  // ── Pick & upload avatar ──────────────────────────────────────────────────
+  async function changeAvatar() {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission needed', 'Allow photo access to change your profile picture.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaType.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+    if (result.canceled || !result.assets?.[0]) return;
+    const uri = result.assets[0].uri;
+    setAvatarUrl(uri);
+    setUploadingAvatar(true);
+    try {
+      const fd  = new FormData();
+      const ext = uri.split('.').pop().toLowerCase();
+      fd.append('avatar', { uri, name: `avatar.${ext}`, type: ext === 'png' ? 'image/png' : 'image/jpeg' });
+      await api('/auth/me/', { method: 'PATCH', body: fd });
+    } catch {
+      Alert.alert('Upload failed', 'Could not save your profile picture. Try again.');
+    } finally {
+      setUploadingAvatar(false);
+    }
+  }
+
+  // ── Pick & upload cover ───────────────────────────────────────────────────
+  async function changeCover() {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission needed', 'Allow photo access to change your cover photo.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaType.Images,
+      allowsEditing: true,
+      aspect: [3, 1],
+      quality: 0.8,
+    });
+    if (result.canceled || !result.assets?.[0]) return;
+    const uri = result.assets[0].uri;
+    setCoverUrl(uri);
+    setUploadingCover(true);
+    try {
+      const fd  = new FormData();
+      const ext = uri.split('.').pop().toLowerCase();
+      fd.append('cover', { uri, name: `cover.${ext}`, type: ext === 'png' ? 'image/png' : 'image/jpeg' });
+      await api('/auth/me/', { method: 'PATCH', body: fd });
+    } catch {
+      Alert.alert('Upload failed', 'Could not save your cover photo. Try again.');
+    } finally {
+      setUploadingCover(false);
+    }
+  }
 
   // ── Fetch user's posts ────────────────────────────────────────────────────
   const fetchMyPosts = useCallback(async () => {
@@ -125,9 +197,22 @@ export default function ProfileScreen({ navigation }) {
     }
   }, [api, authUser, user.handle]);
 
+  const fetchSavedPosts = useCallback(async () => {
+    setLoadingSaved(true);
+    try {
+      const data = await api('/posts/saved/');
+      setSavedPosts(Array.isArray(data) ? data : (data.results || []));
+    } catch {
+      setSavedPosts([]);
+    } finally {
+      setLoadingSaved(false);
+    }
+  }, [api]);
+
   useEffect(() => {
     if (activeTab === 'Posts') fetchMyPosts();
-  }, [activeTab, fetchMyPosts]);
+    if (activeTab === 'Saved') fetchSavedPosts();
+  }, [activeTab, fetchMyPosts, fetchSavedPosts]);
 
   // ── Save profile ──────────────────────────────────────────────────────────
   async function handleSaveProfile() {
@@ -185,25 +270,42 @@ export default function ProfileScreen({ navigation }) {
     <SafeAreaView style={s.safe} edges={['top']}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 48 }}>
 
-        {/* ── Cover + avatar ─────────────────────────────────── */}
-        <View style={s.coverWrap}>
-          <View style={s.cover} />
+        {/* ── Cover ─────────────────────────────────────────── */}
+        <TouchableOpacity style={s.coverWrap} onPress={changeCover} activeOpacity={0.9}>
+          {coverUrl
+            ? <Image source={{ uri: coverUrl }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+            : <View style={s.cover} />
+          }
           <View style={s.coverOverlay} />
+          {/* Camera badge */}
+          <View style={s.coverCameraBtn}>
+            {uploadingCover
+              ? <ActivityIndicator size="small" color="white" />
+              : <Ionicons name="camera" size={16} color="white" />
+            }
+          </View>
           {/* Settings shortcut */}
           <TouchableOpacity style={s.coverSettingsBtn} onPress={() => navigation.navigate('Settings')} activeOpacity={0.8}>
             <Ionicons name="settings-outline" size={20} color="white" />
           </TouchableOpacity>
-        </View>
+        </TouchableOpacity>
 
-        {/* Avatar */}
+        {/* ── Avatar ────────────────────────────────────────── */}
         <View style={s.avatarWrap}>
-          <View style={s.avatarRing}>
-            <View style={s.avatarInner}>
-              <Text style={{ fontSize: 36 }}>{displayAvatar}</Text>
-            </View>
-          </View>
-          <TouchableOpacity style={s.editAvatarBtn} activeOpacity={0.85}>
-            <Ionicons name="camera" size={14} color="white" />
+          <TouchableOpacity style={s.avatarRing} onPress={changeAvatar} activeOpacity={0.85}>
+            <UserAvatar
+              uri={avatarUrl}
+              emoji={displayAvatar}
+              name={displayName}
+              size={80}
+              bg={C.vividD}
+            />
+          </TouchableOpacity>
+          <TouchableOpacity style={s.editAvatarBtn} onPress={changeAvatar} activeOpacity={0.85}>
+            {uploadingAvatar
+              ? <ActivityIndicator size="small" color="white" />
+              : <Ionicons name="camera" size={14} color="white" />
+            }
           </TouchableOpacity>
         </View>
 
@@ -223,12 +325,6 @@ export default function ProfileScreen({ navigation }) {
               <Text style={{ fontSize: 13 }}>{country.flag}</Text>
               <Text style={s.metaChipTxt}>{country.name}</Text>
             </View>
-            {visaStatus ? (
-              <View style={[s.metaChip, { backgroundColor: C.vividD, borderColor: C.vivid + '44' }]}>
-                <Ionicons name="card-outline" size={12} color={C.vivid} />
-                <Text style={[s.metaChipTxt, { color: C.vivid }]}>{visaStatus}</Text>
-              </View>
-            ) : null}
           </View>
 
           {/* Action buttons */}
@@ -247,9 +343,9 @@ export default function ProfileScreen({ navigation }) {
         {/* ── Stats ──────────────────────────────────────────── */}
         <View style={s.statsRow}>
           {[
-            { num: posts.length, label: 'Posts' },
-            { num: '—',          label: 'Reputation' },
-            { num: '—',          label: 'Saved' },
+            { num: posts.length,      label: 'Posts' },
+            { num: '—',               label: 'Reputation' },
+            { num: savedPosts.length, label: 'Saved' },
           ].map((st, i) => (
             <View key={i} style={[s.statItem, i < 2 && { borderRightWidth: 1, borderRightColor: C.border }]}>
               <Text style={s.statNum}>{st.num}</Text>
@@ -302,10 +398,22 @@ export default function ProfileScreen({ navigation }) {
 
         {/* ── Saved tab ──────────────────────────────────────── */}
         {activeTab === 'Saved' && (
-          <View style={s.centerState}>
-            <Ionicons name="bookmark-outline" size={36} color={C.c35} />
-            <Text style={s.emptyTxt}>Nothing saved yet</Text>
-            <Text style={s.emptySub}>Tap 🔖 on any post to save it</Text>
+          <View style={s.section}>
+            {loadingSaved ? (
+              <View style={s.centerState}>
+                <ActivityIndicator size="small" color={C.vivid} />
+              </View>
+            ) : savedPosts.length === 0 ? (
+              <View style={s.centerState}>
+                <Ionicons name="bookmark-outline" size={36} color={C.c35} />
+                <Text style={s.emptyTxt}>Nothing saved yet</Text>
+                <Text style={s.emptySub}>Tap Save on any post to save it here</Text>
+              </View>
+            ) : (
+              savedPosts.map(post => (
+                <PostCard key={post.id} post={post} navigation={navigation} C={C} s={s} />
+              ))
+            )}
           </View>
         )}
 
@@ -364,12 +472,23 @@ export default function ProfileScreen({ navigation }) {
           <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }} keyboardShouldPersistTaps="handled">
             {/* Avatar row */}
             <View style={s.editAvatarRow}>
-              <View style={s.editAvatarPreview}>
-                <Text style={{ fontSize: 40 }}>{displayAvatar}</Text>
-              </View>
-              <TouchableOpacity style={s.changeAvatarBtn} activeOpacity={0.85}>
-                <Text style={[s.changeAvatarTxt, { color: C.vivid }]}>Change avatar emoji</Text>
+              <TouchableOpacity style={s.editAvatarPreview} onPress={changeAvatar} activeOpacity={0.85}>
+                <UserAvatar
+                  uri={avatarUrl}
+                  emoji={displayAvatar}
+                  name={displayName}
+                  size={70}
+                  bg={C.vividD}
+                />
               </TouchableOpacity>
+              <View style={{ flex: 1, gap: 10 }}>
+                <TouchableOpacity onPress={changeAvatar} activeOpacity={0.85}>
+                  <Text style={[s.changeAvatarTxt, { color: C.vivid }]}>Change profile picture</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={changeCover} activeOpacity={0.85}>
+                  <Text style={[s.changeAvatarTxt, { color: C.c35 }]}>Change cover photo</Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
             {[
@@ -444,7 +563,8 @@ const getStyles = (C) => StyleSheet.create({
   coverWrap:       { height: 130, position: 'relative' },
   cover:           { ...StyleSheet.absoluteFillObject, backgroundColor: C.vividD },
   coverOverlay:    { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.3)' },
-  coverSettingsBtn:{ position: 'absolute', top: 14, right: 14, width: 36, height: 36, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.35)', alignItems: 'center', justifyContent: 'center' },
+  coverSettingsBtn: { position: 'absolute', top: 14, right: 14, width: 36, height: 36, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.35)', alignItems: 'center', justifyContent: 'center' },
+  coverCameraBtn:   { position: 'absolute', bottom: 10, right: 54, width: 34, height: 34, borderRadius: 10, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
 
   // Avatar
   avatarWrap:   { alignItems: 'center', marginTop: -44, zIndex: 5, position: 'relative' },

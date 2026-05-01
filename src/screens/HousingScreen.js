@@ -15,45 +15,6 @@ const TIPS = [
   { icon: 'people-outline',        title: 'Find a Co-signer',   desc: 'A US citizen co-signer dramatically increases your approval chances with larger landlords.' },
 ];
 
-const LISTINGS = [
-  {
-    id: '1', title: '1BR in Jackson Heights', price: '$1,450/mo', area: 'Jackson Heights, Queens',
-    beds: '1 bed · 1 bath', noCredit: true, noSSN: true, furnished: true,
-    desc: 'Sunny unit close to F/M/R trains. Landlord speaks Bengali & Spanish. No credit check.',
-    color: '#F5A623', poster: 'Karim Bhai', time: '3h ago', initials: 'KB',
-    communities: ['Bangladesh', 'Pakistan'],
-  },
-  {
-    id: '2', title: 'Shared Room — Male Only', price: '$750/mo', area: 'Astoria, Queens',
-    beds: 'Shared · 3 roommates', noCredit: true, noSSN: false, furnished: true,
-    desc: 'Quiet South Asian household. Close to N/W train. Bills included. Muslim-friendly home.',
-    color: '#3EC8C8', poster: 'Ahmed S.', time: '6h ago', initials: 'AS',
-    communities: ['Bangladesh', 'Pakistan', 'India', 'Egypt'],
-  },
-  {
-    id: '3', title: '2BR for Immigrant Family', price: '$2,100/mo', area: 'Bronx, NY',
-    beds: '2 bed · 1 bath', noCredit: false, noSSN: false, furnished: false,
-    desc: 'Spacious apartment. Landlord understands new immigrants. Offer letter accepted instead of credit.',
-    color: '#5B8DEF', poster: 'Luis M.', time: '1d ago', initials: 'LM',
-    communities: ['Mexico', 'Colombia', 'Brazil', 'Dominican Republic'],
-  },
-  {
-    id: '4', title: 'Studio near Flushing Meadows', price: '$1,200/mo', area: 'Flushing, Queens',
-    beds: 'Studio · 1 bath', noCredit: true, noSSN: true, furnished: false,
-    desc: 'Perfect for students & new grads. Close to 7 train. Landlord accepts ITIN.',
-    color: '#A855F7', poster: 'Wei L.', time: '2d ago', initials: 'WL',
-    communities: ['China', 'South Korea', 'Vietnam'],
-  },
-  {
-    id: '5', title: 'Room in Nigerian Household', price: '$900/mo', area: 'Brooklyn, NY',
-    beds: 'Shared · 2 roommates', noCredit: true, noSSN: false, furnished: true,
-    desc: 'Welcoming Nigerian household. Bills partially included. Close to A/C train. No background check.',
-    color: '#3EC878', poster: 'Chukwu O.', time: '4h ago', initials: 'CO',
-    communities: ['Nigeria', 'Ghana', 'Ethiopia'],
-  },
-];
-
-const FILTERS = ['All', 'No Credit', 'No SSN', 'Furnished', 'Shared', 'Family'];
 
 export default function HousingScreen({ navigation }) {
   const { colors: C } = useTheme();
@@ -65,7 +26,6 @@ export default function HousingScreen({ navigation }) {
   const fetchListings = useHousingStore(s => s.fetchListings);
 
   const [search,       setSearch]       = useState('');
-  const [activeFilter, setActiveFilter] = useState(0);
   const [activeScope,  setActiveScope]  = useState('all');
   const [contacted,    setContacted]    = useState({});
   const [refreshing,   setRefreshing]   = useState(false);
@@ -90,10 +50,9 @@ export default function HousingScreen({ navigation }) {
     const matchSearch = !q ||
       l.title.toLowerCase().includes(q) ||
       l.area.toLowerCase().includes(q);
-    const matchFilter = activeFilter === 0;
     const matchScope = activeScope === 'all' ||
       l.communities.some(c => c.toLowerCase() === (country.name || '').toLowerCase());
-    return matchSearch && matchFilter && matchScope;
+    return matchSearch && matchScope;
   });
 
   const toggleContact = (id) => setContacted(prev => ({ ...prev, [id]: !prev[id] }));
@@ -150,19 +109,6 @@ export default function HousingScreen({ navigation }) {
         </TouchableOpacity>
       </View>
 
-      {/* Filter pills */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filtersRow}>
-        {FILTERS.map((f, i) => (
-          <TouchableOpacity
-            key={f}
-            style={[s.filterPill, i === activeFilter && s.filterPillActive]}
-            onPress={() => setActiveFilter(i)}
-            activeOpacity={0.8}
-          >
-            <Text style={[s.filterTxt, i === activeFilter && s.filterTxtActive]}>{f}</Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
 
       {loading && listings.length === 0 && (
         <View style={s.loadingWrap}>
@@ -215,61 +161,63 @@ export default function HousingScreen({ navigation }) {
         ) : (
           filtered.map(listing => {
             const isContacted = contacted[listing.id];
+            const planColor   = listing.plan === 'premium' ? '#9B72EF' : listing.plan === 'standard' ? '#F5A623' : C.gold;
             return (
-              <View key={listing.id} style={[s.listingCard, isContacted && { borderColor: C.green + '55' }]}>
+              <View key={listing.id} style={[s.listingCard, listing.featured && { borderColor: '#9B72EF55' }, isContacted && { borderColor: C.green + '55' }]}>
                 <View style={s.listingTop}>
-                  <View style={[s.listingAv, { backgroundColor: listing.color + '22' }]}>
-                    <Text style={[s.listingInitials, { color: listing.color }]}>{listing.initials}</Text>
+                  <View style={[s.listingAv, { backgroundColor: planColor + '22' }]}>
+                    <Text style={[s.listingInitials, { color: planColor }]}>{listing.initials}</Text>
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={s.listingTitle}>{listing.title}</Text>
-                    <Text style={[s.listingPrice, { color: listing.color }]}>{listing.price}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={s.listingTitle}>{listing.title}</Text>
+                      {listing.featured && (
+                        <View style={[s.featuredBadge, { backgroundColor: '#9B72EF22', borderColor: '#9B72EF55' }]}>
+                          <Ionicons name="star" size={9} color="#9B72EF" />
+                        </View>
+                      )}
+                    </View>
+                    <Text style={[s.listingPrice, { color: planColor }]}>{listing.price}</Text>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                       <Ionicons name="location-outline" size={11} color={C.c35} />
-                      <Text style={s.listingArea}>{listing.area}</Text>
+                      <Text style={s.listingArea}>{listing.location}</Text>
                     </View>
                   </View>
                 </View>
 
-                <View style={s.badgeRow}>
-                  {listing.noCredit  && (
-                    <View style={[s.badge, { backgroundColor: C.greenD, borderColor: C.green + '33' }]}>
-                      <Ionicons name="checkmark-circle" size={11} color={C.green} />
-                      <Text style={[s.badgeTxt, { color: C.green }]}>No Credit</Text>
+                {listing.countryFlag ? (
+                  <View style={s.badgeRow}>
+                    <View style={[s.badge, { backgroundColor: C.card2, borderColor: C.border }]}>
+                      <Text style={{ fontSize: 11 }}>{listing.countryFlag}</Text>
+                      <Text style={[s.badgeTxt, { color: C.c35 }]}>{listing.communities[0] || ''}</Text>
                     </View>
-                  )}
-                  {listing.noSSN && (
-                    <View style={[s.badge, { backgroundColor: C.greenD, borderColor: C.green + '33' }]}>
-                      <Ionicons name="checkmark-circle" size={11} color={C.green} />
-                      <Text style={[s.badgeTxt, { color: C.green }]}>No SSN</Text>
-                    </View>
-                  )}
-                  {listing.furnished && (
-                    <View style={[s.badge, { backgroundColor: C.blueD, borderColor: C.blue + '33' }]}>
-                      <Ionicons name="bed-outline" size={11} color={C.blue} />
-                      <Text style={[s.badgeTxt, { color: C.blue }]}>Furnished</Text>
-                    </View>
-                  )}
-                </View>
+                    {listing.postedFrom ? (
+                      <View style={[s.badge, { backgroundColor: C.card2, borderColor: C.border }]}>
+                        <Ionicons name="location-outline" size={11} color={C.c35} />
+                        <Text style={[s.badgeTxt, { color: C.c35 }]}>{listing.postedFrom}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                ) : null}
 
-                <Text style={s.listingDesc}>{listing.desc}</Text>
+                <Text style={s.listingDesc} numberOfLines={2}>{listing.desc}</Text>
 
                 <View style={s.listingFooter}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                    <View style={[s.posterAv, { backgroundColor: listing.color + '22' }]}>
-                      <Text style={[{ fontSize: 10, fontWeight: '800', color: listing.color }]}>{listing.initials[0]}</Text>
+                    <View style={[s.posterAv, { backgroundColor: planColor + '22' }]}>
+                      <Text style={{ fontSize: 10, fontWeight: '800', color: planColor }}>{listing.initials[0]}</Text>
                     </View>
                     <Text style={s.posterName}>{listing.poster} · {listing.time}</Text>
                   </View>
                   <TouchableOpacity
                     style={[s.contactBtn, isContacted
                       ? { backgroundColor: C.greenD, borderWidth: 1, borderColor: C.green + '44' }
-                      : { backgroundColor: listing.color }
+                      : { backgroundColor: planColor }
                     ]}
                     onPress={() => toggleContact(listing.id)}
                     activeOpacity={0.85}
                   >
-                    <Ionicons name={isContacted ? 'checkmark-circle' : 'chatbubble-outline'} size={13} color={isContacted ? C.green : '#0D0F1A'} />
+                    <Ionicons name={isContacted ? 'checkmark-circle' : 'chatbubble-outline'} size={13} color={isContacted ? C.green : 'white'} />
                     <Text style={[s.contactTxt, isContacted && { color: C.green }]}>
                       {isContacted ? 'Contacted' : 'Contact'}
                     </Text>
@@ -350,6 +298,7 @@ const getStyles = (C) => StyleSheet.create({
   listingTop:      { flexDirection: 'row', gap: 12, alignItems: 'flex-start', marginBottom: 10 },
   listingAv:       { width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   listingInitials: { fontSize: 16, fontWeight: '900' },
+  featuredBadge:   { width: 20, height: 20, borderRadius: 6, alignItems: 'center', justifyContent: 'center', borderWidth: 1, flexShrink: 0 },
   listingTitle:    { fontSize: 14, fontWeight: '700', color: C.cream, marginBottom: 2 },
   listingPrice:    { fontSize: 15, fontWeight: '800', marginBottom: 2 },
   listingArea:     { fontSize: 11, color: C.c35 },

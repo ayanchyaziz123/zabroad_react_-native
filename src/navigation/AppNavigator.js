@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NavigationContainer } from '@react-navigation/native';
@@ -6,6 +6,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useTheme } from '../theme/ThemeContext';
 import { useAuthStore } from '../store/authStore';
+import { useChatStore } from '../store/chatStore';
 
 // Onboarding
 import WelcomeScreen    from '../screens/onboarding/WelcomeScreen';
@@ -14,7 +15,8 @@ import LoginScreen      from '../screens/onboarding/LoginScreen';
 import FromCountryScreen from '../screens/onboarding/FromCountryScreen';
 import InterestsScreen  from '../screens/onboarding/InterestsScreen';
 import AllDoneScreen    from '../screens/onboarding/AllDoneScreen';
-import OTPScreen        from '../screens/onboarding/OTPScreen';
+import OTPScreen             from '../screens/onboarding/OTPScreen';
+import ForgotPasswordScreen  from '../screens/onboarding/ForgotPasswordScreen';
 
 // Main app
 import HomeScreen       from '../screens/HomeScreen';
@@ -37,6 +39,7 @@ import UserProfileScreen       from '../screens/UserProfileScreen';
 import ListAttorneyScreen      from '../screens/ListAttorneyScreen';
 import PostJobScreen           from '../screens/PostJobScreen';
 import PostHousingScreen       from '../screens/PostHousingScreen';
+import PostAttorneyScreen      from '../screens/PostAttorneyScreen';
 import ListDoctorScreen        from '../screens/ListDoctorScreen';
 import EventsScreen            from '../screens/EventsScreen';
 import JobDetailScreen         from '../screens/JobDetailScreen';
@@ -49,13 +52,20 @@ const Stack = createNativeStackNavigator();
 function CustomTabBar({ state, navigation }) {
   const { colors: C } = useTheme();
   const s = useMemo(() => getStyles(C), [C]);
+  const inConversation = useChatStore(s => s.inConversation);
+  const conversations  = useChatStore(s => s.conversations);
 
-  // Order: Home · Chat · [+] · Notifications · Profile
+  // Sum unread across all conversations
+  const totalUnread = conversations.reduce((sum, c) => sum + (c.unread_count || 0), 0);
+
+  if (inConversation) return null;
+
+  // Order: Home · Notifications · [+] · Chat · Profile
   const allTabs = [
     { type: 'tab', name: 'Home',          icon: 'home-outline',          iconActive: 'home',          label: 'Home'    },
-    { type: 'tab', name: 'Chat',          icon: 'chatbubble-outline',    iconActive: 'chatbubble',    label: 'Chat'    },
-    { type: 'fab' },
     { type: 'tab', name: 'Notifications', icon: 'notifications-outline', iconActive: 'notifications', label: 'Notifs'  },
+    { type: 'fab' },
+    { type: 'tab', name: 'Chat',          icon: 'chatbubble-outline',    iconActive: 'chatbubble',    label: 'Chat', badge: totalUnread },
     { type: 'tab', name: 'Profile',       icon: 'person-outline',        iconActive: 'person',        label: 'Profile' },
   ];
 
@@ -78,11 +88,18 @@ function CustomTabBar({ state, navigation }) {
             onPress={() => navigation.navigate(item.name)}
             activeOpacity={0.7}
           >
-            <Ionicons
-              name={isActive ? item.iconActive : item.icon}
-              size={19}
-              color={isActive ? C.vivid : C.c35}
-            />
+            <View style={s.iconWrap}>
+              <Ionicons
+                name={isActive ? item.iconActive : item.icon}
+                size={19}
+                color={isActive ? C.vivid : C.c35}
+              />
+              {item.badge > 0 && (
+                <View style={s.badge}>
+                  <Text style={s.badgeTxt}>{item.badge > 99 ? '99+' : item.badge}</Text>
+                </View>
+              )}
+            </View>
             <Text style={[s.tabLabel, isActive && s.tabLabelActive]}>{item.label}</Text>
           </TouchableOpacity>
         );
@@ -92,10 +109,15 @@ function CustomTabBar({ state, navigation }) {
 }
 
 function MainTabs() {
+  const fetchConversations = useChatStore(s => s.fetchConversations);
+
+  // Fetch on mount so the unread badge is populated immediately
+  useEffect(() => { fetchConversations(); }, []);
+
   return (
     <Tab.Navigator tabBar={(props) => <CustomTabBar {...props} />} screenOptions={{ headerShown: false }}>
       <Tab.Screen name="Home"          component={HomeScreen} />
-      <Tab.Screen name="Chat"   component={ChatScreen} />
+      <Tab.Screen name="Chat"          component={ChatScreen} />
       <Tab.Screen name="Notifications" component={NotificationsScreen} />
       <Tab.Screen name="Profile"       component={ProfileScreen} />
     </Tab.Navigator>
@@ -128,7 +150,8 @@ export default function AppNavigator() {
         <Stack.Screen name="Login"       component={LoginScreen} />
         <Stack.Screen name="FromCountry" component={FromCountryScreen} />
         <Stack.Screen name="Interests"   component={InterestsScreen} />
-        <Stack.Screen name="OTP"         component={OTPScreen} />
+        <Stack.Screen name="OTP"            component={OTPScreen} />
+        <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
         <Stack.Screen name="AllDone"     component={AllDoneScreen} options={{ animation: 'fade' }} />
 
         {/* Main app */}
@@ -150,6 +173,7 @@ export default function AppNavigator() {
         <Stack.Screen name="ListAttorney"     component={ListAttorneyScreen} />
         <Stack.Screen name="PostJob"          component={PostJobScreen} />
         <Stack.Screen name="PostHousing"      component={PostHousingScreen} />
+        <Stack.Screen name="PostAttorney"     component={PostAttorneyScreen} />
         <Stack.Screen name="ListDoctor"       component={ListDoctorScreen} />
         <Stack.Screen name="CreatePost"       component={CreatePostScreen} />
         <Stack.Screen name="Events"           component={EventsScreen} />
@@ -169,6 +193,9 @@ const getStyles = (C) => StyleSheet.create({
   tabItemActive: { backgroundColor: C.vividD },
   tabLabel: { fontSize: 8, fontWeight: '700', letterSpacing: 0.4, textTransform: 'uppercase', color: C.c35 },
   tabLabelActive: { color: C.vivid },
+  iconWrap: { position: 'relative' },
+  badge:    { position: 'absolute', top: -5, right: -7, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: '#FF3B30', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
+  badgeTxt: { fontSize: 9, fontWeight: '800', color: 'white', lineHeight: 11 },
   fab: {
     width: 46, height: 46, borderRadius: 15, backgroundColor: C.vivid,
     alignItems: 'center', justifyContent: 'center', marginBottom: 10,

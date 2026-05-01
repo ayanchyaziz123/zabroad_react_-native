@@ -24,14 +24,15 @@ async function deleteTokens() {
 
 // ── Raw fetch — returns { ok, status, data } without throwing ─────────────────
 async function fetchJSON(endpoint, options = {}, token = null) {
+  const isFormData = options.body instanceof FormData;
   const headers = {
-    'Content-Type': 'application/json',
+    ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
   const res = await fetch(`${BASE_URL}${endpoint}`, {
     ...options,
     headers,
-    body: options.body ? JSON.stringify(options.body) : undefined,
+    body: isFormData ? options.body : (options.body ? JSON.stringify(options.body) : undefined),
   });
   const data = await res.json();
   return { ok: res.ok, status: res.status, data };
@@ -77,8 +78,9 @@ export const useAuthStore = create((set, get) => ({
         set({ user: null, accessToken: null, isAuthenticated: false });
         throw new Error('Session expired. Please log in again.');
       }
-      const newAccess = refreshResult.data.access;
-      await saveTokens(newAccess, refresh);
+      const newAccess  = refreshResult.data.access;
+      const newRefresh = refreshResult.data.refresh || refresh; // server rotates token when ROTATE_REFRESH_TOKENS=True
+      await saveTokens(newAccess, newRefresh);
       set({ accessToken: newAccess });
       // Retry the original request with the new token
       ({ ok, data } = await fetchJSON(endpoint, options, newAccess));
@@ -106,8 +108,9 @@ export const useAuthStore = create((set, get) => ({
           body: { refresh },
         });
         if (refreshResult.ok) {
-          const newAccess = refreshResult.data.access;
-          await saveTokens(newAccess, refresh);
+          const newAccess  = refreshResult.data.access;
+          const newRefresh = refreshResult.data.refresh || refresh;
+          await saveTokens(newAccess, newRefresh);
           ({ ok, data } = await fetchJSON('/auth/me/', {}, newAccess));
           if (ok) {
             set({ user: data, accessToken: newAccess, isAuthenticated: true, isLoading: false });

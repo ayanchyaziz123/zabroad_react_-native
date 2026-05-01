@@ -1,271 +1,391 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
   StyleSheet, TextInput, KeyboardAvoidingView,
-  Platform, Animated,
+  Platform, Animated, ActivityIndicator, RefreshControl,
+  Image, Alert,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../theme/ThemeContext';
+import { useAuthStore } from '../store/authStore';
+import { useChatStore, formatMsgTime } from '../store/chatStore';
+import UserAvatar from '../components/UserAvatar';
 
-// ─── AI brain ────────────────────────────────────────────────────────────────
-const AI_REPLIES = {
-  opt:     "Great question about OPT! Key points:\n\n✅ 12-month OPT after graduation\n✅ 24-month STEM extension if eligible\n⚠️ 90-day unemployment limit applies\n📅 File I-765 90 days before OPT end\n\nNeed help calculating your specific timeline?",
-  h1b:     "H-1B cap for FY2027 opens ~March 2027. Timeline:\n\n📅 March — USCIS registration window\n🎯 Late March — Lottery results\n📝 April 1 — Earliest filing\n✅ Oct 1 — Employment begins\n\nWith STEM OPT you have cap-gap protection. Want me to help with your documents?",
-  housing: "Renting without credit history:\n\n📄 Show your offer letter / employment contract\n💰 Offer 2–3 months deposit upfront\n🤝 Find a US citizen co-signer\n🏢 Jackson Heights, Flushing, Astoria accept ITIN\n📱 Check Zabroad Housing — no-credit listings\n\nWant me to find listings near you?",
-  doctor:  "Healthcare options without full insurance:\n\n🆓 FQHCs — sliding-scale fees\n🎓 University health centers — cheap for students\n🛡️ GeoBlue / IMG — OPT-specific plans\n💊 GoodRx — big prescription discounts\n\nWant me to find doctors near you who speak your language?",
-  job:     "Job search tips for OPT/STEM:\n\n💼 Use LinkedIn with 'OPT sponsorship' filter\n🏢 Target E-Verify registered companies\n📧 Reach out directly to hiring managers\n🎓 University career centers often have OPT-friendly leads\n📋 Staffing: Mastech, TCS, Infosys for IT roles\n\nWant to see current OPT-friendly listings?",
-  green:   "Green Card paths for immigrants:\n\n🌿 EB-2 NIW — self-petition, no employer needed\n🏆 EB-1A — extraordinary ability\n💼 EB-2/EB-3 — employer-sponsored\n🛡️ Asylum-based — if persecuted\n\nEB-2 NIW is popular for researchers. Want a breakdown of your eligibility?",
-  default: "Great question! Here's what I know:\n\nThis is a complex immigration topic that depends on your specific situation. I recommend:\n\n1. Checking USCIS.gov for official updates\n2. Consulting a licensed immigration attorney\n3. Asking our community — others may have been through the same\n\nWant me to find an immigration attorney near you?",
-};
-
-function getAIReply(text) {
-  const t = text.toLowerCase();
-  if (t.includes('opt') || t.includes('stem') || t.includes('ead')) return AI_REPLIES.opt;
-  if (t.includes('h1b') || t.includes('h-1b') || t.includes('cap') || t.includes('lottery')) return AI_REPLIES.h1b;
-  if (t.includes('hous') || t.includes('rent') || t.includes('apartment')) return AI_REPLIES.housing;
-  if (t.includes('doctor') || t.includes('health') || t.includes('insurance') || t.includes('medical')) return AI_REPLIES.doctor;
-  if (t.includes('job') || t.includes('work') || t.includes('employ') || t.includes('career')) return AI_REPLIES.job;
-  if (t.includes('green') || t.includes('gc') || t.includes('eb-') || t.includes('niw')) return AI_REPLIES.green;
-  return AI_REPLIES.default;
-}
-
-// ─── Per-convo seed messages ──────────────────────────────────────────────────
-const CONVO_MSGS = {
-  '1': [
-    { id: '1', from: 'ai',   text: "Hi! I'm Zabroad AI 🤖\n\nI can help with visa questions, immigration timelines, finding doctors, jobs, housing, and more.\n\nWhat do you need help with today?", time: '2:00 PM' },
-    { id: '2', from: 'user', text: 'When does H-1B cap registration open in 2027?', time: '2:01 PM' },
-    { id: '3', from: 'ai',   text: "H-1B cap for FY2027 opens ~March 2027. Timeline:\n\n📅 March — USCIS registration window\n🎯 Late March — Lottery results\n📝 April 1 — Earliest filing date\n✅ Oct 1 — Employment begins\n\nWith STEM OPT you have cap-gap protection. Want me to help with your documents?", time: '2:01 PM' },
-  ],
-  '2': [
-    { id: '1', from: 'ai',   text: 'Thanks for the OPT agency recommendations! Those were really helpful 🙏', time: 'Yesterday' },
-    { id: '2', from: 'user', text: 'No problem! Have you tried Mastech yet?', time: 'Yesterday' },
-    { id: '3', from: 'ai',   text: 'Not yet but will reach out this week. Did they ask for your full SSN or just the last 4?', time: 'Yesterday' },
-  ],
-  '3': [
-    { id: '1', from: 'ai',   text: '🎉 New event: Eid gathering this Saturday at Queens Community Center! Come join us — food, games, and community. RSVP in the comments.', time: '5h ago' },
-    { id: '2', from: 'user', text: 'Will there be Biryani? 🍛', time: '4h ago' },
-    { id: '3', from: 'ai',   text: 'Of course! Multiple food stalls from Bangladesh, Pakistan and India 🎊', time: '4h ago' },
-  ],
-  '4': [
-    { id: '1', from: 'ai',   text: 'Your H-1B documents look complete. We can file next week — Monday or Tuesday work for you?', time: '1d ago' },
-    { id: '2', from: 'user', text: 'Tuesday works great. What time should I come in?', time: '1d ago' },
-    { id: '3', from: 'ai',   text: '10:00 AM at our downtown office. Bring your original I-20, passport, and employment offer letter.', time: '1d ago' },
-  ],
-  '5': [
-    { id: '1', from: 'ai',   text: 'Your appointment is confirmed for Tuesday at 3:00 PM. Please bring your insurance card and a list of any current medications.', time: '1d ago' },
-    { id: '2', from: 'user', text: 'I\'m on OPT so my insurance might be different — is GeoBlue accepted?', time: '1d ago' },
-    { id: '3', from: 'ai',   text: 'Yes, GeoBlue is accepted at our clinic. No issues at all 🙂', time: '1d ago' },
-  ],
-  '6': [
-    { id: '1', from: 'ai',   text: 'The no-credit apartment in Jackson Heights is still available! $1,400/mo — they accept ITIN and OPT letters. Want me to forward your details?', time: '2d ago' },
-    { id: '2', from: 'user', text: 'Yes please! Is it close to the 7 train?', time: '2d ago' },
-    { id: '3', from: 'ai',   text: 'Just 5 min walk from 74th St–Roosevelt Ave 🚇', time: '2d ago' },
-  ],
-  '7': [
-    { id: '1', from: 'ai',   text: '🏠 3 new listings posted near Queens — all no credit check required. ITIN & OPT letters accepted. Check the Housing tab for details!', time: '3d ago' },
-  ],
-};
-
-// ─── Typing dots ─────────────────────────────────────────────────────────────
+// ── Typing dots ───────────────────────────────────────────────────────────────
 function TypingDots({ C }) {
-  const dots = [useRef(new Animated.Value(0)).current, useRef(new Animated.Value(0)).current, useRef(new Animated.Value(0)).current];
-
+  const dots = [
+    useRef(new Animated.Value(0)).current,
+    useRef(new Animated.Value(0)).current,
+    useRef(new Animated.Value(0)).current,
+  ];
   useEffect(() => {
     const anims = dots.map((dot, i) =>
-      Animated.loop(
-        Animated.sequence([
-          Animated.delay(i * 150),
-          Animated.timing(dot, { toValue: -6, duration: 300, useNativeDriver: true }),
-          Animated.timing(dot, { toValue: 0, duration: 300, useNativeDriver: true }),
-          Animated.delay(600 - i * 150),
-        ])
-      )
+      Animated.loop(Animated.sequence([
+        Animated.delay(i * 150),
+        Animated.timing(dot, { toValue: -5, duration: 280, useNativeDriver: true }),
+        Animated.timing(dot, { toValue: 0,  duration: 280, useNativeDriver: true }),
+        Animated.delay(500 - i * 150),
+      ]))
     );
     Animated.parallel(anims).start();
     return () => anims.forEach(a => a.stop());
   }, []);
-
   return (
-    <View style={{ flexDirection: 'row', gap: 5, alignItems: 'center', paddingVertical: 6, paddingHorizontal: 4 }}>
+    <View style={{ flexDirection: 'row', gap: 4, alignItems: 'center', paddingVertical: 6, paddingHorizontal: 4 }}>
       {dots.map((dot, i) => (
-        <Animated.View key={i} style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: C.c35, transform: [{ translateY: dot }] }} />
+        <Animated.View
+          key={i}
+          style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: C.c35, transform: [{ translateY: dot }] }}
+        />
       ))}
     </View>
   );
 }
 
-// ─── Main component ───────────────────────────────────────────────────────────
-export default function ChatScreen() {
+// ── Date separator between messages ──────────────────────────────────────────
+function dateSeparatorLabel(isoString) {
+  if (!isoString) return '';
+  const d   = new Date(isoString);
+  const now = new Date();
+  const isToday     = d.toDateString() === now.toDateString();
+  const yesterday   = new Date(now); yesterday.setDate(now.getDate() - 1);
+  const isYesterday = d.toDateString() === yesterday.toDateString();
+  if (isToday)     return 'Today';
+  if (isYesterday) return 'Yesterday';
+  return d.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' });
+}
+
+function isSameDay(a, b) {
+  if (!a || !b) return false;
+  return new Date(a).toDateString() === new Date(b).toDateString();
+}
+
+// ── Preview text for last message in list ────────────────────────────────────
+function lastMsgPreview(lastMsg, isMe) {
+  if (!lastMsg) return 'No messages yet';
+  const prefix = isMe ? 'You: ' : '';
+  if (lastMsg.has_media && !lastMsg.text) return `${prefix}📷 Photo`;
+  if (lastMsg.has_media && lastMsg.text)  return `${prefix}📷 ${lastMsg.text}`;
+  return `${prefix}${lastMsg.text}`;
+}
+
+// ── Main ──────────────────────────────────────────────────────────────────────
+export default function ChatScreen({ route }) {
   const { colors: C } = useTheme();
   const s = useMemo(() => getStyles(C), [C]);
+  const insets = useSafeAreaInsets();
 
-  const CONVOS = useMemo(() => [
-    { id: '1', isAI: true,  avatar: '🤖', avatarBg: C.vividD,  name: 'Zabroad AI',           preview: 'Your STEM OPT application looks good! Here are the next steps...',           time: 'Now', unread: 2, online: true  },
-    { id: '2',              avatar: '🧑‍🎓', avatarBg: C.blueD,   name: 'Tanvir Hassan',         preview: 'Thanks for the OPT agency recommendations!',                                time: '2h',  unread: 0, online: true  },
-    { id: '3',              avatar: '🏘️', avatarBg: C.greenD,  name: 'NYC BD Network',        preview: 'New event: Eid gathering this Saturday at Queens...',                        time: '5h',  unread: 7, online: false, isGroup: true, members: 2413 },
-    { id: '4',              avatar: '⚖️', avatarBg: C.purpleD, name: 'Immigration Attorney',  preview: 'Your H-1B documents look complete. We can file next week.',                 time: '1d',  unread: 0, online: false, verified: true },
-    { id: '5',              avatar: '🩺', avatarBg: C.tealD,   name: 'Dr. Ayesha Karim',      preview: 'Your appointment is confirmed for Tuesday 3pm.',                            time: '1d',  unread: 0, online: false, verified: true },
-    { id: '6',              avatar: '👩‍💼', avatarBg: C.goldD,   name: 'Sara M.',               preview: 'The no-credit apartment in Jackson Heights is still...',                    time: '2d',  unread: 1, online: false },
-    { id: '7',              avatar: '🏠', avatarBg: C.blueD,   name: 'Housing Group NYC',      preview: '3 new listings posted near Queens — no credit check required',               time: '3d',  unread: 0, online: false, isGroup: true, members: 890 },
-  ], [C]);
+  const currentUser    = useAuthStore(s => s.user);
+  const currentUserId  = currentUser?.id;
 
-  const [activeConvo, setActiveConvo]   = useState(null);
-  const [allMessages, setAllMessages]   = useState(CONVO_MSGS);
-  const [input, setInput]               = useState('');
-  const [search, setSearch]             = useState('');
-  const [typing, setTyping]             = useState(false);
-  const scrollRef = useRef(null);
+  const conversations      = useChatStore(s => s.conversations);
+  const messages           = useChatStore(s => s.messages);
+  const loading            = useChatStore(s => s.loading);
+  const loadingMsgs        = useChatStore(s => s.loadingMsgs);
+  const fetchConversations = useChatStore(s => s.fetchConversations);
+  const fetchMessages      = useChatStore(s => s.fetchMessages);
+  const sendMessage        = useChatStore(s => s.sendMessage);
+  const retryMessage       = useChatStore(s => s.retryMessage);
+  const startConversation  = useChatStore(s => s.startConversation);
+  const setInConversation  = useChatStore(s => s.setInConversation);
 
-  const convo    = CONVOS.find(c => c.id === activeConvo);
-  const messages = allMessages[activeConvo] || [];
+  const [activeConvoId, setActiveConvoId] = useState(null);
+  const [input,         setInput]         = useState('');
+  const [mediaUri,      setMediaUri]      = useState(null);
+  const [search,        setSearch]        = useState('');
+  const [refreshing,    setRefreshing]    = useState(false);
+  const scrollRef   = useRef(null);
+  const inputRef    = useRef(null);
 
-  const sendMessage = () => {
-    if (!input.trim()) return;
-    const msg = input.trim();
-    setInput('');
-    const userMsg = { id: Date.now().toString(), from: 'user', text: msg, time: 'Now' };
-    setAllMessages(prev => ({ ...prev, [activeConvo]: [...(prev[activeConvo] || []), userMsg] }));
-
-    // Only AI convo replies automatically
-    if (convo?.isAI || activeConvo === '1') {
-      setTyping(true);
-      setTimeout(() => {
-        setTyping(false);
-        const aiMsg = { id: (Date.now() + 1).toString(), from: 'ai', text: getAIReply(msg), time: 'Now' };
-        setAllMessages(prev => ({ ...prev, [activeConvo]: [...(prev[activeConvo] || []), aiMsg] }));
-        setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80);
-      }, 1400);
+  // ── Media picker ──────────────────────────────────────────────────────────
+  async function pickMedia() {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission needed', 'Allow access to your photos to share media.');
+      return;
     }
-  };
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaType.Images,
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets?.[0]) setMediaUri(result.assets[0].uri);
+  }
 
-  const openConvo = (id) => {
-    setActiveConvo(id);
-    setTyping(false);
+  async function openCamera() {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission needed', 'Allow camera access to take photos.');
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({ quality: 0.8 });
+    if (!result.canceled && result.assets?.[0]) setMediaUri(result.assets[0].uri);
+  }
+
+  function showMediaOptions() {
+    Alert.alert('Share Media', '', [
+      { text: 'Camera',        onPress: openCamera },
+      { text: 'Photo Library', onPress: pickMedia  },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  }
+
+  // ── Lifecycle ──────────────────────────────────────────────────────────────
+  useEffect(() => { fetchConversations(); }, []);
+
+  const targetUserId = route?.params?.userId;
+  useEffect(() => {
+    if (!targetUserId) return;
+    startConversation(targetUserId).then(convo => {
+      setActiveConvoId(convo.id);
+    }).catch(() => {});
+  }, [targetUserId]);
+
+  useEffect(() => {
+    if (activeConvoId) {
+      setInConversation(true);
+      fetchMessages(activeConvoId);
+    } else {
+      setInConversation(false);
+      setInput('');
+      setMediaUri(null);
+    }
+    return () => setInConversation(false);
+  }, [activeConvoId]);
+
+  // Scroll to bottom when messages arrive
+  useEffect(() => {
+    if (!activeConvoId) return;
+    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80);
+  }, [messages[activeConvoId]?.length]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchConversations();
+    setRefreshing(false);
+  }, []);
+
+  // ── Derived ────────────────────────────────────────────────────────────────
+  const activeConvo    = conversations.find(c => c.id === activeConvoId);
+  const convoMessages  = messages[activeConvoId] || [];
+  const otherUser      = activeConvo?.other_user;
+  const otherName      = otherUser?.name || 'Unknown';
+
+  const filteredConvos = useMemo(() => {
+    if (!search) return conversations;
+    const q = search.toLowerCase();
+    return conversations.filter(c => (c.other_user?.name || '').toLowerCase().includes(q));
+  }, [conversations, search]);
+
+  // ── Send ───────────────────────────────────────────────────────────────────
+  function handleSend() {
+    if ((!input.trim() && !mediaUri) || !activeConvoId) return;
+    sendMessage(activeConvoId, input.trim(), mediaUri);
     setInput('');
-  };
+    setMediaUri(null);
+  }
 
-  // ── Chat view ────────────────────────────────────────────────────────────────
-  if (activeConvo) {
+  // ── Chat view ──────────────────────────────────────────────────────────────
+  if (activeConvoId) {
+    // Build display list with date separators and grouping info
+    const displayItems = [];
+    convoMessages.forEach((msg, idx) => {
+      const prev = convoMessages[idx - 1];
+      if (!isSameDay(prev?.created_at, msg.created_at)) {
+        displayItems.push({ type: 'date', key: `date-${idx}`, label: dateSeparatorLabel(msg.created_at) });
+      }
+      const next = convoMessages[idx + 1];
+      const isFirst = !prev || prev.sender_id !== msg.sender_id || !isSameDay(prev.created_at, msg.created_at);
+      const isLast  = !next || next.sender_id !== msg.sender_id || !isSameDay(msg.created_at, next?.created_at);
+      displayItems.push({ type: 'msg', key: String(msg.id), msg, isFirst, isLast });
+    });
+
     return (
-      <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
-        {/* Header */}
+      <SafeAreaView style={s.safe} edges={['top']}>
+        {/* Chat header */}
         <View style={s.chatHeader}>
-          <TouchableOpacity onPress={() => setActiveConvo(null)} style={s.backBtn}>
-            <Text style={{ fontSize: 22, color: C.cream }}>‹</Text>
+          <TouchableOpacity onPress={() => setActiveConvoId(null)} style={s.backBtn} activeOpacity={0.8}>
+            <Ionicons name="chevron-back" size={22} color={C.cream} />
           </TouchableOpacity>
-          <View style={[s.chatAv, { backgroundColor: convo.avatarBg }]}>
-            <Text style={{ fontSize: 18 }}>{convo.avatar}</Text>
-            {convo.online && <View style={s.chatOnline} />}
-          </View>
+          <UserAvatar
+            uri={otherUser?.avatar_url}
+            name={otherName}
+            size={40}
+            radius={13}
+            bg={C.purpleD}
+          />
           <View style={{ flex: 1 }}>
-            <Text style={s.chatName}>{convo.name}</Text>
-            <Text style={s.chatStatus}>
-              {convo.isGroup
-                ? `${convo.members?.toLocaleString()} members`
-                : convo.verified
-                  ? '✓ Verified professional'
-                  : convo.online ? '🟢 Online now' : 'Tap to view profile'}
-            </Text>
+            <Text style={s.chatName} numberOfLines={1}>{otherName}</Text>
+            <Text style={s.chatStatus}>Community member</Text>
           </View>
-          <TouchableOpacity style={s.chatMore}>
-            <Text style={{ color: C.c35, fontSize: 16 }}>•••</Text>
+          <TouchableOpacity style={s.headerIcon} activeOpacity={0.7}>
+            <Ionicons name="ellipsis-horizontal" size={20} color={C.c35} />
           </TouchableOpacity>
         </View>
 
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-          {/* Messages */}
-          <ScrollView
-            ref={scrollRef}
-            style={s.msgList}
-            contentContainerStyle={{ padding: 16, gap: 10 }}
-            showsVerticalScrollIndicator={false}
-            onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
-          >
-            {messages.map((msg, idx) => {
-              const isUser = msg.from === 'user';
-              const showTime = idx === 0 || messages[idx - 1]?.time !== msg.time;
-              return (
-                <View key={msg.id}>
-                  {showTime && idx !== 0 && (
-                    <Text style={s.timeLabel}>{msg.time}</Text>
-                  )}
-                  <View style={[s.msgRow, isUser && s.msgRowUser]}>
-                    {!isUser && (
-                      <View style={[s.msgAv, { backgroundColor: convo.avatarBg }]}>
-                        <Text style={{ fontSize: 13 }}>{convo.avatar}</Text>
-                      </View>
-                    )}
-                    <View style={[s.bubble, isUser ? s.bubbleUser : s.bubbleAI]}>
-                      <Text style={[s.bubbleTxt, { color: isUser ? 'white' : C.c60 }]}>
-                        {msg.text}
-                      </Text>
-                    </View>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        >
+          {/* Message list */}
+          {loadingMsgs && convoMessages.length === 0 ? (
+            <View style={s.loadingWrap}>
+              <ActivityIndicator size="large" color={C.vivid} />
+            </View>
+          ) : (
+            <ScrollView
+              ref={scrollRef}
+              style={s.msgList}
+              contentContainerStyle={[
+                s.msgListContent,
+                convoMessages.length === 0 && { flex: 1 },
+              ]}
+              showsVerticalScrollIndicator={false}
+              keyboardDismissMode="interactive"
+            >
+              {convoMessages.length === 0 ? (
+                <View style={s.emptyChat}>
+                  <View style={[s.emptyChatAvCircle, { backgroundColor: C.purpleD }]}>
+                    <UserAvatar uri={otherUser?.avatar_url} name={otherName} size={64} radius={22} bg={C.purpleD} />
                   </View>
-                  {isUser && idx === messages.length - 1 && (
-                    <Text style={s.delivered}>Delivered ✓</Text>
-                  )}
+                  <Text style={s.emptyChatName}>{otherName}</Text>
+                  <Text style={s.emptyChatSub}>You're connected on Zabroad</Text>
+                  <Text style={s.emptyChatHint}>Say hello 👋</Text>
                 </View>
-              );
-            })}
+              ) : (
+                displayItems.map(item => {
+                  if (item.type === 'date') {
+                    return (
+                      <View key={item.key} style={s.dateSep}>
+                        <View style={s.dateLine} />
+                        <Text style={s.dateLabel}>{item.label}</Text>
+                        <View style={s.dateLine} />
+                      </View>
+                    );
+                  }
+                  const { msg, isFirst, isLast } = item;
+                  const isMe = msg.sender_id === currentUserId;
 
-            {typing && (
-              <View style={s.msgRow}>
-                <View style={[s.msgAv, { backgroundColor: convo.avatarBg }]}>
-                  <Text style={{ fontSize: 13 }}>{convo.avatar}</Text>
-                </View>
-                <View style={[s.bubble, s.bubbleAI]}>
-                  <TypingDots C={C} />
-                </View>
+                  // Bubble radius — group consecutive messages
+                  const r = 18;
+                  const bubbleRadius = isMe
+                    ? { borderTopLeftRadius: r, borderBottomLeftRadius: r, borderTopRightRadius: isFirst ? r : 6, borderBottomRightRadius: isLast ? 4 : 6 }
+                    : { borderTopRightRadius: r, borderBottomRightRadius: r, borderTopLeftRadius: isFirst ? r : 6, borderBottomLeftRadius: isLast ? 4 : 6 };
+
+                  return (
+                    <View key={item.key} style={[s.msgRow, isMe && s.msgRowMe, !isLast && s.msgRowGrouped]}>
+                      {/* Avatar — only on last message of a group for "other" side */}
+                      {!isMe ? (
+                        isLast ? (
+                          <UserAvatar
+                            uri={msg.sender_avatar_url}
+                            name={msg.sender_name}
+                            size={28}
+                            radius={9}
+                            bg={C.purpleD}
+                            style={{ flexShrink: 0, alignSelf: 'flex-end' }}
+                          />
+                        ) : (
+                          <View style={{ width: 28 }} />
+                        )
+                      ) : null}
+
+                      <TouchableOpacity
+                        activeOpacity={msg._failed ? 0.6 : 1}
+                        onPress={msg._failed ? () => {
+                          Alert.alert('Message failed', 'Tap Retry to resend.', [
+                            { text: 'Retry',  onPress: () => retryMessage(activeConvoId, msg) },
+                            { text: 'Cancel', style: 'cancel' },
+                          ]);
+                        } : undefined}
+                        style={[
+                          s.bubble,
+                          isMe ? s.bubbleMe : s.bubbleOther,
+                          bubbleRadius,
+                          msg._pending && { opacity: 0.65 },
+                          msg._failed  && { opacity: 0.5, borderWidth: 1, borderColor: '#ff4444' },
+                          msg.media_url && !msg.text && s.bubbleMediaOnly,
+                        ]}
+                      >
+                        {msg.media_url ? (
+                          <Image source={{ uri: msg.media_url }} style={s.msgImage} resizeMode="cover" />
+                        ) : null}
+                        {msg.text ? (
+                          <Text style={[s.bubbleTxt, { color: isMe ? '#fff' : C.c60 }, msg.media_url && { marginTop: 6 }]}>
+                            {msg.text}
+                          </Text>
+                        ) : null}
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })
+              )}
+              {/* Status row for last sent message */}
+              {convoMessages.length > 0 && (() => {
+                const last = convoMessages[convoMessages.length - 1];
+                if (last.sender_id !== currentUserId) return null;
+                return (
+                  <Text style={s.delivered}>
+                    {last._pending ? 'Sending…' : last._failed ? '⚠ Failed · Tap to retry' : last.is_read ? 'Read ✓✓' : 'Delivered ✓'}
+                  </Text>
+                );
+              })()}
+            </ScrollView>
+          )}
+
+          {/* Input bar */}
+          <View style={[s.inputWrap, { paddingBottom: insets.bottom > 0 ? insets.bottom : 12 }]}>
+            {mediaUri && (
+              <View style={s.mediaPreview}>
+                <Image source={{ uri: mediaUri }} style={s.mediaThumb} resizeMode="cover" />
+                <TouchableOpacity style={s.mediaRemove} onPress={() => setMediaUri(null)} activeOpacity={0.8}>
+                  <Ionicons name="close-circle" size={22} color="white" />
+                </TouchableOpacity>
               </View>
             )}
-          </ScrollView>
-
-          {/* Input */}
-          <View style={s.inputRow}>
-            <TouchableOpacity style={s.attachBtn}>
-              <Text style={{ fontSize: 18 }}>📎</Text>
-            </TouchableOpacity>
-            <TextInput
-              style={s.msgInput}
-              placeholder={convo?.isAI ? 'Ask anything about your visa…' : 'Type a message…'}
-              placeholderTextColor={C.c35}
-              value={input}
-              onChangeText={setInput}
-              multiline
-              onSubmitEditing={sendMessage}
-            />
-            <TouchableOpacity
-              style={[s.sendBtn, !input.trim() && { opacity: 0.35 }]}
-              onPress={sendMessage}
-              disabled={!input.trim()}
-            >
-              <Text style={{ fontSize: 16, color: 'white' }}>↑</Text>
-            </TouchableOpacity>
+            <View style={s.inputRow}>
+              <TouchableOpacity style={s.attachBtn} onPress={showMediaOptions} activeOpacity={0.75}>
+                <Ionicons name="image-outline" size={22} color={C.c35} />
+              </TouchableOpacity>
+              <TextInput
+                ref={inputRef}
+                style={s.msgInput}
+                placeholder="Message…"
+                placeholderTextColor={C.c35}
+                value={input}
+                onChangeText={setInput}
+                multiline
+                maxLength={2000}
+                returnKeyType="default"
+              />
+              <TouchableOpacity
+                style={[s.sendBtn, (!input.trim() && !mediaUri) && s.sendBtnDisabled]}
+                onPress={handleSend}
+                disabled={!input.trim() && !mediaUri}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="arrow-up" size={18} color="white" />
+              </TouchableOpacity>
+            </View>
           </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
     );
   }
 
-  // ── Conversation list ────────────────────────────────────────────────────────
-  const filtered = CONVOS.filter(c =>
-    !search || c.name.toLowerCase().includes(search.toLowerCase())
-  );
-
+  // ── Conversation list ──────────────────────────────────────────────────────
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
-      {/* Header */}
       <View style={s.header}>
         <Text style={s.title}>Messages</Text>
-        <TouchableOpacity style={s.newBtn}>
-          <Text style={{ fontSize: 20, color: C.vivid }}>✏️</Text>
-        </TouchableOpacity>
       </View>
 
       {/* Search */}
       <View style={s.searchWrap}>
         <View style={s.searchBox}>
-          <Text style={{ fontSize: 15 }}>🔍</Text>
+          <Ionicons name="search-outline" size={16} color={C.c35} />
           <TextInput
             style={s.searchInput}
             placeholder="Search conversations…"
@@ -274,125 +394,178 @@ export default function ChatScreen() {
             onChangeText={setSearch}
           />
           {search.length > 0 && (
-            <TouchableOpacity onPress={() => setSearch('')}>
-              <Text style={{ fontSize: 14, color: C.c35 }}>✕</Text>
+            <TouchableOpacity onPress={() => setSearch('')} activeOpacity={0.7}>
+              <Ionicons name="close-circle" size={16} color={C.c35} />
             </TouchableOpacity>
           )}
         </View>
       </View>
 
-      {/* AI Quick-Start Banner */}
-      <TouchableOpacity style={s.aiBar} onPress={() => openConvo('1')} activeOpacity={0.9}>
-        <View style={s.aiBarLeft}>
-          <View style={s.aiBarAv}>
-            <Text style={{ fontSize: 20 }}>🤖</Text>
-          </View>
-          <View>
-            <Text style={s.aiBarTitle}>Ask Zabroad AI</Text>
-            <Text style={s.aiBarSub}>Visa help, job tips, community — 24/7</Text>
-          </View>
+      {loading && conversations.length === 0 ? (
+        <View style={s.loadingWrap}>
+          <ActivityIndicator size="large" color={C.vivid} />
+          <Text style={s.loadingTxt}>Loading messages…</Text>
         </View>
-        <View style={s.aiBarCta}><Text style={s.aiBarCtaTxt}>Chat →</Text></View>
-      </TouchableOpacity>
+      ) : (
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.vivid} />}
+        >
+          {filteredConvos.length === 0 ? (
+            <View style={s.emptyState}>
+              <Ionicons name="chatbubbles-outline" size={52} color={C.c35} />
+              <Text style={s.emptyTxt}>
+                {search ? 'No results' : 'No messages yet'}
+              </Text>
+              <Text style={s.emptySub}>
+                {search
+                  ? `No conversations matching "${search}"`
+                  : 'Tap Message on any post or profile to start a conversation'}
+              </Text>
+            </View>
+          ) : (
+            filteredConvos.map(convo => {
+              const other   = convo.other_user;
+              const lastMsg = convo.last_message;
+              const unread  = convo.unread_count || 0;
+              const isMe    = lastMsg?.sender_id === currentUserId;
+              const preview = lastMsgPreview(lastMsg, isMe);
+              const time    = lastMsg ? formatMsgTime(lastMsg.created_at) : '';
 
-      {/* Conversation list */}
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {filtered.length === 0 ? (
-          <View style={{ alignItems: 'center', paddingTop: 60, gap: 10 }}>
-            <Text style={{ fontSize: 36 }}>💬</Text>
-            <Text style={{ fontSize: 15, fontWeight: '700', color: C.cream }}>No conversations found</Text>
-            <Text style={{ fontSize: 13, color: C.c35 }}>Try a different search</Text>
-          </View>
-        ) : filtered.map((convo) => (
-          <TouchableOpacity
-            key={convo.id}
-            style={[s.convoItem, convo.unread > 0 && s.convoUnread]}
-            onPress={() => openConvo(convo.id)}
-            activeOpacity={0.8}
-          >
-            <View style={s.convoAvWrap}>
-              <View style={[s.convoAv, { backgroundColor: convo.avatarBg }]}>
-                <Text style={{ fontSize: 20 }}>{convo.avatar}</Text>
-              </View>
-              {convo.online && <View style={s.onlineDot} />}
-            </View>
-            <View style={s.convoBody}>
-              <View style={s.convoTop}>
-                <View style={s.convoNameRow}>
-                  <Text style={[s.convoName, convo.unread > 0 && { color: C.cream }]}>{convo.name}</Text>
-                  {convo.verified && <Text style={s.verifiedBadge}>✓</Text>}
-                  {convo.isGroup && <Text style={s.groupBadge}>Group · {convo.members?.toLocaleString()}</Text>}
-                </View>
-                <Text style={s.convoTime}>{convo.time}</Text>
-              </View>
-              <View style={s.convoBottom}>
-                <Text style={[s.convoPreview, convo.unread > 0 && s.convoPreviewUnread]} numberOfLines={1}>
-                  {convo.preview}
-                </Text>
-                {convo.unread > 0 && (
-                  <View style={s.unreadBadge}><Text style={s.unreadTxt}>{convo.unread}</Text></View>
-                )}
-              </View>
-            </View>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+              return (
+                <TouchableOpacity
+                  key={convo.id}
+                  style={[s.convoItem, unread > 0 && s.convoUnread]}
+                  onPress={() => setActiveConvoId(convo.id)}
+                  activeOpacity={0.75}
+                >
+                  <UserAvatar
+                    uri={other?.avatar_url}
+                    name={other?.name}
+                    size={52}
+                    radius={17}
+                    bg={C.purpleD}
+                  />
+                  <View style={s.convoBody}>
+                    <View style={s.convoTop}>
+                      <Text
+                        style={[s.convoName, unread > 0 && { color: C.cream, fontWeight: '700' }]}
+                        numberOfLines={1}
+                      >
+                        {other?.name || 'Unknown'}
+                      </Text>
+                      <Text style={[s.convoTime, unread > 0 && { color: C.vivid, fontWeight: '600' }]}>
+                        {time}
+                      </Text>
+                    </View>
+                    <View style={s.convoBottom}>
+                      <Text
+                        style={[s.convoPreview, unread > 0 && { color: C.c60, fontWeight: '500' }]}
+                        numberOfLines={1}
+                      >
+                        {preview}
+                      </Text>
+                      {unread > 0 && (
+                        <View style={s.unreadBadge}>
+                          <Text style={s.unreadTxt}>{unread > 99 ? '99+' : unread}</Text>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              );
+            })
+          )}
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 }
 
+// ── Styles ────────────────────────────────────────────────────────────────────
 const getStyles = (C) => StyleSheet.create({
-  safe: { flex: 1, backgroundColor: C.bg },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16 },
-  title: { fontSize: 26, fontWeight: '800', color: C.cream, letterSpacing: -0.5 },
-  newBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  searchWrap: { paddingHorizontal: 20, marginBottom: 14 },
-  searchBox: { flexDirection: 'row', gap: 8, alignItems: 'center', backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 11 },
-  searchInput: { flex: 1, fontSize: 14, color: C.cream },
-  aiBar: { marginHorizontal: 20, marginBottom: 16, backgroundColor: C.vividD, borderWidth: 1, borderColor: 'rgba(232,54,74,0.2)', borderRadius: 18, padding: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  aiBarLeft: { flexDirection: 'row', gap: 12, alignItems: 'center' },
-  aiBarAv: { width: 44, height: 44, borderRadius: 15, backgroundColor: 'rgba(232,54,74,0.2)', alignItems: 'center', justifyContent: 'center' },
-  aiBarTitle: { fontSize: 14, fontWeight: '700', color: C.cream, marginBottom: 2 },
-  aiBarSub: { fontSize: 11, color: C.c35 },
-  aiBarCta: { backgroundColor: C.vivid, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 50, shadowColor: C.vivid, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8 },
-  aiBarCtaTxt: { fontSize: 12, fontWeight: '700', color: 'white' },
-  convoItem: { flexDirection: 'row', gap: 12, paddingHorizontal: 20, paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: C.border },
-  convoUnread: { backgroundColor: C.card + '55' },
-  convoAvWrap: { position: 'relative' },
-  convoAv: { width: 52, height: 52, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  onlineDot: { position: 'absolute', bottom: 0, right: 0, width: 12, height: 12, backgroundColor: C.green, borderRadius: 6, borderWidth: 2, borderColor: C.bg },
-  convoBody: { flex: 1, justifyContent: 'center' },
-  convoTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  convoNameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  convoName: { fontSize: 14, fontWeight: '600', color: C.c60 },
-  verifiedBadge: { fontSize: 10, color: C.green, backgroundColor: C.greenD, borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1 },
-  groupBadge: { fontSize: 9, color: C.c35 },
-  convoTime: { fontSize: 11, color: C.c35 },
-  convoBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  safe:         { flex: 1, backgroundColor: C.bg },
+
+  // List header
+  header:       { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 10, paddingBottom: 14 },
+  title:        { fontSize: 26, fontWeight: '800', color: C.cream, letterSpacing: -0.5 },
+
+  // Search
+  searchWrap:   { paddingHorizontal: 16, marginBottom: 8 },
+  searchBox:    { flexDirection: 'row', gap: 8, alignItems: 'center', backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 11 },
+  searchInput:  { flex: 1, fontSize: 13, color: C.cream },
+
+  loadingWrap:  { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingTop: 60 },
+  loadingTxt:   { fontSize: 13, color: C.c35, fontWeight: '600' },
+
+  // Empty list
+  emptyState:   { alignItems: 'center', paddingTop: 80, gap: 12, paddingHorizontal: 40 },
+  emptyTxt:     { fontSize: 17, fontWeight: '700', color: C.cream, textAlign: 'center' },
+  emptySub:     { fontSize: 13, color: C.c35, textAlign: 'center', lineHeight: 20 },
+
+  // Convo row
+  convoItem:    { flexDirection: 'row', gap: 12, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border },
+  convoUnread:  { backgroundColor: C.card },
+  convoBody:    { flex: 1, justifyContent: 'center' },
+  convoTop:     { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 },
+  convoName:    { fontSize: 14, fontWeight: '600', color: C.c60, flex: 1, marginRight: 8 },
+  convoTime:    { fontSize: 11, color: C.c35 },
+  convoBottom:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   convoPreview: { flex: 1, fontSize: 12, color: C.c35, marginRight: 8 },
-  convoPreviewUnread: { color: C.c60, fontWeight: '500' },
-  unreadBadge: { backgroundColor: C.vivid, borderRadius: 10, paddingHorizontal: 7, paddingVertical: 2, minWidth: 20, alignItems: 'center' },
-  unreadTxt: { fontSize: 10, fontWeight: '700', color: 'white' },
-  // Chat view
-  chatHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: C.border, backgroundColor: C.nav },
-  backBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
-  chatAv: { width: 40, height: 40, borderRadius: 13, alignItems: 'center', justifyContent: 'center', position: 'relative' },
-  chatOnline: { position: 'absolute', bottom: -1, right: -1, width: 10, height: 10, backgroundColor: C.green, borderRadius: 5, borderWidth: 2, borderColor: C.nav },
-  chatName: { fontSize: 15, fontWeight: '700', color: C.cream },
-  chatStatus: { fontSize: 11, color: C.c35, marginTop: 1 },
-  chatMore: { padding: 8 },
-  msgList: { flex: 1 },
-  msgRow: { flexDirection: 'row', gap: 8, alignItems: 'flex-end' },
-  msgRowUser: { flexDirection: 'row-reverse' },
-  msgAv: { width: 30, height: 30, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  bubble: { maxWidth: '76%', borderRadius: 18, padding: 12 },
-  bubbleAI: { backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderBottomLeftRadius: 4 },
-  bubbleUser: { backgroundColor: C.vivid, borderBottomRightRadius: 4, shadowColor: C.vivid, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8 },
-  bubbleTxt: { fontSize: 14, lineHeight: 21 },
-  timeLabel: { textAlign: 'center', fontSize: 10, color: C.c35, fontWeight: '500', marginVertical: 6 },
-  delivered: { fontSize: 10, color: C.c35, textAlign: 'right', marginTop: 3, marginRight: 4 },
-  inputRow: { flexDirection: 'row', gap: 8, alignItems: 'flex-end', paddingHorizontal: 12, paddingVertical: 10, borderTopWidth: 1, borderTopColor: C.border, backgroundColor: C.nav },
-  attachBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  msgInput: { flex: 1, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, fontSize: 14, color: C.cream, maxHeight: 100 },
-  sendBtn: { width: 40, height: 40, backgroundColor: C.vivid, borderRadius: 13, alignItems: 'center', justifyContent: 'center', shadowColor: C.vivid, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 8 },
+  unreadBadge:  { backgroundColor: C.vivid, borderRadius: 10, paddingHorizontal: 7, paddingVertical: 2, minWidth: 20, alignItems: 'center' },
+  unreadTxt:    { fontSize: 10, fontWeight: '700', color: 'white' },
+
+  // Chat header
+  chatHeader:   { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border },
+  backBtn:      { width: 36, height: 36, borderRadius: 12, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, alignItems: 'center', justifyContent: 'center', marginRight: 2 },
+  chatName:     { fontSize: 15, fontWeight: '700', color: C.cream },
+  chatStatus:   { fontSize: 11, color: C.c35, marginTop: 1 },
+  headerIcon:   { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+
+  // Message list
+  msgList:        { flex: 1 },
+  msgListContent: { paddingHorizontal: 12, paddingTop: 12, paddingBottom: 6 },
+
+  // Date separator
+  dateSep:    { flexDirection: 'row', alignItems: 'center', marginVertical: 16, gap: 10 },
+  dateLine:   { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: C.border },
+  dateLabel:  { fontSize: 11, color: C.c35, fontWeight: '600', paddingHorizontal: 4 },
+
+  // Message rows
+  msgRow:        { flexDirection: 'row', gap: 6, alignItems: 'flex-end', marginBottom: 2 },
+  msgRowMe:      { flexDirection: 'row-reverse' },
+  msgRowGrouped: { marginBottom: 1 },
+
+  // Bubbles
+  bubble:        { maxWidth: '76%', padding: 11 },
+  bubbleOther:   { backgroundColor: C.card, borderWidth: 1, borderColor: C.border },
+  bubbleMe:      { backgroundColor: C.vivid },
+  bubbleMediaOnly: { padding: 3 },
+  bubbleTxt:     { fontSize: 14, lineHeight: 21 },
+
+  // Media image inside bubble
+  msgImage:      { width: 220, height: 200, borderRadius: 12 },
+
+  // Status row
+  delivered:     { fontSize: 10, color: C.c35, textAlign: 'right', marginTop: 2, marginRight: 4, marginBottom: 4 },
+
+  // Empty chat state
+  emptyChat:       { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8, paddingBottom: 60 },
+  emptyChatAvCircle: { marginBottom: 6 },
+  emptyChatName:   { fontSize: 18, fontWeight: '700', color: C.cream },
+  emptyChatSub:    { fontSize: 13, color: C.c35 },
+  emptyChatHint:   { fontSize: 22, marginTop: 6 },
+
+  // Input
+  inputWrap:    { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.border, backgroundColor: C.nav, paddingTop: 10 },
+  inputRow:     { flexDirection: 'row', gap: 8, alignItems: 'flex-end', paddingHorizontal: 10 },
+  attachBtn:    { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginBottom: 2 },
+  msgInput:     { flex: 1, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 22, paddingHorizontal: 16, paddingVertical: Platform.OS === 'ios' ? 10 : 8, fontSize: 14, color: C.cream, maxHeight: 120, lineHeight: 20 },
+  sendBtn:      { width: 42, height: 42, backgroundColor: C.vivid, borderRadius: 21, alignItems: 'center', justifyContent: 'center', shadowColor: C.vivid, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.4, shadowRadius: 6, flexShrink: 0, marginBottom: 2 },
+  sendBtnDisabled: { opacity: 0.35 },
+
+  // Media preview
+  mediaPreview: { marginHorizontal: 12, marginBottom: 8, alignSelf: 'flex-start' },
+  mediaThumb:   { width: 80, height: 80, borderRadius: 14, backgroundColor: C.card },
+  mediaRemove:  { position: 'absolute', top: -8, right: -8 },
 });

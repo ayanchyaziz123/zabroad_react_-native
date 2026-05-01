@@ -10,6 +10,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { useTheme } from '../theme/ThemeContext';
 import { useAuthStore } from '../store/authStore';
+import UserAvatar from '../components/UserAvatar';
 
 const TOPICS = [
   { label: '#OPT',        icon: 'card-outline' },
@@ -223,11 +224,13 @@ export default function CreatePostScreen({ navigation }) {
           {/* ── Author row ─────────────────────────────────────── */}
           <View style={s.authorRow}>
             <View style={s.avatarRing}>
-              <View style={[s.authorAv, { backgroundColor: isAnonymous ? C.card2 : C.vividD }]}>
-                <Text style={{ fontSize: 21 }}>
-                  {isAnonymous ? '🕵️' : (user?.profile?.avatar_emoji || '🧑‍💻')}
-                </Text>
-              </View>
+              <UserAvatar
+                uri={isAnonymous ? null : user?.profile?.avatar_url}
+                emoji={isAnonymous ? '🕵️' : user?.profile?.avatar_emoji}
+                name={user?.name}
+                size={38}
+                bg={isAnonymous ? C.card2 : C.vividD}
+              />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={s.authorName}>

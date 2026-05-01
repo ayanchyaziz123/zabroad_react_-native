@@ -10,11 +10,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 import { useUser } from '../context/UserContext';
 import { useAuthStore } from '../store/authStore';
+import UserAvatar from '../components/UserAvatar';
 
 const NEARBY_RESOURCES = [
   { id: 'r1', category: 'Jobs',      icon: 'briefcase-outline',        color: '#3EC878', bg: '#0F2018', count: 14, route: 'Jobs'       },
   { id: 'r2', category: 'Housing',   icon: 'home-outline',             color: '#F5A623', bg: '#1A1408', count: 8,  route: 'Housing'    },
-  { id: 'r3', category: 'Doctors',   icon: 'medkit-outline',           color: '#5BCFEF', bg: '#0A1820', count: 6,  route: 'Healthcare' },
+  // TODO: re-enable when Healthcare screen is ready
+  // { id: 'r3', category: 'Doctors', icon: 'medkit-outline', color: '#5BCFEF', bg: '#0A1820', count: 6, route: 'Healthcare' },
   { id: 'r4', category: 'Attorneys', icon: 'shield-checkmark-outline', color: '#9B72EF', bg: '#130F20', count: 5,  route: 'Attorney'   },
 ];
 
@@ -60,7 +62,7 @@ function FeedCard({ post, navigation, C, s, api }) {
   const avatarBg = getAvatarBg(post.author_handle);
   const [liked,  setLiked]  = useState(post.is_liked  || false);
   const [likes,  setLikes]  = useState(post.likes_count || 0);
-  const [saved,  setSaved]  = useState(false);
+  const [saved,  setSaved]  = useState(post.is_saved  || false);
   const heartScale = useRef(new Animated.Value(1)).current;
 
   async function onLike() {
@@ -72,7 +74,9 @@ function FeedCard({ post, navigation, C, s, api }) {
       Animated.spring(heartScale, { toValue: 1,   useNativeDriver: true, speed: 30 }),
     ]).start();
     try {
-      await api(`/posts/${post.id}/like/`, { method: 'POST' });
+      const res = await api(`/posts/${post.id}/like/`, { method: 'POST' });
+      setLiked(res.liked);
+      setLikes(res.likes_count);
     } catch {
       setLiked(liked);
       setLikes(c => next ? c - 1 : c + 1);
@@ -90,12 +94,16 @@ function FeedCard({ post, navigation, C, s, api }) {
       <View style={s.feedHeader}>
         <TouchableOpacity
           style={s.avatarRing}
-          onPress={() => post.author_handle && navigation.navigate('UserProfile', { handle: post.author_handle })}
+          onPress={() => post.author_id && navigation.navigate('UserProfile', { userId: post.author_id })}
           activeOpacity={0.85}
         >
-          <View style={[s.feedAvatar, { backgroundColor: avatarBg }]}>
-            <Text style={{ fontSize: 20 }}>{post.author_avatar || '🧑‍💻'}</Text>
-          </View>
+          <UserAvatar
+            uri={post.author_avatar_url}
+            emoji={post.author_avatar}
+            name={post.author_name}
+            size={38}
+            bg={avatarBg}
+          />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -128,36 +136,33 @@ function FeedCard({ post, navigation, C, s, api }) {
         </View>
       )}
 
-      {/* ── Instagram-style action bar ──────────────────────────── */}
-      <View style={s.igActions}>
-        <View style={s.igLeft}>
-          <TouchableOpacity onPress={onLike} activeOpacity={0.7} style={s.igBtn}>
-            <Animated.View style={{ transform: [{ scale: heartScale }] }}>
-              <Ionicons name={liked ? 'heart' : 'heart-outline'} size={26} color={liked ? '#FF3B5C' : C.c60} />
-            </Animated.View>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={handlePress} activeOpacity={0.7} style={s.igBtn}>
-            <Ionicons name="chatbubble-outline" size={24} color={C.c60} />
-          </TouchableOpacity>
-          <TouchableOpacity activeOpacity={0.7} style={s.igBtn}>
-            <Ionicons name="paper-plane-outline" size={24} color={C.c60} />
-          </TouchableOpacity>
-        </View>
-        <TouchableOpacity onPress={() => setSaved(v => !v)} activeOpacity={0.7} style={s.igBtn}>
-          <Ionicons name={saved ? 'bookmark' : 'bookmark-outline'} size={24} color={saved ? C.vivid : C.c60} />
+      {/* ── Action bar ─────────────────────────────────────────── */}
+      <View style={s.actionBar}>
+        <TouchableOpacity onPress={onLike} activeOpacity={0.75} style={[s.actionBtn, liked && s.actionBtnActive]}>
+          <Animated.View style={{ transform: [{ scale: heartScale }] }}>
+            <Ionicons name={liked ? 'heart' : 'heart-outline'} size={16} color={liked ? '#FF3B5C' : C.c35} />
+          </Animated.View>
+          <Text style={[s.actionTxt, liked && { color: '#FF3B5C' }]}>
+            {likes > 0 ? likes.toLocaleString() : ''} {liked ? 'Liked' : 'Like'}
+          </Text>
         </TouchableOpacity>
-      </View>
 
-      {/* ── Counts ─────────────────────────────────────────────── */}
-      <View style={s.igCounts}>
-        {likes > 0 && <Text style={s.igCountTxt}>{likes.toLocaleString()} like{likes !== 1 ? 's' : ''}</Text>}
-        {post.comments_count > 0 && (
-          <TouchableOpacity onPress={handlePress} activeOpacity={0.7}>
-            <Text style={[s.igCountTxt, { color: C.c35 }]}>
-              {likes > 0 ? '  ·  ' : ''}{post.comments_count} comment{post.comments_count !== 1 ? 's' : ''}
-            </Text>
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity onPress={handlePress} activeOpacity={0.75} style={s.actionBtn}>
+          <Ionicons name="chatbubble-ellipses-outline" size={16} color={C.c35} />
+          <Text style={s.actionTxt}>
+            {post.comments_count > 0 ? `${post.comments_count} ` : ''}Comment
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity onPress={async () => {
+          const next = !saved;
+          setSaved(next);
+          try { await api(`/posts/${post.id}/save/`, { method: 'POST' }); }
+          catch { setSaved(!next); }
+        }} activeOpacity={0.75} style={[s.actionBtn, saved && s.actionBtnActive]}>
+          <Ionicons name={saved ? 'bookmark' : 'bookmark-outline'} size={16} color={saved ? C.vivid : C.c35} />
+          <Text style={[s.actionTxt, saved && { color: C.vivid }]}>{saved ? 'Saved' : 'Save'}</Text>
+        </TouchableOpacity>
       </View>
 
     </View>
@@ -347,7 +352,7 @@ function LocationSheet({ visible, current, currentRadius, onSelect, onClose, C, 
 export default function HomeScreen({ navigation }) {
   const { colors: C } = useTheme();
   const { user, updateUser } = useUser();
-  const { api } = useAuthStore();
+  const { api, user: authUser } = useAuthStore();
   const s = useMemo(() => getStyles(C), [C]);
 
   const [locationSheetOpen, setLocationSheetOpen] = useState(false);
@@ -362,10 +367,6 @@ export default function HomeScreen({ navigation }) {
   const livesIn   = user.livesIn || '';            // "Queens, NY"
   const cityShort = livesIn.split(',')[0] || 'You';
 
-  const SCOPES = [
-    { key: 'country', label: `${country.flag} Community` },
-    { key: 'all',     label: '🌍 All' },
-  ];
 
   const buildUrl = useCallback((scope) => {
     if (scope === 'country' && country?.name) return `/posts/?country=${encodeURIComponent(country.name)}`;
@@ -409,7 +410,14 @@ export default function HomeScreen({ navigation }) {
       {/* ── HEADER ─────────────────────────────────────────────── */}
       <View style={s.header}>
         <View style={s.av}>
-          <Text style={{ fontSize: 20 }}>🧑‍💻</Text>
+          <UserAvatar
+            uri={authUser?.profile?.avatar_url}
+            emoji={authUser?.profile?.avatar_emoji}
+            name={authUser?.name}
+            size={36}
+            radius={12}
+            bg={C.vividD}
+          />
           <View style={s.avOnline} />
         </View>
         <TouchableOpacity onPress={() => setLocationSheetOpen(true)} activeOpacity={0.7} style={{ marginRight: 8 }}>
@@ -421,19 +429,27 @@ export default function HomeScreen({ navigation }) {
         </TouchableOpacity>
 
         <View style={s.headerRight}>
-          {SCOPES.map(sc => {
-            const isActive = sc.key === activeScope;
-            return (
-              <TouchableOpacity
-                key={sc.key}
-                style={[s.scopeTab, isActive && s.scopeTabActive]}
-                onPress={() => setActiveScope(sc.key)}
-                activeOpacity={0.8}
-              >
-                <Text style={[s.scopeTabTxt, isActive && s.scopeTabTxtActive]}>{sc.label}</Text>
-              </TouchableOpacity>
-            );
-          })}
+          <TouchableOpacity
+            style={s.iconBtn}
+            onPress={() => navigation.navigate('Search')}
+            activeOpacity={0.75}
+          >
+            <Ionicons name="search-outline" size={20} color={C.c35} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[s.iconBtn, activeScope === 'country' && s.iconBtnActive]}
+            onPress={() => setActiveScope('country')}
+            activeOpacity={0.75}
+          >
+            <Text style={s.iconBtnEmoji}>{country.flag}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[s.iconBtn, activeScope === 'all' && s.iconBtnActive]}
+            onPress={() => setActiveScope('all')}
+            activeOpacity={0.75}
+          >
+            <Ionicons name="globe-outline" size={20} color={activeScope === 'all' ? C.vivid : C.c35} />
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -548,11 +564,9 @@ const getStyles = (C) => StyleSheet.create({
   resourceBadgeTxt:  { fontSize: 9, fontWeight: '700', textAlign: 'center' },
   resourceTitle:     { fontSize: 11, fontWeight: '800', color: C.cream, textAlign: 'center' },
 
-  // Scope tabs
-  scopeTab:          { alignItems: 'center', paddingHorizontal: 8, paddingVertical: 5, borderRadius: 50, borderWidth: 1, borderColor: C.border, backgroundColor: C.card },
-  scopeTabActive:    { backgroundColor: C.vividD, borderColor: C.vivid + '66' },
-  scopeTabTxt:       { fontSize: 10, fontWeight: '600', color: C.c35 },
-  scopeTabTxtActive: { color: C.vivid, fontWeight: '700' },
+  iconBtn:       { width: 36, height: 36, borderRadius: 12, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, alignItems: 'center', justifyContent: 'center' },
+  iconBtnActive: { backgroundColor: C.vividD, borderColor: C.vivid + '66' },
+  iconBtnEmoji:  { fontSize: 18 },
 
   // Feed
   feedList:       { gap: 12, marginTop: 8, paddingHorizontal: 0 },
@@ -567,12 +581,11 @@ const getStyles = (C) => StyleSheet.create({
   topicsRow:      { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: 14, marginBottom: 10 },
   topicChip:      { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 50, borderWidth: 1 },
   topicChipTxt:   { fontSize: 11, fontWeight: '600' },
-  // Instagram action bar
-  igActions:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 10, paddingTop: 4, paddingBottom: 2 },
-  igLeft:         { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  igBtn:          { padding: 8 },
-  igCounts:       { flexDirection: 'row', paddingHorizontal: 14, paddingBottom: 4 },
-  igCountTxt:     { fontSize: 13, fontWeight: '700', color: C.cream },
+  // Action bar
+  actionBar:      { flexDirection: 'row', borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.border, marginTop: 6 },
+  actionBtn:      { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10 },
+  actionBtnActive:{ backgroundColor: 'transparent' },
+  actionTxt:      { fontSize: 12, fontWeight: '600', color: C.c35 },
 
   // Center states (loading / error / empty)
   centerState:    { alignItems: 'center', paddingVertical: 50, gap: 8, paddingHorizontal: 20 },

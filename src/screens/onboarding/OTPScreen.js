@@ -6,13 +6,14 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../theme/ThemeContext';
+import { useAuthStore } from '../../store/authStore';
 
-const BASE_URL = 'http://127.0.0.1:8000/api';
 const OTP_LENGTH = 6;
 const RESEND_COOLDOWN = 60;
 
 export default function OTPScreen({ navigation, route }) {
   const { colors: C } = useTheme();
+  const api      = useAuthStore(s => s.api);
   const userData = route.params || {};
   const email = userData.email || '';
 
@@ -68,13 +69,7 @@ export default function OTPScreen({ navigation, route }) {
     setLoading(true);
     setError('');
     try {
-      const res  = await fetch(`${BASE_URL}/auth/otp/verify/`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, code: fullCode }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || 'Invalid code');
+      await api('/auth/otp/verify/', { method: 'POST', body: { email, code: fullCode } });
 
       // Animate success tick
       setVerified(true);
@@ -96,11 +91,7 @@ export default function OTPScreen({ navigation, route }) {
     setResending(true);
     setError('');
     try {
-      await fetch(`${BASE_URL}/auth/otp/send/`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
-      });
+      await api('/auth/otp/send/', { method: 'POST', body: { email } });
       setCountdown(RESEND_COOLDOWN);
       setCode(['', '', '', '', '', '']);
       inputs.current[0]?.focus();
