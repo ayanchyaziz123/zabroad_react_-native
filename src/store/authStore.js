@@ -1,9 +1,12 @@
 import { create } from 'zustand';
 import * as SecureStore from 'expo-secure-store';
+import Constants from 'expo-constants';
 
-const BASE_URL = 'http://127.0.0.1:8000/api';
-// On a physical device or Android emulator change to your machine's local IP:
-// const BASE_URL = 'http://192.168.1.x:8000/api';
+// Simulator uses localhost; physical device uses the Mac's local network IP.
+const DEV_IP   = '192.168.1.202';
+const BASE_URL = Constants.isDevice
+  ? `http://${DEV_IP}:8000/api`
+  : 'http://localhost:8000/api';
 
 // ── Token helpers ─────────────────────────────────────────────────────────────
 async function saveTokens(access, refresh) {
@@ -34,7 +37,8 @@ async function fetchJSON(endpoint, options = {}, token = null) {
     headers,
     body: isFormData ? options.body : (options.body ? JSON.stringify(options.body) : undefined),
   });
-  const data = await res.json();
+  const text = await res.text();
+  const data = text ? JSON.parse(text) : null;
   return { ok: res.ok, status: res.status, data };
 }
 

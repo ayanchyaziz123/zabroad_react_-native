@@ -301,7 +301,7 @@ export default function CommunityDetailScreen({ navigation, route }) {
                       <Animated.Text style={{ fontSize: 16, transform: [{ scale: heartScales[post.id] }] }}>
                         {likeState.liked ? '❤️' : '🤍'}
                       </Animated.Text>
-                      <Text style={[s.actionTxt, likeState.liked && { color: '#FF6B6B' }]}>{likeState.count}</Text>
+                      <Text style={[s.actionTxt, likeState.liked && { color: '#F4A227' }]}>{likeState.count}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={s.actionBtn}

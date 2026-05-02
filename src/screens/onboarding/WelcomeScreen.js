@@ -6,6 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../theme/ThemeContext';
+import { G_PRIMARY } from '../../theme/colors';
 
 const { width, height } = Dimensions.get('window');
 
@@ -48,7 +49,7 @@ export default function WelcomeScreen({ navigation }) {
         <Animated.View style={[styles.top, { opacity: fadeAnim, transform: [{ translateY: slideAnim }, { scale: scaleAnim }] }]}>
           {/* Logo */}
           <View style={styles.logoWrap}>
-            <LinearGradient colors={[C.vivid, '#8B1525']} style={styles.logoIcon}>
+            <LinearGradient colors={G_PRIMARY} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.logoIcon}>
               <Text style={{ fontSize: 36 }}>🌍</Text>
             </LinearGradient>
             <Text style={[styles.logoText, { color: C.cream }]}>
@@ -90,7 +91,7 @@ export default function WelcomeScreen({ navigation }) {
             onPress={() => navigation.navigate('SignUp')}
             activeOpacity={0.88}
           >
-            <LinearGradient colors={[C.vivid, '#B82838']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.primaryGrad}>
+            <LinearGradient colors={G_PRIMARY} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.primaryGrad}>
               <Text style={styles.primaryTxt}>Get Started — It's Free</Text>
               <Text style={{ fontSize: 16 }}>→</Text>
             </LinearGradient>
@@ -119,7 +120,7 @@ const styles = StyleSheet.create({
   orb2: { position: 'absolute', width: 200, height: 200, borderRadius: 100, bottom: 100, left: -60, opacity: 0.08 },
   top: { alignItems: 'center', paddingTop: 40, paddingHorizontal: 24 },
   logoWrap: { alignItems: 'center', marginBottom: 32 },
-  logoIcon: { width: 80, height: 80, borderRadius: 26, alignItems: 'center', justifyContent: 'center', marginBottom: 14, shadowColor: '#E8364A', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.4, shadowRadius: 16 },
+  logoIcon: { width: 80, height: 80, borderRadius: 26, alignItems: 'center', justifyContent: 'center', marginBottom: 14, shadowColor: '#F4A227', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.4, shadowRadius: 16 },
   logoText: { fontSize: 38, fontWeight: '900', letterSpacing: -1.5, marginBottom: 6 },
   logoTagline: { fontSize: 14, fontWeight: '400', letterSpacing: 0.2 },
   statsBar: { flexDirection: 'row', borderRadius: 18, borderWidth: 1, overflow: 'hidden', marginBottom: 24, alignSelf: 'stretch' },
@@ -130,7 +131,7 @@ const styles = StyleSheet.create({
   featurePill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 50, borderWidth: 1 },
   featureTxt: { fontSize: 12, fontWeight: '500' },
   bottom: { paddingHorizontal: 24, paddingBottom: 8, gap: 10 },
-  primaryBtn: { borderRadius: 18, overflow: 'hidden', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.4, shadowRadius: 16, elevation: 8 },
+  primaryBtn: { borderRadius: 18, overflow: 'hidden', shadowColor: '#F4A227', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.4, shadowRadius: 16, elevation: 8 },
   primaryGrad: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 17 },
   primaryTxt: { fontSize: 16, fontWeight: '800', color: 'white', letterSpacing: -0.3 },
   secondaryBtn: { borderRadius: 18, borderWidth: 1, paddingVertical: 15, alignItems: 'center' },

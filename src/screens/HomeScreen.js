@@ -2,21 +2,21 @@ import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import {
   View, Text, ScrollView, TouchableOpacity,
   StyleSheet, Animated, Modal, TextInput,
-  ActivityIndicator, RefreshControl,
+  ActivityIndicator, RefreshControl, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MapView, { Circle } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 import { useAuthStore } from '../store/authStore';
+import { useLocationStore } from '../store/locationStore';
 import UserAvatar from '../components/UserAvatar';
 
 const NEARBY_RESOURCES = [
-  { id: 'r1', category: 'Jobs',      icon: 'briefcase-outline',        color: '#3EC878', bg: '#0F2018', count: 14, route: 'Jobs'       },
-  { id: 'r2', category: 'Housing',   icon: 'home-outline',             color: '#F5A623', bg: '#1A1408', count: 8,  route: 'Housing'    },
-  // TODO: re-enable when Healthcare screen is ready
-  // { id: 'r3', category: 'Doctors', icon: 'medkit-outline', color: '#5BCFEF', bg: '#0A1820', count: 6, route: 'Healthcare' },
-  { id: 'r4', category: 'Attorneys', icon: 'shield-checkmark-outline', color: '#9B72EF', bg: '#130F20', count: 5,  route: 'Attorney'   },
+  { id: 'r1', category: 'Jobs',        icon: 'briefcase-outline',        color: '#3EC878', bg: '#0F2018', count: 14, route: 'Jobs'        },
+  { id: 'r2', category: 'Housing',     icon: 'home-outline',             color: '#F5A623', bg: '#1A1408', count: 8,  route: 'Housing'     },
+  // { id: 'r4', category: 'Attorneys',   icon: 'shield-checkmark-outline', color: '#9B72EF', bg: '#130F20', count: 5,  route: 'Attorney'    },
+  { id: 'r5', category: 'Marketplace', icon: 'storefront-outline',       color: '#00B4D8', bg: '#001A20', count: 0,  route: 'Marketplace' },
 ];
 
 const SUGGESTED_CITIES = [
@@ -124,6 +124,13 @@ function FeedCard({ post, navigation, C, s, api }) {
         <Text style={s.feedBody} numberOfLines={6}>{post.body}</Text>
       </TouchableOpacity>
 
+      {/* ── Image ──────────────────────────────────────────────── */}
+      {post.image_url ? (
+        <TouchableOpacity onPress={handlePress} activeOpacity={0.95}>
+          <Image source={{ uri: post.image_url }} style={s.feedImage} resizeMode="cover" />
+        </TouchableOpacity>
+      ) : null}
+
       {/* ── Topics ─────────────────────────────────────────────── */}
       {post.topics_list?.length > 0 && (
         <View style={s.topicsRow}>
@@ -139,9 +146,9 @@ function FeedCard({ post, navigation, C, s, api }) {
       <View style={s.actionBar}>
         <TouchableOpacity onPress={onLike} activeOpacity={0.75} style={[s.actionBtn, liked && s.actionBtnActive]}>
           <Animated.View style={{ transform: [{ scale: heartScale }] }}>
-            <Ionicons name={liked ? 'heart' : 'heart-outline'} size={16} color={liked ? '#FF3B5C' : C.c35} />
+            <Ionicons name={liked ? 'heart' : 'heart-outline'} size={16} color={liked ? '#F4A227' : C.c35} />
           </Animated.View>
-          <Text style={[s.actionTxt, liked && { color: '#FF3B5C' }]}>
+          <Text style={[s.actionTxt, liked && { color: '#F4A227' }]}>
             {likes > 0 ? likes.toLocaleString() : ''} {liked ? 'Liked' : 'Like'}
           </Text>
         </TouchableOpacity>
@@ -351,6 +358,8 @@ function LocationSheet({ visible, current, currentRadius, onSelect, onClose, C, 
 export default function HomeScreen({ navigation }) {
   const { colors: C } = useTheme();
   const { api, user: authUser, updateProfile } = useAuthStore();
+  const gpsLat = useLocationStore(s => s.latitude);
+  const gpsLng = useLocationStore(s => s.longitude);
   const s = useMemo(() => getStyles(C), [C]);
 
   // Location state — seeded from authStore profile, locally mutable
@@ -376,14 +385,18 @@ export default function HomeScreen({ navigation }) {
   const cityShort   = currentCity.split(',')[0] || 'Set location';
   const displayName = authUser?.name || '';
 
-  // Build the fetch URL — always include near_city for location sorting;
-  // flag scope adds country filter on top
+  // Build the fetch URL — prefer real GPS coords for distance sorting;
+  // fall back to city text match; flag scope adds country filter on top
   const buildUrl = useCallback((scope) => {
     const parts = [];
     if (scope === 'country' && homeCountry) parts.push(`country=${encodeURIComponent(homeCountry)}`);
-    if (currentCity) parts.push(`near_city=${encodeURIComponent(currentCity)}`);
+    if (gpsLat != null && gpsLng != null) {
+      parts.push(`lat=${gpsLat}&lng=${gpsLng}`);
+    } else if (currentCity) {
+      parts.push(`near_city=${encodeURIComponent(currentCity)}`);
+    }
     return parts.length ? `/posts/?${parts.join('&')}` : '/posts/';
-  }, [homeCountry, currentCity]);
+  }, [homeCountry, currentCity, gpsLat, gpsLng]);
 
   const fetchPosts = useCallback(async (scope, isRefresh = false) => {
     if (!isRefresh) setLoading(true);
@@ -484,8 +497,8 @@ export default function HomeScreen({ navigation }) {
         <View style={s.sectionHeader}>
           <Text style={s.sectionTitle}>
             {activeScope === 'country'
-              ? `${countryFlag} ${homeCountry} Community`
-              : '🌍 All Communities'}
+              ? `${homeCountry} Community Near You`
+              : '🌍 All Communities Near You'}
           </Text>
         </View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 14, gap: 10, paddingBottom: 4 }}>
@@ -506,14 +519,14 @@ export default function HomeScreen({ navigation }) {
         </ScrollView>
 
         {/* ── FEED ───────────────────────────────────────────────── */}
-        <View style={[s.sectionHeader, { marginTop: 20 }]}>
+        {/* <View style={[s.sectionHeader, { marginTop: 20 }]}>
           <Text style={s.sectionTitle}>
             {activeScope === 'country' ? `${countryFlag} ${homeCountry} posts` : '🌍 All posts'}
           </Text>
           {!loading && posts.length > 0 && (
             <Text style={s.sectionSub}>{posts.length} post{posts.length !== 1 ? 's' : ''}</Text>
           )}
-        </View>
+        </View> */}
 
         <View style={s.feedList}>
           {/* Loading */}
@@ -598,6 +611,7 @@ const getStyles = (C) => StyleSheet.create({
   feedMeta:       { fontSize: 11, color: C.c35 },
   moreBtn:        { padding: 6 },
   feedBody:       { fontSize: 14, color: C.c60, lineHeight: 22, paddingHorizontal: 14, marginBottom: 10 },
+  feedImage:      { width: '100%', height: 220, marginBottom: 10, backgroundColor: C.card2 },
   topicsRow:      { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: 14, marginBottom: 10 },
   topicChip:      { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 50, borderWidth: 1 },
   topicChipTxt:   { fontSize: 11, fontWeight: '600' },

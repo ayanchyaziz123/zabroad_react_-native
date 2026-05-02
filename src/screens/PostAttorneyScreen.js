@@ -1,13 +1,15 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
   StyleSheet, TextInput, KeyboardAvoidingView,
   Platform, Animated, ActivityIndicator, Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
-import { useUser } from '../context/UserContext';
+import { G_PRIMARY, G_SUCCESS, BRAND } from '../theme/colors';
+import { useLocationStore } from '../store/locationStore';
 import { useAttorneyStore } from '../store/attorneyStore';
 import { useAuthStore } from '../store/authStore';
 
@@ -53,9 +55,12 @@ const PLANS = [
 export default function PostAttorneyScreen({ navigation }) {
   const { colors: C } = useTheme();
   const s = useMemo(() => getStyles(C), [C]);
-  const { user }      = useUser();
-  const addAttorney   = useAttorneyStore(s => s.addAttorney);
-  const api           = useAuthStore(s => s.api);
+  const { user: authUser } = useAuthStore();
+  const addAttorney        = useAttorneyStore(s => s.addAttorney);
+  const api                = useAuthStore(s => s.api);
+  const locCity            = useLocationStore(s => s.city);
+  const locLat             = useLocationStore(s => s.latitude);
+  const locLng             = useLocationStore(s => s.longitude);
 
   const [name,      setName]      = useState('');
   const [firm,      setFirm]      = useState('');
@@ -77,14 +82,21 @@ export default function PostAttorneyScreen({ navigation }) {
   const successScale   = useRef(new Animated.Value(0)).current;
   const successOpacity = useRef(new Animated.Value(0)).current;
 
+  useEffect(() => {
+    if (locCity && !location) setLocation(locCity);
+  }, [locCity]);
+
   const canPost = name.trim().length > 2 && location.trim().length > 1 && desc.trim().length >= 20;
 
   async function postListing() {
     await addAttorney({
-      name, firm, location, languages, specialty, price, desc, plan,
-      homeCountry: user.homeCountry?.name || '',
-      countryFlag: user.homeCountry?.flag || '🌍',
-      postedFrom:  user.livesIn           || '',
+      name, firm, location,
+      latitude:    locLat,
+      longitude:   locLng,
+      languages, specialty, price, desc, plan,
+      homeCountry: authUser?.profile?.home_country || '',
+      countryFlag: authUser?.profile?.country_flag || '🌍',
+      postedFrom:  authUser?.profile?.lives_in     || '',
     });
     setSubmitted(true);
     Animated.parallel([
@@ -97,7 +109,7 @@ export default function PostAttorneyScreen({ navigation }) {
     if (plan === 'free') {
       postListing().catch(() => alert('Failed to post listing. Please try again.'));
     } else {
-      setCardName(user.name || '');
+      setCardName(authUser ? `${authUser.first_name} ${authUser.last_name}`.trim() : '');
       setShowPayment(true);
     }
   }
@@ -154,9 +166,11 @@ export default function PostAttorneyScreen({ navigation }) {
               <Text style={[s.successPlanTxt, { color: accent }]}>{activePlan.label} Plan · {activePlan.price}</Text>
             </View>
             <Text style={s.successNote}>Your profile is now visible to your community.</Text>
-            <TouchableOpacity style={[s.doneBtn, { backgroundColor: C.purple }]} onPress={() => navigation.navigate('Attorney')} activeOpacity={0.85}>
-              <Ionicons name="checkmark-circle" size={18} color="white" />
-              <Text style={s.doneBtnTxt}>View Listings</Text>
+            <TouchableOpacity style={s.doneBtnWrap} onPress={() => navigation.navigate('Attorney')} activeOpacity={0.85}>
+              <LinearGradient colors={G_SUCCESS} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.doneBtnInner}>
+                <Ionicons name="checkmark-circle" size={18} color="white" />
+                <Text style={s.doneBtnTxt}>View Listings</Text>
+              </LinearGradient>
             </TouchableOpacity>
             <TouchableOpacity onPress={resetAll} style={{ marginTop: 12 }}>
               <Text style={{ fontSize: 13, color: C.c35, fontWeight: '600' }}>Post another listing</Text>
@@ -296,17 +310,25 @@ export default function PostAttorneyScreen({ navigation }) {
 
       {/* Post button */}
       <View style={s.footer}>
-        <TouchableOpacity
-          style={[s.postBtn, !canPost && { backgroundColor: C.card, borderWidth: 1, borderColor: C.border }]}
-          onPress={handlePost}
-          disabled={!canPost}
-          activeOpacity={0.85}
-        >
-          <Ionicons name="paper-plane" size={16} color={canPost ? 'white' : C.c35} />
-          <Text style={[s.postBtnTxt, !canPost && { color: C.c35 }]}>
-            {plan === 'free' ? 'Post Listing — Free' : `Post Listing — ${PLANS.find(p => p.key === plan).price}`}
-          </Text>
-        </TouchableOpacity>
+        <View style={s.postBtnShadow}>
+          <TouchableOpacity style={s.postBtnTap} onPress={handlePost} disabled={!canPost} activeOpacity={0.85}>
+            {canPost ? (
+              <LinearGradient colors={G_PRIMARY} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.postBtnInner}>
+                <Ionicons name="paper-plane" size={16} color="white" />
+                <Text style={s.postBtnTxt}>
+                  {plan === 'free' ? 'Post Listing — Free' : `Post Listing — ${PLANS.find(p => p.key === plan).price}`}
+                </Text>
+              </LinearGradient>
+            ) : (
+              <View style={[s.postBtnInner, s.postBtnOff]}>
+                <Ionicons name="paper-plane" size={16} color={C.c35} />
+                <Text style={[s.postBtnTxt, { color: C.c35 }]}>
+                  {plan === 'free' ? 'Post Listing — Free' : `Post Listing — ${PLANS.find(p => p.key === plan).price}`}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Payment Modal */}
@@ -364,10 +386,14 @@ export default function PostAttorneyScreen({ navigation }) {
               </View>
             </View>
 
-            <TouchableOpacity style={[s.payBtn, { backgroundColor: C.purple }, paying && { opacity: 0.7 }]} onPress={handlePay} disabled={paying} activeOpacity={0.85}>
-              {paying ? <ActivityIndicator size="small" color="white" /> : <Ionicons name="lock-closed" size={15} color="white" />}
-              <Text style={s.payBtnTxt}>{paying ? 'Processing…' : `Pay ${PLANS.find(p => p.key === plan)?.price}`}</Text>
-            </TouchableOpacity>
+            <View style={[s.payBtnShadow, paying && { opacity: 0.7 }]}>
+              <TouchableOpacity style={s.payBtnTap} onPress={handlePay} disabled={paying} activeOpacity={0.85}>
+                <LinearGradient colors={G_SUCCESS} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.payBtnInner}>
+                  {paying ? <ActivityIndicator size="small" color="white" /> : <Ionicons name="lock-closed" size={15} color="white" />}
+                  <Text style={s.payBtnTxt}>{paying ? 'Processing…' : `Pay ${PLANS.find(p => p.key === plan)?.price}`}</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
 
             <View style={s.secureRow}>
               <Ionicons name="shield-checkmark-outline" size={12} color={C.c35} />
@@ -409,8 +435,11 @@ const getStyles = (C) => StyleSheet.create({
   featureTxt:   { fontSize: 12, color: C.c35, fontWeight: '500' },
 
   footer:     { paddingHorizontal: 20, paddingBottom: 28, paddingTop: 12, borderTopWidth: 1, borderTopColor: C.border, backgroundColor: C.bg },
-  postBtn:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: C.purple, borderRadius: 16, paddingVertical: 15, shadowColor: C.purple, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 6 },
-  postBtnTxt: { fontSize: 15, fontWeight: '800', color: 'white' },
+  postBtnShadow: { borderRadius: 16, shadowColor: BRAND.orange, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 6 },
+  postBtnTap:    { borderRadius: 16, overflow: 'hidden' },
+  postBtnInner:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 15 },
+  postBtnOff:    { backgroundColor: C.card, borderWidth: 1, borderColor: C.border },
+  postBtnTxt:    { fontSize: 15, fontWeight: '800', color: 'white' },
 
   modalOverlay:  { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.6)' },
   modalCard:     { borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, gap: 16 },
@@ -424,7 +453,9 @@ const getStyles = (C) => StyleSheet.create({
   payLabel:      { fontSize: 10, fontWeight: '700', color: C.c35, letterSpacing: 1.5 },
   payInputRow:   { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 12 },
   payInput:      { flex: 1, fontSize: 14 },
-  payBtn:        { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 14, paddingVertical: 15, marginTop: 4 },
+  payBtnShadow:  { borderRadius: 14, marginTop: 4, shadowColor: BRAND.teal, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 6 },
+  payBtnTap:     { borderRadius: 14, overflow: 'hidden' },
+  payBtnInner:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 15 },
   payBtnTxt:     { fontSize: 15, fontWeight: '800', color: 'white' },
   secureRow:     { flexDirection: 'row', alignItems: 'center', gap: 5, justifyContent: 'center', paddingBottom: 8 },
   secureTxt:     { fontSize: 11, color: C.c35, fontWeight: '500' },
@@ -438,6 +469,7 @@ const getStyles = (C) => StyleSheet.create({
   successPlanBadge:{ flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderRadius: 50, paddingHorizontal: 12, paddingVertical: 5, marginTop: 4 },
   successPlanTxt:  { fontSize: 12, fontWeight: '700' },
   successNote:     { fontSize: 13, color: C.c35, textAlign: 'center', lineHeight: 19, marginTop: 4 },
-  doneBtn:         { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, paddingHorizontal: 28, paddingVertical: 13, borderRadius: 50 },
-  doneBtnTxt:      { fontSize: 15, fontWeight: '800', color: 'white' },
+  doneBtnWrap:  { borderRadius: 50, overflow: 'hidden', marginTop: 12 },
+  doneBtnInner: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 28, paddingVertical: 13 },
+  doneBtnTxt:   { fontSize: 15, fontWeight: '800', color: 'white' },
 });

@@ -8,8 +8,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../theme/ThemeContext';
 import { useAuthStore } from '../store/authStore';
+import { G_PRIMARY } from '../theme/colors';
 import UserAvatar from '../components/UserAvatar';
 
 const TOPICS = [
@@ -84,22 +86,22 @@ export default function CreatePostScreen({ navigation }) {
 
   const removeImage = (index) => setImages(prev => prev.filter((_, i) => i !== index));
 
-  // ── Auto-detect GPS city ──────────────────────────────────────────────────
-  const getGpsCity = async () => {
+  // ── Auto-detect GPS city + coords ─────────────────────────────────────────
+  const getGpsData = async () => {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') return '';
+      if (status !== 'granted') return { city: '', latitude: null, longitude: null };
       const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      const [place] = await Location.reverseGeocodeAsync({
-        latitude:  loc.coords.latitude,
-        longitude: loc.coords.longitude,
-      });
-      if (!place) return '';
+      const { latitude, longitude } = loc.coords;
+      const [place] = await Location.reverseGeocodeAsync({ latitude, longitude });
+      const lat6 = parseFloat(latitude.toFixed(6));
+      const lng6 = parseFloat(longitude.toFixed(6));
+      if (!place) return { city: '', latitude: lat6, longitude: lng6 };
       const city   = place.city || place.subregion || place.district || '';
       const region = place.region || place.country || '';
-      return city ? `${city}, ${region}` : region;
+      return { city: city ? `${city}, ${region}` : region, latitude: lat6, longitude: lng6 };
     } catch {
-      return '';
+      return { city: '', latitude: null, longitude: null };
     }
   };
 
@@ -109,18 +111,39 @@ export default function CreatePostScreen({ navigation }) {
     setPosting(true);
     setPostError('');
     try {
-      const city    = await getGpsCity();
+      const { city, latitude, longitude } = await getGpsData();
       const country = user?.profile?.home_country || '';
-      await api('/posts/', {
-        method: 'POST',
-        body: {
+
+      let requestBody;
+      if (images.length > 0) {
+        const fd = new FormData();
+        fd.append('body',         text.trim());
+        fd.append('location',     city || '');
+        fd.append('country',      country);
+        fd.append('is_anonymous', isAnonymous ? 'true' : 'false');
+        if (latitude  != null) fd.append('latitude',  String(latitude));
+        if (longitude != null) fd.append('longitude', String(longitude));
+        selectedTopics.forEach(t => fd.append('topics', t.replace('#', '')));
+        const img = images[0];
+        fd.append('image', {
+          uri:  img.uri,
+          name: img.fileName || `post_${Date.now()}.jpg`,
+          type: img.mimeType || 'image/jpeg',
+        });
+        requestBody = fd;
+      } else {
+        requestBody = {
           body:         text.trim(),
           location:     city,
+          latitude,
+          longitude,
           country,
           is_anonymous: isAnonymous,
           topics:       selectedTopics.map(t => t.replace('#', '')),
-        },
-      });
+        };
+      }
+
+      await api('/posts/', { method: 'POST', body: requestBody });
       setPostedCity(city);
       setPosted(true);
       Animated.parallel([
@@ -191,20 +214,23 @@ export default function CreatePostScreen({ navigation }) {
             <Ionicons name="close" size={20} color={C.c35} />
           </TouchableOpacity>
           <Text style={s.title}>New Post</Text>
-          <TouchableOpacity
-            style={[s.publishBtn, !canPost && s.publishBtnDisabled]}
-            onPress={handlePost}
-            disabled={!canPost}
-            activeOpacity={0.85}
-          >
-            {posting
-              ? <ActivityIndicator size="small" color="white" />
-              : <>
-                  <Text style={s.publishTxt}>Publish</Text>
-                  <Ionicons name="arrow-up-circle" size={16} color="white" />
-                </>
-            }
-          </TouchableOpacity>
+          {canPost ? (
+            <TouchableOpacity style={s.publishBtnWrap} onPress={handlePost} disabled={posting} activeOpacity={0.85}>
+              <LinearGradient colors={G_PRIMARY} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.publishGrad}>
+                {posting
+                  ? <ActivityIndicator size="small" color="white" />
+                  : <>
+                      <Text style={s.publishTxt}>Publish</Text>
+                      <Ionicons name="arrow-up-circle" size={16} color="white" />
+                    </>
+                }
+              </LinearGradient>
+            </TouchableOpacity>
+          ) : (
+            <View style={s.publishBtnOff}>
+              <Text style={s.publishTxtOff}>Publish</Text>
+            </View>
+          )}
         </View>
 
         <ScrollView
@@ -401,9 +427,11 @@ const getStyles = (C) => StyleSheet.create({
   header:        { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: C.border },
   closeBtn:      { width: 36, height: 36, borderRadius: 12, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, alignItems: 'center', justifyContent: 'center' },
   title:         { flex: 1, fontSize: 17, fontWeight: '800', color: C.cream, letterSpacing: -0.3 },
-  publishBtn:    { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 9, borderRadius: 50, backgroundColor: C.vivid },
-  publishBtnDisabled: { backgroundColor: C.card, borderWidth: 1, borderColor: C.border },
-  publishTxt:    { fontSize: 13, fontWeight: '700', color: 'white' },
+  publishBtnWrap: { borderRadius: 50, overflow: 'hidden' },
+  publishGrad:    { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 9 },
+  publishBtnOff:  { borderRadius: 50, paddingHorizontal: 16, paddingVertical: 9, backgroundColor: C.card, borderWidth: 1, borderColor: C.border },
+  publishTxt:     { fontSize: 13, fontWeight: '700', color: 'white' },
+  publishTxtOff:  { fontSize: 13, fontWeight: '700', color: C.c35 },
 
   // Error
   errorBanner:   { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, marginTop: 12, borderRadius: 12, borderWidth: 1, borderColor: C.vivid + '55', backgroundColor: C.vividD, padding: 12 },

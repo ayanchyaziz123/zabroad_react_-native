@@ -40,11 +40,12 @@ export const useAttorneyStore = create((set) => ({
   fetchAttorneys: async () => {
     set({ loading: true, error: null });
     try {
-      const api      = useAuthStore.getState().api;
-      const nearCity = useLocationStore.getState().nearCityParam();
-      const url      = nearCity ? `/attorneys/?${nearCity}` : '/attorneys/';
-      const data     = await api(url);
-      const list     = Array.isArray(data) ? data : (data.results ?? []);
+      const api    = useAuthStore.getState().api;
+      const loc    = useLocationStore.getState();
+      const params = loc.coordsParam() || loc.nearCityParam();
+      const url    = params ? `/attorneys/?${params}` : '/attorneys/';
+      const data   = await api(url);
+      const list   = Array.isArray(data) ? data : (data.results ?? []);
       set({ attorneys: list.map(normalize), loading: false });
     } catch (e) {
       set({ error: e.message, loading: false });
@@ -59,6 +60,8 @@ export const useAttorneyStore = create((set) => ({
         name:         formData.name,
         firm:         formData.firm,
         location:     formData.location,
+        latitude:     formData.latitude  ?? null,
+        longitude:    formData.longitude ?? null,
         languages:    formData.languages,
         specialty:    formData.specialty,
         price:        formData.price,

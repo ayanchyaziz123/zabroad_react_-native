@@ -29,7 +29,12 @@ export const useLocationStore = create((set, get) => ({
       const region = place?.region || place?.isoCountryCode || '';
       const label  = city ? `${city}, ${region}` : region;
 
-      set({ latitude, longitude, city: label, status: 'ready' });
+      set({
+        latitude:  parseFloat(latitude.toFixed(6)),
+        longitude: parseFloat(longitude.toFixed(6)),
+        city: label,
+        status: 'ready',
+      });
     } catch {
       set({ status: 'failed' });
     }
@@ -42,5 +47,13 @@ export const useLocationStore = create((set, get) => ({
   nearCityParam: () => {
     const city = get().city;
     return city ? `near_city=${encodeURIComponent(city)}` : '';
+  },
+
+  // Returns lat=X&lng=Y string when GPS coords are available, otherwise ''
+  coordsParam: () => {
+    const { latitude, longitude } = get();
+    return (latitude != null && longitude != null)
+      ? `lat=${latitude}&lng=${longitude}`
+      : '';
   },
 }));

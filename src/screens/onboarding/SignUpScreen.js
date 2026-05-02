@@ -9,6 +9,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/ThemeContext';
 import { useAuthStore } from '../../store/authStore';
+import { G_PRIMARY } from '../../theme/colors';
 
 export default function SignUpScreen({ navigation }) {
   const { colors: C } = useTheme();
@@ -105,7 +106,7 @@ export default function SignUpScreen({ navigation }) {
         >
           {/* Logo + headline */}
           <View style={s.logoRow}>
-            <LinearGradient colors={[C.vivid, '#8B1525']} style={s.logoGrad}>
+            <LinearGradient colors={G_PRIMARY} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.logoGrad}>
               <Text style={{ fontSize: 24 }}>🌍</Text>
             </LinearGradient>
             <Text style={[s.brand, { color: C.cream }]}>
@@ -250,7 +251,7 @@ export default function SignUpScreen({ navigation }) {
             activeOpacity={0.88}
           >
             <LinearGradient
-              colors={[C.vivid, '#B82838']}
+              colors={G_PRIMARY}
               start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
               style={s.btnGrad}
             >

@@ -4,10 +4,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../theme/ThemeContext';
+import { G_PRIMARY, BRAND } from '../theme/colors';
 import { useAuthStore } from '../store/authStore';
 import { useChatStore } from '../store/chatStore';
 import { useLocationStore } from '../store/locationStore';
+import { useNotificationStore } from '../store/notificationStore';
 
 // Onboarding
 import WelcomeScreen    from '../screens/onboarding/WelcomeScreen';
@@ -45,6 +48,8 @@ import PostAttorneyScreen      from '../screens/PostAttorneyScreen';
 import ListDoctorScreen        from '../screens/ListDoctorScreen';
 import EventsScreen            from '../screens/EventsScreen';
 import JobDetailScreen         from '../screens/JobDetailScreen';
+import MarketplaceScreen        from '../screens/MarketplaceScreen';
+import PostMarketplaceScreen    from '../screens/PostMarketplaceScreen';
 import ChatScreen               from '../screens/ChatScreen';
 
 const Tab   = createBottomTabNavigator();
@@ -54,21 +59,21 @@ const Stack = createNativeStackNavigator();
 function CustomTabBar({ state, navigation }) {
   const { colors: C } = useTheme();
   const s = useMemo(() => getStyles(C), [C]);
-  const inConversation = useChatStore(s => s.inConversation);
-  const conversations  = useChatStore(s => s.conversations);
+  const inConversation  = useChatStore(s => s.inConversation);
+  const conversations   = useChatStore(s => s.conversations);
+  const notifUnread     = useNotificationStore(s => s.unreadCount);
 
-  // Sum unread across all conversations
   const totalUnread = conversations.reduce((sum, c) => sum + (c.unread_count || 0), 0);
 
   if (inConversation) return null;
 
   // Order: Home · Notifications · [+] · Chat · Profile
   const allTabs = [
-    { type: 'tab', name: 'Home',          icon: 'home-outline',          iconActive: 'home',          label: 'Home'    },
-    { type: 'tab', name: 'Notifications', icon: 'notifications-outline', iconActive: 'notifications', label: 'Notifs'  },
+    { type: 'tab', name: 'Home',          icon: 'home-outline',          iconActive: 'home',          label: 'Home'                      },
+    { type: 'tab', name: 'Notifications', icon: 'notifications-outline', iconActive: 'notifications', label: 'Notifs', badge: notifUnread },
     { type: 'fab' },
-    { type: 'tab', name: 'Chat',          icon: 'chatbubble-outline',    iconActive: 'chatbubble',    label: 'Chat', badge: totalUnread },
-    { type: 'tab', name: 'Profile',       icon: 'person-outline',        iconActive: 'person',        label: 'Profile' },
+    { type: 'tab', name: 'Chat',          icon: 'chatbubble-outline',    iconActive: 'chatbubble',    label: 'Chat',   badge: totalUnread },
+    { type: 'tab', name: 'Profile',       icon: 'person-outline',        iconActive: 'person',        label: 'Profile'                   },
   ];
 
   return (
@@ -76,9 +81,13 @@ function CustomTabBar({ state, navigation }) {
       {allTabs.map((item) => {
         if (item.type === 'fab') {
           return (
-            <TouchableOpacity key="fab" style={s.fab} onPress={() => navigation.navigate('CreatePost')} activeOpacity={0.85}>
-              <Ionicons name="add" size={24} color="white" />
-            </TouchableOpacity>
+            <View key="fab" style={s.fabShadow}>
+              <TouchableOpacity style={s.fabTap} onPress={() => navigation.navigate('CreatePost')} activeOpacity={0.85}>
+                <LinearGradient colors={G_PRIMARY} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.fabInner}>
+                  <Ionicons name="add" size={24} color="white" />
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
           );
         }
         const routeIndex = state.routes.findIndex(r => r.name === item.name);
@@ -111,12 +120,14 @@ function CustomTabBar({ state, navigation }) {
 }
 
 function MainTabs() {
-  const fetchConversations = useChatStore(s => s.fetchConversations);
-  const detectLocation     = useLocationStore(s => s.detect);
+  const fetchConversations   = useChatStore(s => s.fetchConversations);
+  const detectLocation       = useLocationStore(s => s.detect);
+  const fetchNotifications   = useNotificationStore(s => s.fetchNotifications);
 
   useEffect(() => {
     fetchConversations();
     detectLocation();
+    fetchNotifications();
   }, []);
 
   return (
@@ -182,8 +193,10 @@ export default function AppNavigator() {
         <Stack.Screen name="PostAttorney"     component={PostAttorneyScreen} />
         <Stack.Screen name="ListDoctor"       component={ListDoctorScreen} />
         <Stack.Screen name="CreatePost"       component={CreatePostScreen} />
-        <Stack.Screen name="Events"           component={EventsScreen} />
-        <Stack.Screen name="JobDetail"        component={JobDetailScreen} />
+        <Stack.Screen name="Events"            component={EventsScreen} />
+        <Stack.Screen name="JobDetail"         component={JobDetailScreen} />
+        <Stack.Screen name="Marketplace"       component={MarketplaceScreen} />
+        <Stack.Screen name="PostMarketplace"   component={PostMarketplaceScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );
@@ -202,9 +215,7 @@ const getStyles = (C) => StyleSheet.create({
   iconWrap: { position: 'relative' },
   badge:    { position: 'absolute', top: -5, right: -7, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: '#FF3B30', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
   badgeTxt: { fontSize: 9, fontWeight: '800', color: 'white', lineHeight: 11 },
-  fab: {
-    width: 46, height: 46, borderRadius: 15, backgroundColor: C.vivid,
-    alignItems: 'center', justifyContent: 'center', marginBottom: 10,
-    shadowColor: C.vivid, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.5, shadowRadius: 12, elevation: 8,
-  },
+  fabShadow: { borderRadius: 15, marginBottom: 10, shadowColor: BRAND.orange, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.5, shadowRadius: 12, elevation: 8 },
+  fabTap:    { borderRadius: 15, overflow: 'hidden' },
+  fabInner:  { width: 46, height: 46, alignItems: 'center', justifyContent: 'center' },
 });

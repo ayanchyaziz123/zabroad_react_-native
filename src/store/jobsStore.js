@@ -36,11 +36,12 @@ export const useJobsStore = create((set, get) => ({
   fetchJobs: async () => {
     set({ loading: true, error: null });
     try {
-      const api          = useAuthStore.getState().api;
-      const nearCity     = useLocationStore.getState().nearCityParam();
-      const url          = nearCity ? `/jobs/?${nearCity}` : '/jobs/';
-      const data         = await api(url);
-      const list = Array.isArray(data) ? data : (data.results ?? []);
+      const api    = useAuthStore.getState().api;
+      const loc    = useLocationStore.getState();
+      const params = loc.coordsParam() || loc.nearCityParam();
+      const url    = params ? `/jobs/?${params}` : '/jobs/';
+      const data   = await api(url);
+      const list   = Array.isArray(data) ? data : (data.results ?? []);
       set({ jobs: list.map(normalize), loading: false });
     } catch (e) {
       set({ error: e.message, loading: false });
@@ -56,6 +57,8 @@ export const useJobsStore = create((set, get) => ({
           title:        jobData.title,
           company:      jobData.company,
           location:     jobData.location,
+          latitude:     jobData.latitude  ?? null,
+          longitude:    jobData.longitude ?? null,
           description:  jobData.desc,
           plan:         jobData.plan,
           home_country: jobData.homeCountry,
@@ -63,7 +66,6 @@ export const useJobsStore = create((set, get) => ({
           posted_from:  jobData.postedFrom,
         },
       });
-      // Prepend normalized job immediately for instant UI feedback
       set(state => ({ jobs: [normalize(data), ...state.jobs] }));
       return data;
     } catch (e) {

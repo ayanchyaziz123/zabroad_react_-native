@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   TextInput, KeyboardAvoidingView, Platform, Animated,
-  ActivityIndicator,
+  ActivityIndicator, Image, Modal, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -58,9 +58,9 @@ function CommentRow({ comment, C, s, onReply, api }) {
         <View style={s.commentActions}>
           <TouchableOpacity style={s.commentActionBtn} onPress={onLike} activeOpacity={0.7}>
             <Animated.View style={{ transform: [{ scale }] }}>
-              <Ionicons name={liked ? 'heart' : 'heart-outline'} size={14} color={liked ? '#FF3B5C' : C.c35} />
+              <Ionicons name={liked ? 'heart' : 'heart-outline'} size={14} color={liked ? '#F4A227' : C.c35} />
             </Animated.View>
-            {likeCount > 0 && <Text style={[s.commentActionTxt, liked && { color: '#FF3B5C' }]}>{likeCount}</Text>}
+            {likeCount > 0 && <Text style={[s.commentActionTxt, liked && { color: '#F4A227' }]}>{likeCount}</Text>}
           </TouchableOpacity>
           <TouchableOpacity
             style={s.commentActionBtn}
@@ -93,6 +93,9 @@ export default function PostDetailScreen({ navigation, route }) {
   const [input,       setInput]       = useState('');
   const [replyingTo,  setReplyingTo]  = useState(null);
   const [sending,     setSending]     = useState(false);
+  const [sheetMode,   setSheetMode]   = useState(null); // null | 'menu' | 'edit'
+  const [editBody,    setEditBody]    = useState('');
+  const [saving,      setSaving]      = useState(false);
 
   const heartScale = useRef(new Animated.Value(1)).current;
   const scrollRef  = useRef(null);
@@ -171,6 +174,40 @@ export default function PostDetailScreen({ navigation, route }) {
     inputRef.current?.focus();
   };
 
+  const openMenu = () => setSheetMode('menu');
+
+  const openEdit = () => {
+    setEditBody(post.body || '');
+    setSheetMode('edit');
+  };
+
+  const closeSheet = () => setSheetMode(null);
+
+  const handleEditSave = async () => {
+    const body = editBody.trim();
+    if (!body || saving) return;
+    setSaving(true);
+    try {
+      const updated = await api(`/posts/${initialPost.id}/`, { method: 'PATCH', body: { body } });
+      setPost(prev => ({ ...prev, body: updated.body }));
+      setSheetMode(null);
+    } catch {
+      Alert.alert('Error', 'Could not save changes. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    setSheetMode(null);
+    try {
+      await api(`/posts/${initialPost.id}/`, { method: 'DELETE' });
+      navigation.goBack();
+    } catch {
+      Alert.alert('Error', 'Could not delete post. Please try again.');
+    }
+  };
+
   const totalComments = comments.length;
 
   // ── Author info (read from refreshed post state) ────────────────────────
@@ -193,8 +230,8 @@ export default function PostDetailScreen({ navigation, route }) {
           <Ionicons name="chevron-back" size={22} color={C.cream} />
         </TouchableOpacity>
         <Text style={s.headerTitle}>Post</Text>
-        <TouchableOpacity style={s.headerBtn} activeOpacity={0.7}>
-          <Ionicons name="ellipsis-horizontal" size={20} color={C.cream} />
+        <TouchableOpacity style={s.headerBtn} activeOpacity={0.7} onPress={isOwnPost ? openMenu : undefined}>
+          <Ionicons name="ellipsis-horizontal" size={20} color={isOwnPost ? C.cream : C.c35} />
         </TouchableOpacity>
       </View>
 
@@ -244,13 +281,18 @@ export default function PostDetailScreen({ navigation, route }) {
                   <Ionicons name="chatbubble-ellipses-outline" size={17} color={C.vivid} />
                 </TouchableOpacity>
               )}
-              <TouchableOpacity style={s.moreBtn} activeOpacity={0.7}>
+              <TouchableOpacity style={s.moreBtn} activeOpacity={0.7} onPress={isOwnPost ? openMenu : undefined}>
                 <Ionicons name="ellipsis-horizontal" size={20} color={C.c35} />
               </TouchableOpacity>
             </View>
 
             {/* Body */}
             <Text style={s.postBody}>{postBody}</Text>
+
+            {/* Image */}
+            {post.image_url ? (
+              <Image source={{ uri: post.image_url }} style={s.postImage} resizeMode="cover" />
+            ) : null}
 
             {/* Topics */}
             {topics.length > 0 && (
@@ -267,9 +309,9 @@ export default function PostDetailScreen({ navigation, route }) {
             <View style={s.actionBar}>
               <TouchableOpacity onPress={onLikePost} activeOpacity={0.75} style={s.actionBtn}>
                 <Animated.View style={{ transform: [{ scale: heartScale }] }}>
-                  <Ionicons name={liked ? 'heart' : 'heart-outline'} size={16} color={liked ? '#FF3B5C' : C.c35} />
+                  <Ionicons name={liked ? 'heart' : 'heart-outline'} size={16} color={liked ? '#F4A227' : C.c35} />
                 </Animated.View>
-                <Text style={[s.actionTxt, liked && { color: '#FF3B5C' }]}>
+                <Text style={[s.actionTxt, liked && { color: '#F4A227' }]}>
                   {likeCount > 0 ? `${likeCount.toLocaleString()} ` : ''}{liked ? 'Liked' : 'Like'}
                 </Text>
               </TouchableOpacity>
@@ -390,6 +432,70 @@ export default function PostDetailScreen({ navigation, route }) {
         </View>
 
       </KeyboardAvoidingView>
+
+      {/* ── Single bottom sheet (menu OR edit) ────────────────── */}
+      <Modal
+        visible={sheetMode !== null}
+        transparent
+        animationType="slide"
+        onRequestClose={closeSheet}
+      >
+        {sheetMode === 'menu' ? (
+          <TouchableOpacity style={s.menuOverlay} activeOpacity={1} onPress={closeSheet}>
+            <View style={[s.menuSheet, { backgroundColor: C.card }]}>
+              <TouchableOpacity style={s.menuItem} onPress={openEdit} activeOpacity={0.7}>
+                <Ionicons name="create-outline" size={20} color={C.cream} />
+                <Text style={s.menuItemTxt}>Edit post</Text>
+              </TouchableOpacity>
+              <View style={[s.menuDivider, { backgroundColor: C.border }]} />
+              <TouchableOpacity style={s.menuItem} onPress={handleDelete} activeOpacity={0.7}>
+                <Ionicons name="trash-outline" size={20} color={C.red} />
+                <Text style={[s.menuItemTxt, { color: C.red }]}>Delete post</Text>
+              </TouchableOpacity>
+              <View style={[s.menuDivider, { backgroundColor: C.border }]} />
+              <TouchableOpacity style={s.menuItem} onPress={closeSheet} activeOpacity={0.7}>
+                <Text style={[s.menuItemTxt, { color: C.c35 }]}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        ) : (
+          <KeyboardAvoidingView
+            style={s.editOverlay}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          >
+            <View style={[s.editSheet, { backgroundColor: C.nav }]}>
+              <View style={s.editHeader}>
+                <Text style={[s.editTitle, { color: C.cream }]}>Edit post</Text>
+                <TouchableOpacity style={s.editClose} onPress={closeSheet} activeOpacity={0.7}>
+                  <Ionicons name="close" size={20} color={C.c35} />
+                </TouchableOpacity>
+              </View>
+              <TextInput
+                style={[s.editInput, { color: C.cream, borderColor: C.border, backgroundColor: C.card }]}
+                value={editBody}
+                onChangeText={setEditBody}
+                multiline
+                autoFocus
+                maxLength={500}
+                placeholderTextColor={C.c35}
+                placeholder="What's on your mind?"
+              />
+              <Text style={[s.editCharCount, { color: C.c35 }]}>{editBody.length}/500</Text>
+              <TouchableOpacity
+                style={[s.editSaveBtn, { backgroundColor: C.vivid }, (!editBody.trim() || saving) && { opacity: 0.5 }]}
+                onPress={handleEditSave}
+                disabled={!editBody.trim() || saving}
+                activeOpacity={0.85}
+              >
+                {saving
+                  ? <ActivityIndicator size="small" color="white" />
+                  : <Text style={s.editSaveTxt}>Save changes</Text>}
+              </TouchableOpacity>
+            </View>
+          </KeyboardAvoidingView>
+        )}
+      </Modal>
+
     </SafeAreaView>
   );
 }
@@ -413,6 +519,7 @@ const getStyles = (C) => StyleSheet.create({
   moreBtn:        { padding: 6 },
   msgBtn:         { width: 36, height: 36, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: C.vividD, borderWidth: 1, borderColor: C.vivid + '44' },
   postBody:       { fontSize: 15, color: C.c60, lineHeight: 24, paddingHorizontal: 14, paddingBottom: 12 },
+  postImage:      { width: '100%', height: 260, marginBottom: 12, backgroundColor: C.card2 },
   topicsRow:      { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: 14, paddingBottom: 12 },
   topicChip:      { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 50, borderWidth: 1 },
   topicTxt:       { fontSize: 11, fontWeight: '700' },
@@ -449,6 +556,24 @@ const getStyles = (C) => StyleSheet.create({
   // Empty / loading
   centerState:  { alignItems: 'center', paddingVertical: 36, gap: 10 },
   emptyCmtTxt:  { fontSize: 13, color: C.c35, fontWeight: '600' },
+
+  // Action menu
+  menuOverlay:  { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  menuSheet:    { borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: 28 },
+  menuItem:     { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 20, paddingVertical: 17 },
+  menuItemTxt:  { fontSize: 15, fontWeight: '600', color: C.cream },
+  menuDivider:  { height: 1, marginHorizontal: 0 },
+
+  // Edit modal
+  editOverlay:   { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  editSheet:     { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 36 },
+  editHeader:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
+  editTitle:     { fontSize: 17, fontWeight: '800' },
+  editClose:     { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  editInput:     { borderWidth: 1, borderRadius: 14, padding: 14, fontSize: 15, lineHeight: 22, minHeight: 120, textAlignVertical: 'top', marginBottom: 6 },
+  editCharCount: { fontSize: 11, textAlign: 'right', marginBottom: 14 },
+  editSaveBtn:   { borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
+  editSaveTxt:   { fontSize: 15, fontWeight: '800', color: 'white' },
 
   // Input bar
   inputArea:    { borderTopWidth: 1, borderTopColor: C.border, backgroundColor: C.nav },

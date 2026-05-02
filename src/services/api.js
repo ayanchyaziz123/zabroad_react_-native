@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // ── Base URL ──────────────────────────────────────────────────────────────────
 // Android emulator: use 10.0.2.2  |  iOS simulator / Expo Go: use your machine IP
 // Example: 'http://192.168.1.5:8000/api'
-export const BASE_URL = 'http://127.0.0.1:8000/api';
+export const BASE_URL = 'http://192.168.1.202:8000/api';
 
 // ── Token helpers ─────────────────────────────────────────────────────────────
 const KEYS = { access: '@zabroad_access', refresh: '@zabroad_refresh' };

@@ -37,11 +37,12 @@ export const useHousingStore = create((set, get) => ({
   fetchListings: async () => {
     set({ loading: true, error: null });
     try {
-      const api      = useAuthStore.getState().api;
-      const nearCity = useLocationStore.getState().nearCityParam();
-      const url      = nearCity ? `/housing/?${nearCity}` : '/housing/';
-      const data     = await api(url);
-      const list     = Array.isArray(data) ? data : (data.results ?? []);
+      const api    = useAuthStore.getState().api;
+      const loc    = useLocationStore.getState();
+      const params = loc.coordsParam() || loc.nearCityParam();
+      const url    = params ? `/housing/?${params}` : '/housing/';
+      const data   = await api(url);
+      const list   = Array.isArray(data) ? data : (data.results ?? []);
       set({ listings: list.map(normalize), loading: false });
     } catch (e) {
       set({ error: e.message, loading: false });
@@ -56,6 +57,8 @@ export const useHousingStore = create((set, get) => ({
         title:        listingData.title,
         price:        listingData.price,
         location:     listingData.location,
+        latitude:     listingData.latitude  ?? null,
+        longitude:    listingData.longitude ?? null,
         description:  listingData.desc,
         plan:         listingData.plan,
         home_country: listingData.homeCountry,
