@@ -6,7 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
-import { useUser } from '../context/UserContext';
+import { useAuthStore } from '../store/authStore';
 
 const DOCTORS = [
   {
@@ -179,17 +179,18 @@ function DoctorCard({ doc, navigation, C, s }) {
 
 export default function HealthcareScreen({ navigation }) {
   const { colors: C } = useTheme();
-  const { user }      = useUser();
+  const { user: authUser } = useAuthStore();
   const s = useMemo(() => getStyles(C), [C]);
 
   const [search,       setSearch]       = useState('');
   const [activeFilter, setActiveFilter] = useState(0);
   const [activeScope,  setActiveScope]  = useState('all');
 
-  const country = user.homeCountry || { flag: '🌍', name: '' };
+  const countryName = authUser?.profile?.home_country || '';
+  const countryFlag = authUser?.profile?.country_flag || '🌍';
 
   const SCOPES = [
-    { key: 'community', label: `${country.flag} Community` },
+    { key: 'community', label: `${countryFlag} Community` },
     { key: 'all',       label: '🌍 All' },
   ];
 
@@ -201,7 +202,7 @@ export default function HealthcareScreen({ navigation }) {
       d.languages.some(l => l.toLowerCase().includes(q));
     const matchFilter = activeFilter === 0 || d.filter === FILTERS[activeFilter];
     const matchScope  = activeScope === 'all' ||
-      d.communities.some(c => c.toLowerCase() === (country.name || '').toLowerCase());
+      d.communities.some(c => c.toLowerCase() === countryName.toLowerCase());
     return matchSearch && matchFilter && matchScope;
   });
 
@@ -276,7 +277,7 @@ export default function HealthcareScreen({ navigation }) {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.list}>
         <Text style={s.sectionLabel}>
           {filtered.length} DOCTOR{filtered.length !== 1 ? 'S' : ''}
-          {activeScope === 'community' ? ` IN ${(country.name || '').toUpperCase()} COMMUNITY` : ' NEAR YOU'}
+          {activeScope === 'community' ? ` IN ${countryName.toUpperCase()} COMMUNITY` : ' NEAR YOU'}
         </Text>
 
         {filtered.length === 0 ? (
@@ -284,7 +285,7 @@ export default function HealthcareScreen({ navigation }) {
             <Ionicons name="medical-outline" size={40} color={C.c35} />
             <Text style={s.emptyTxt}>
               {activeScope === 'community'
-                ? `No doctors in ${country.name} community yet`
+                ? `No doctors in ${countryName} community yet`
                 : 'No doctors found'}
             </Text>
             <Text style={s.emptySub}>Try a different filter or search term</Text>

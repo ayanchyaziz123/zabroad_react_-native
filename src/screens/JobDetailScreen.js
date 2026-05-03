@@ -26,7 +26,9 @@ export default function JobDetailScreen({ route, navigation }) {
 
   function onMessage() {
     setMessaged(true);
-    navigation.navigate('Chat');
+    if (job.poster_id) {
+      navigation.navigate('AppMain', { screen: 'Chat', params: { userId: job.poster_id } });
+    }
   }
 
   async function onShare() {
@@ -98,7 +100,7 @@ export default function JobDetailScreen({ route, navigation }) {
           <Text style={s.sectionTitle}>Posted by</Text>
           <View style={s.posterCard}>
             <View style={[s.posterAv, { backgroundColor: C.vividD }]}>
-              <Text style={[s.posterInitial, { color: C.vivid }]}>{job.poster[0]}</Text>
+              <Text style={[s.posterInitial, { color: C.vivid }]}>{(job.poster || '?')[0]}</Text>
             </View>
             <View style={{ flex: 1 }}>
               <Text style={s.posterName}>{job.poster}</Text>
@@ -144,7 +146,7 @@ export default function JobDetailScreen({ route, navigation }) {
         >
           <Ionicons name={messaged ? 'checkmark-circle' : 'chatbubble'} size={18} color={messaged ? C.vivid : 'white'} />
           <Text style={[s.msgTxt, messaged && { color: C.vivid }]}>
-            {messaged ? 'Message Sent' : `Message ${job.poster.split(' ')[0]}`}
+            {messaged ? 'Message Sent' : `Message ${(job.poster || 'Poster').split(' ')[0]}`}
           </Text>
         </TouchableOpacity>
       </View>

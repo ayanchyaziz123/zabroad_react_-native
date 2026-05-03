@@ -44,11 +44,13 @@ import UserProfileScreen       from '../screens/UserProfileScreen';
 import ListAttorneyScreen      from '../screens/ListAttorneyScreen';
 import PostJobScreen           from '../screens/PostJobScreen';
 import PostHousingScreen       from '../screens/PostHousingScreen';
+import HousingDetailScreen     from '../screens/HousingDetailScreen';
 import PostAttorneyScreen      from '../screens/PostAttorneyScreen';
 import ListDoctorScreen        from '../screens/ListDoctorScreen';
 import EventsScreen            from '../screens/EventsScreen';
 import JobDetailScreen         from '../screens/JobDetailScreen';
 import MarketplaceScreen        from '../screens/MarketplaceScreen';
+import MarketplaceDetailScreen  from '../screens/MarketplaceDetailScreen';
 import PostMarketplaceScreen    from '../screens/PostMarketplaceScreen';
 import ChatScreen               from '../screens/ChatScreen';
 
@@ -175,7 +177,8 @@ export default function AppNavigator() {
         <Stack.Screen name="AppMain"     component={MainTabs} options={{ animation: 'fade' }} />
         <Stack.Screen name="Healthcare"  component={HealthcareScreen} />
         <Stack.Screen name="Jobs"        component={JobsScreen} />
-        <Stack.Screen name="Housing"     component={HousingScreen} />
+        <Stack.Screen name="Housing"       component={HousingScreen} />
+        <Stack.Screen name="HousingDetail" component={HousingDetailScreen} />
         <Stack.Screen name="Attorney"      component={AttorneyScreen} />
         <Stack.Screen name="AIAssistant"   component={AIAssistantScreen} />
         <Stack.Screen name="Community"     component={CommunityScreen} />
@@ -195,8 +198,9 @@ export default function AppNavigator() {
         <Stack.Screen name="CreatePost"       component={CreatePostScreen} />
         <Stack.Screen name="Events"            component={EventsScreen} />
         <Stack.Screen name="JobDetail"         component={JobDetailScreen} />
-        <Stack.Screen name="Marketplace"       component={MarketplaceScreen} />
-        <Stack.Screen name="PostMarketplace"   component={PostMarketplaceScreen} />
+        <Stack.Screen name="Marketplace"         component={MarketplaceScreen} />
+        <Stack.Screen name="MarketplaceDetail"   component={MarketplaceDetailScreen} />
+        <Stack.Screen name="PostMarketplace"     component={PostMarketplaceScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

@@ -69,7 +69,7 @@ function PostCard({ post, navigation, C, s }) {
       <View style={s.postFooter}>
         <TouchableOpacity style={s.postStat} onPress={onLike} activeOpacity={0.7}>
           <Animated.View style={{ transform: [{ scale }] }}>
-            <Ionicons name={liked ? 'heart' : 'heart-outline'} size={14} color={liked ? '#F4A227' : C.c35} />
+            <Ionicons name={liked ? 'thumbs-up' : 'thumbs-up-outline'} size={14} color={liked ? '#F4A227' : C.c35} />
           </Animated.View>
           <Text style={[s.postStatTxt, liked && { color: '#F4A227' }]}>{count}</Text>
         </TouchableOpacity>

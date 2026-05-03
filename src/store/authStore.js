@@ -2,11 +2,13 @@ import { create } from 'zustand';
 import * as SecureStore from 'expo-secure-store';
 import Constants from 'expo-constants';
 
-// Simulator uses localhost; physical device uses the Mac's local network IP.
-const DEV_IP   = '192.168.1.202';
-const BASE_URL = Constants.isDevice
-  ? `http://${DEV_IP}:8000/api`
-  : 'http://localhost:8000/api';
+// Production: set extra.apiUrl in app.json.
+// Development: simulator uses localhost; physical device uses your Mac's LAN IP.
+const BASE_URL =
+  Constants.expoConfig?.extra?.apiUrl ||
+  (Constants.isDevice ? 'http://192.168.1.202:8000/api' : 'http://localhost:8000/api');
+
+const TIMEOUT_MS = 15_000; // 15 s request timeout
 
 // ── Token helpers ─────────────────────────────────────────────────────────────
 async function saveTokens(access, refresh) {
@@ -32,23 +34,41 @@ async function fetchJSON(endpoint, options = {}, token = null) {
     ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
-  const res = await fetch(`${BASE_URL}${endpoint}`, {
-    ...options,
-    headers,
-    body: isFormData ? options.body : (options.body ? JSON.stringify(options.body) : undefined),
-  });
-  const text = await res.text();
-  const data = text ? JSON.parse(text) : null;
-  return { ok: res.ok, status: res.status, data };
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
+  try {
+    const res = await fetch(`${BASE_URL}${endpoint}`, {
+      ...options,
+      headers,
+      signal: controller.signal,
+      body: isFormData ? options.body : (options.body ? JSON.stringify(options.body) : undefined),
+    });
+    const text = await res.text();
+    let data = null;
+    try { data = text ? JSON.parse(text) : null; } catch { data = { detail: text }; }
+    return { ok: res.ok, status: res.status, data };
+  } catch (err) {
+    if (err.name === 'AbortError') throw new Error('Request timed out. Check your connection.');
+    if (err.message?.includes('Network request failed') || err.message?.includes('Failed to fetch')) {
+      throw new Error('No internet connection. Please check your network.');
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function extractError(data) {
-  return (
-    data?.detail ||
-    data?.non_field_errors?.[0] ||
-    (data ? Object.values(data)[0]?.[0] : null) ||
-    'Something went wrong'
-  );
+  if (!data) return 'Something went wrong';
+  if (typeof data === 'string') return data;
+  if (data.detail)              return String(data.detail);
+  if (data.non_field_errors?.length) return String(data.non_field_errors[0]);
+  const first = Object.values(data)[0];
+  if (Array.isArray(first) && first.length) return String(first[0]);
+  if (typeof first === 'string') return first;
+  return 'Something went wrong';
 }
 
 // ── Auth Store ────────────────────────────────────────────────────────────────

@@ -6,12 +6,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
-import { useUser } from '../context/UserContext';
+import { useAuthStore } from '../store/authStore';
 import { useAttorneyStore } from '../store/attorneyStore';
 
 export default function AttorneyScreen({ navigation }) {
   const { colors: C } = useTheme();
-  const { user }      = useUser();
+  const { user: authUser } = useAuthStore();
   const s = useMemo(() => getStyles(C), [C]);
 
   const attorneys       = useAttorneyStore(s => s.attorneys);
@@ -23,10 +23,11 @@ export default function AttorneyScreen({ navigation }) {
   const [contacted,   setContacted]   = useState({});
   const [refreshing,  setRefreshing]  = useState(false);
 
-  const country = user.homeCountry || { flag: '🌍', name: '' };
+  const countryName = authUser?.profile?.home_country || '';
+  const countryFlag = authUser?.profile?.country_flag || '🌍';
 
   const SCOPES = [
-    { key: 'community', label: `${country.flag} Community` },
+    { key: 'community', label: `${countryFlag} Community` },
     { key: 'all',       label: '🌍 All' },
   ];
 
@@ -45,7 +46,7 @@ export default function AttorneyScreen({ navigation }) {
       a.specialty.toLowerCase().includes(q) ||
       a.languages.toLowerCase().includes(q);
     const matchScope = activeScope === 'all' ||
-      a.communities.some(c => c.toLowerCase() === (country.name || '').toLowerCase());
+      a.communities.some(c => c.toLowerCase() === countryName.toLowerCase());
     return matchSearch && matchScope;
   });
 
@@ -105,14 +106,14 @@ export default function AttorneyScreen({ navigation }) {
         >
           <Text style={s.sectionLabel}>
             {filtered.length} ATTORNEY{filtered.length !== 1 ? 'S' : ''}
-            {activeScope === 'community' ? ` · ${(country.name || '').toUpperCase()} COMMUNITY` : ''}
+            {activeScope === 'community' ? ` · ${countryName.toUpperCase()} COMMUNITY` : ''}
           </Text>
 
           {filtered.length === 0 ? (
             <View style={s.emptyState}>
               <Ionicons name="scale-outline" size={40} color={C.c35} />
               <Text style={s.emptyTxt}>
-                {activeScope === 'community' ? `No attorneys in ${country.name} community yet` : 'No attorneys found'}
+                {activeScope === 'community' ? `No attorneys in ${countryName} community yet` : 'No attorneys found'}
               </Text>
               {activeScope === 'community' && (
                 <TouchableOpacity style={[s.switchBtn, { backgroundColor: C.purpleD, borderColor: C.purple + '44' }]} onPress={() => setActiveScope('all')} activeOpacity={0.8}>

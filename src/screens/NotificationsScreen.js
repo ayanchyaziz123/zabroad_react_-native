@@ -9,7 +9,7 @@ import { useTheme } from '../theme/ThemeContext';
 import { useNotificationStore } from '../store/notificationStore';
 
 const TYPE_META = {
-  like:     { icon: 'heart',                   color: '#F4A227' },
+  like:     { icon: 'thumbs-up',               color: '#F4A227' },
   comment:  { icon: 'chatbubble',              color: '#3182CE' },
   message:  { icon: 'mail',                    color: '#805AD5' },
   system:   { icon: 'notifications',           color: '#DD6B20' },

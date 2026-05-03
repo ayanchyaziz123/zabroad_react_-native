@@ -255,7 +255,7 @@ export default function SearchScreen({ navigation }) {
                       </View>
                     )}
                     <View style={s.postStats}>
-                      <Ionicons name="heart-outline" size={13} color={C.c35} />
+                      <Ionicons name="thumbs-up-outline" size={13} color={C.c35} />
                       <Text style={s.postStatTxt}>{post.likes_count || 0}</Text>
                       <Ionicons name="chatbubble-ellipses-outline" size={13} color={C.c35} style={{ marginLeft: 8 }} />
                       <Text style={s.postStatTxt}>{post.comments_count || 0}</Text>

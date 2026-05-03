@@ -10,14 +10,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 import { useAuthStore } from '../store/authStore';
 import { useLocationStore } from '../store/locationStore';
+import { useJobsStore } from '../store/jobsStore';
+import { useHousingStore } from '../store/housingStore';
 import UserAvatar from '../components/UserAvatar';
 
-const NEARBY_RESOURCES = [
-  { id: 'r1', category: 'Jobs',        icon: 'briefcase-outline',        color: '#3EC878', bg: '#0F2018', count: 14, route: 'Jobs'        },
-  { id: 'r2', category: 'Housing',     icon: 'home-outline',             color: '#F5A623', bg: '#1A1408', count: 8,  route: 'Housing'     },
-  // { id: 'r4', category: 'Attorneys',   icon: 'shield-checkmark-outline', color: '#9B72EF', bg: '#130F20', count: 5,  route: 'Attorney'    },
-  { id: 'r5', category: 'Marketplace', icon: 'storefront-outline',       color: '#00B4D8', bg: '#001A20', count: 0,  route: 'Marketplace' },
-];
 
 const SUGGESTED_CITIES = [
   { name: 'Queens, NY',        lat: 40.7282,  lng: -73.7949 },
@@ -146,10 +142,10 @@ function FeedCard({ post, navigation, C, s, api }) {
       <View style={s.actionBar}>
         <TouchableOpacity onPress={onLike} activeOpacity={0.75} style={[s.actionBtn, liked && s.actionBtnActive]}>
           <Animated.View style={{ transform: [{ scale: heartScale }] }}>
-            <Ionicons name={liked ? 'heart' : 'heart-outline'} size={16} color={liked ? '#F4A227' : C.c35} />
+            <Ionicons name={liked ? 'thumbs-up' : 'thumbs-up-outline'} size={16} color={liked ? '#F4A227' : C.c35} />
           </Animated.View>
           <Text style={[s.actionTxt, liked && { color: '#F4A227' }]}>
-            {likes > 0 ? likes.toLocaleString() : ''} {liked ? 'Liked' : 'Like'}
+            {likes > 0 ? `${likes.toLocaleString()} ` : ''}Helpful
           </Text>
         </TouchableOpacity>
 
@@ -260,7 +256,7 @@ function LocationSheet({ visible, current, currentRadius, onSelect, onClose, C, 
 
         {/* City dropdown */}
         {showList && (
-          <View style={s.cityDropdown}>
+          <View style={s.sheetCityList}>
             <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 180 }} keyboardShouldPersistTaps="handled">
               {filtered.map(city => {
                 const active = city.name === displayCity.name;
@@ -355,12 +351,69 @@ function LocationSheet({ visible, current, currentRadius, onSelect, onClose, C, 
   );
 }
 
+// ── Combined listing card ─────────────────────────────────────────────────────
+const TYPE_META = {
+  job:     { label: 'Job',     icon: 'briefcase-outline',  color: '#3EC878' },
+  housing: { label: 'Housing', icon: 'home-outline',       color: '#F5A623' },
+  market:  { label: 'For Sale',icon: 'storefront-outline', color: '#00B4D8' },
+};
+
+function ListingCard({ item, onPress, C, s }) {
+  const meta = TYPE_META[item._type] || TYPE_META.market;
+  return (
+    <TouchableOpacity style={s.previewCard} onPress={onPress} activeOpacity={0.88}>
+      {/* Image */}
+      {item.image_url ? (
+        <Image source={{ uri: item.image_url }} style={s.previewImg} resizeMode="cover" />
+      ) : (
+        <View style={[s.previewImgEmpty, { backgroundColor: meta.color + '15' }]}>
+          <Ionicons name={meta.icon} size={24} color={meta.color + 'BB'} />
+        </View>
+      )}
+      {/* Type badge */}
+      <View style={[s.typeBadge, { backgroundColor: meta.color }]}>
+        <Text style={s.typeBadgeTxt}>{meta.label}</Text>
+      </View>
+      {/* Hot badge */}
+      {item.hot && (
+        <View style={s.previewHotBadge}>
+          <Text style={s.previewHotTxt}>🔥</Text>
+        </View>
+      )}
+      <View style={s.previewBody}>
+        <Text style={s.previewTitle} numberOfLines={2}>{item.title}</Text>
+        {item.sub ? (
+          <View style={[s.previewSubPill, { backgroundColor: meta.color + '18' }]}>
+            <Text style={[s.previewSubTxt, { color: meta.color }]} numberOfLines={1}>{item.sub}</Text>
+          </View>
+        ) : null}
+        {item.location ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 5 }}>
+            <Ionicons name="location-outline" size={10} color={C.c35} />
+            <Text style={s.previewLoc} numberOfLines={1}>{item.location}</Text>
+          </View>
+        ) : null}
+      </View>
+    </TouchableOpacity>
+  );
+}
+
 export default function HomeScreen({ navigation }) {
   const { colors: C } = useTheme();
   const { api, user: authUser, updateProfile } = useAuthStore();
   const gpsLat = useLocationStore(s => s.latitude);
   const gpsLng = useLocationStore(s => s.longitude);
   const s = useMemo(() => getStyles(C), [C]);
+
+  const jobs           = useJobsStore(st => st.jobs);
+  const jobsLoading    = useJobsStore(st => st.loading);
+  const fetchJobs      = useJobsStore(st => st.fetchJobs);
+  const listings       = useHousingStore(st => st.listings);
+  const housingLoading = useHousingStore(st => st.loading);
+  const fetchHousing   = useHousingStore(st => st.fetchListings);
+
+  const [marketPreview,      setMarketPreview]      = useState([]);
+  const [marketLoading,      setMarketLoading]      = useState(true);
 
   // Location state — seeded from authStore profile, locally mutable
   const [currentCity, setCurrentCity] = useState('');
@@ -372,12 +425,41 @@ export default function HomeScreen({ navigation }) {
     if (profileCity && !currentCity) setCurrentCity(profileCity);
   }, [authUser?.profile?.lives_in]);
 
-  const [locationSheetOpen, setLocationSheetOpen] = useState(false);
-  const [activeScope,       setActiveScope]       = useState('all');
+  const [locationSheetOpen,  setLocationSheetOpen]  = useState(false);
+  const [cityDropdownOpen,   setCityDropdownOpen]   = useState(false);
+  const [activeScope,        setActiveScope]        = useState('all');
   const [posts,             setPosts]             = useState([]);
   const [loading,           setLoading]           = useState(true);
   const [refreshing,        setRefreshing]        = useState(false);
   const [fetchError,        setFetchError]        = useState('');
+
+  // Category bar hide-on-scroll
+  const CAT_BAR_H    = 80;
+  const catBarHeight = useRef(new Animated.Value(CAT_BAR_H)).current;
+  const catBarOpacity = useRef(new Animated.Value(1)).current;
+  const lastScrollY  = useRef(0);
+  const catVisible   = useRef(true);
+
+  const handleMainScroll = useCallback((e) => {
+    const y = e.nativeEvent.contentOffset.y;
+    const goingDown = y > lastScrollY.current + 4;
+    const goingUp   = y < lastScrollY.current - 4;
+    lastScrollY.current = y;
+
+    if (goingDown && catVisible.current) {
+      catVisible.current = false;
+      Animated.parallel([
+        Animated.timing(catBarHeight,  { toValue: 0, duration: 200, useNativeDriver: false }),
+        Animated.timing(catBarOpacity, { toValue: 0, duration: 150, useNativeDriver: false }),
+      ]).start();
+    } else if (goingUp && !catVisible.current) {
+      catVisible.current = true;
+      Animated.parallel([
+        Animated.timing(catBarHeight,  { toValue: CAT_BAR_H, duration: 220, useNativeDriver: false }),
+        Animated.timing(catBarOpacity, { toValue: 1,          duration: 200, useNativeDriver: false }),
+      ]).start();
+    }
+  }, [catBarHeight, catBarOpacity]);
 
   // Derived display values — single source of truth: authStore
   const homeCountry = authUser?.profile?.home_country || '';
@@ -385,12 +467,29 @@ export default function HomeScreen({ navigation }) {
   const cityShort   = currentCity.split(',')[0] || 'Set location';
   const displayName = authUser?.name || '';
 
-  // Build the fetch URL — prefer real GPS coords for distance sorting;
-  // fall back to city text match; flag scope adds country filter on top
+  // Interleave jobs / housing / marketplace into one combined list
+  const combinedListings = useMemo(() => {
+    const j = jobs.slice(0, 5).map(i => ({ ...i, _type: 'job',     sub: i.company,                       location: i.location }));
+    const h = listings.slice(0, 5).map(i => ({ ...i, _type: 'housing', sub: i.price,                         location: i.location }));
+    const m = marketPreview.slice(0, 5).map(i => ({ ...i, id: String(i.id), _type: 'market',  sub: i.price ? `$${i.price}` : null, location: i.location, image_url: i.image_url || null }));
+    const result = [];
+    const max = Math.max(j.length, h.length, m.length);
+    for (let i = 0; i < max; i++) {
+      if (j[i]) result.push(j[i]);
+      if (h[i]) result.push(h[i]);
+      if (m[i]) result.push(m[i]);
+    }
+    return result;
+  }, [jobs, listings, marketPreview]);
+
+  // Build the fetch URL — city chip selection → known lat/lng → precise ascending distance sort
   const buildUrl = useCallback((scope) => {
     const parts = [];
     if (scope === 'country' && homeCountry) parts.push(`country=${encodeURIComponent(homeCountry)}`);
-    if (gpsLat != null && gpsLng != null) {
+    const knownCity = SUGGESTED_CITIES.find(c => c.name === currentCity);
+    if (knownCity) {
+      parts.push(`lat=${knownCity.lat}&lng=${knownCity.lng}`);
+    } else if (gpsLat != null && gpsLng != null) {
       parts.push(`lat=${gpsLat}&lng=${gpsLng}`);
     } else if (currentCity) {
       parts.push(`near_city=${encodeURIComponent(currentCity)}`);
@@ -417,10 +516,24 @@ export default function HomeScreen({ navigation }) {
     fetchPosts(activeScope);
   }, [activeScope, fetchPosts]);
 
+  // Fetch preview data once on mount
+  useEffect(() => {
+    fetchJobs();
+    fetchHousing();
+    api('/marketplace/').then(data => {
+      setMarketPreview(Array.isArray(data) ? data : (data.results || []));
+    }).catch(() => {}).finally(() => setMarketLoading(false));
+  }, []);
+
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    fetchPosts(activeScope, true);
-  }, [activeScope, fetchPosts]);
+    Promise.all([
+      fetchPosts(activeScope, true),
+      fetchJobs(),
+      fetchHousing(),
+      api('/marketplace/').then(d => setMarketPreview(Array.isArray(d) ? d : (d.results || []))).catch(() => {}),
+    ]).finally(() => setRefreshing(false));
+  }, [activeScope, fetchPosts, fetchJobs, fetchHousing, api]);
 
   // Update city: local state immediately (fast UI), persist to backend silently
   function handleLocationSelect(city, r) {
@@ -440,93 +553,248 @@ export default function HomeScreen({ navigation }) {
         C={C} s={s}
       />
 
-      {/* ── HEADER ─────────────────────────────────────────────── */}
-      <View style={s.header}>
-        <View style={s.av}>
-          <UserAvatar
-            uri={authUser?.profile?.avatar_url}
-            emoji={authUser?.profile?.avatar_emoji}
-            name={authUser?.name}
-            size={36}
-            radius={12}
-            bg={C.vividD}
-          />
-          <View style={s.avOnline} />
-        </View>
-        <TouchableOpacity onPress={() => setLocationSheetOpen(true)} activeOpacity={0.7} style={{ marginRight: 8 }}>
-          <Text style={s.uname}>{displayName}</Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 1 }}>
-            <Text style={s.locationChipTxt}>📍 {cityShort} · {radius} mi</Text>
-            <Text style={s.locationChevron}>▾</Text>
+      {/* ── HEADER + CITY DROPDOWN ─────────────────────────────── */}
+      <View style={{ zIndex: 100 }}>
+        <View style={s.header}>
+          <View style={s.av}>
+            <UserAvatar
+              uri={authUser?.profile?.avatar_url}
+              emoji={authUser?.profile?.avatar_emoji}
+              name={authUser?.name}
+              size={36}
+              radius={12}
+              bg={C.vividD}
+            />
+            <View style={s.avOnline} />
           </View>
-        </TouchableOpacity>
 
-        <View style={s.headerRight}>
+          {/* City selector — tapping opens dropdown */}
           <TouchableOpacity
-            style={s.iconBtn}
-            onPress={() => navigation.navigate('Search')}
+            style={{ flex: 1 }}
+            onPress={() => setCityDropdownOpen(v => !v)}
             activeOpacity={0.75}
           >
-            <Ionicons name="search-outline" size={20} color={C.c35} />
+            <Text style={s.uname} numberOfLines={1}>
+              {displayName ? `Hi, ${displayName.split(' ')[0]}` : 'Zabroad'}
+            </Text>
+            <View style={s.cityPickerRow}>
+              <Ionicons name="location" size={11} color={C.vivid} />
+              <Text style={s.cityPickerTxt} numberOfLines={1}>
+                {cityShort !== 'Set location' ? cityShort : 'Pick your city'}
+              </Text>
+              <Ionicons
+                name={cityDropdownOpen ? 'chevron-up' : 'chevron-down'}
+                size={11}
+                color={C.c35}
+              />
+            </View>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={[s.iconBtn, activeScope === 'country' && s.iconBtnActive]}
-            onPress={() => setActiveScope(s => s === 'country' ? 'all' : 'country')}
-            activeOpacity={0.75}
-          >
-            <Text style={s.iconBtnEmoji}>{countryFlag}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[s.iconBtn, activeScope === 'all' && s.iconBtnActive]}
-            onPress={() => setActiveScope('all')}
-            activeOpacity={0.75}
-          >
-            <Ionicons name="globe-outline" size={20} color={activeScope === 'all' ? C.vivid : C.c35} />
-          </TouchableOpacity>
+
+          <View style={s.headerRight}>
+            <TouchableOpacity style={s.iconBtn} onPress={() => navigation.navigate('Search')} activeOpacity={0.75}>
+              <Ionicons name="search-outline" size={20} color={C.c35} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[s.iconBtn, activeScope === 'country' && s.iconBtnActive]}
+              onPress={() => setActiveScope(sc => sc === 'country' ? 'all' : 'country')}
+              activeOpacity={0.75}
+            >
+              <Text style={s.iconBtnEmoji}>{countryFlag}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[s.iconBtn, activeScope === 'all' && s.iconBtnActive]}
+              onPress={() => setActiveScope('all')}
+              activeOpacity={0.75}
+            >
+              <Ionicons name="globe-outline" size={20} color={activeScope === 'all' ? C.vivid : C.c35} />
+            </TouchableOpacity>
+          </View>
         </View>
+
+        {/* Inline dropdown */}
+        {cityDropdownOpen && (
+          <>
+            {/* Tap-outside overlay */}
+            <TouchableOpacity
+              style={s.dropdownOverlay}
+              activeOpacity={1}
+              onPress={() => setCityDropdownOpen(false)}
+            />
+            <View style={[s.cityDropdown, { backgroundColor: C.nav, borderColor: C.border }]}>
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                style={{ maxHeight: 300 }}
+              >
+                {/* Near Me row */}
+                {gpsLat != null && (
+                  <TouchableOpacity
+                    style={[s.cityRow, { borderBottomColor: C.border, borderBottomWidth: StyleSheet.hairlineWidth }]}
+                    activeOpacity={0.75}
+                    onPress={() => {
+                      const { city: gpsCity } = useLocationStore.getState();
+                      setCurrentCity(gpsCity || '');
+                      updateProfile({ lives_in: gpsCity || '' }).catch(() => {});
+                      setCityDropdownOpen(false);
+                    }}
+                  >
+                    <View style={[s.cityRowIcon, { backgroundColor: C.vividD }]}>
+                      <Ionicons name="navigate" size={14} color={C.vivid} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[s.cityRowName, { color: C.cream }]}>Near Me</Text>
+                      <Text style={[s.cityRowSub, { color: C.c35 }]}>Use your current GPS location</Text>
+                    </View>
+                    {!currentCity && <Ionicons name="checkmark-circle" size={16} color={C.vivid} />}
+                  </TouchableOpacity>
+                )}
+
+                {SUGGESTED_CITIES.map((city, idx) => {
+                  const active = city.name === currentCity;
+                  const isLast = idx === SUGGESTED_CITIES.length - 1;
+                  return (
+                    <TouchableOpacity
+                      key={city.name}
+                      style={[s.cityRow, !isLast && { borderBottomColor: C.border, borderBottomWidth: StyleSheet.hairlineWidth }]}
+                      activeOpacity={0.75}
+                      onPress={() => {
+                        setCurrentCity(city.name);
+                        updateProfile({ lives_in: city.name }).catch(() => {});
+                        setCityDropdownOpen(false);
+                      }}
+                    >
+                      <View style={[s.cityRowIcon, { backgroundColor: active ? C.vividD : C.card2 }]}>
+                        <Ionicons name="location-outline" size={14} color={active ? C.vivid : C.c35} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[s.cityRowName, { color: active ? C.vivid : C.cream }]}>
+                          {city.name.split(',')[0]}
+                        </Text>
+                        <Text style={[s.cityRowSub, { color: C.c35 }]}>
+                          {city.name.split(', ')[1] || ''}
+                        </Text>
+                      </View>
+                      {active && <Ionicons name="checkmark-circle" size={16} color={C.vivid} />}
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          </>
+        )}
       </View>
+
+      {/* ── CATEGORY BAR ───────────────────────────────────────── */}
+      <Animated.View style={[s.catBarWrap, { height: catBarHeight, opacity: catBarOpacity, borderBottomColor: C.border }]}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={s.catBar}
+          contentContainerStyle={s.catBarContent}
+        >
+          {[
+            { key: 'Jobs',        label: 'Jobs',        icon: 'briefcase-outline',        color: '#3EC878' },
+            { key: 'Housing',     label: 'Housing',     icon: 'home-outline',             color: '#F5A623' },
+            { key: 'Marketplace', label: 'Marketplace', icon: 'storefront-outline',       color: '#00B4D8' },
+            { key: 'Attorney',    label: 'Attorneys',   icon: 'shield-checkmark-outline', color: '#9B72EF' },
+            { key: 'Healthcare',  label: 'Healthcare',  icon: 'medkit-outline',           color: '#F4627D' },
+            { key: 'Events',      label: 'Events',      icon: 'calendar-outline',         color: '#F4A227' },
+          ].map(cat => (
+            <TouchableOpacity
+              key={cat.key}
+              style={s.catItem}
+              onPress={() => navigation.navigate(cat.key)}
+              activeOpacity={0.75}
+            >
+              <View style={[s.catIcon, { backgroundColor: cat.color + '18' }]}>
+                <Ionicons name={cat.icon} size={18} color={cat.color} />
+              </View>
+              <Text style={[s.catLabel, { color: C.c35 }]}>{cat.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </Animated.View>
 
       <ScrollView
         style={s.scroll}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 28 }}
+        onScroll={handleMainScroll}
+        scrollEventThrottle={16}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.vivid} />}
       >
 
-        {/* ── NEARBY RESOURCES ────────────────────────────────────── */}
-        <View style={s.sectionHeader}>
-          <Text style={s.sectionTitle}>
+        {/* ── GREETING ────────────────────────────────────────────── */}
+        <View style={s.greeting}>
+          <Text style={s.greetingLine}>
             {activeScope === 'country'
-              ? `${homeCountry} Community Near You`
-              : '🌍 All Communities Near You'}
+              ? `${countryFlag} ${homeCountry} community`
+              : 'Welcome back' + (displayName ? `, ${displayName.split(' ')[0]}` : '')}
+          </Text>
+          <Text style={s.greetingSubLine}>
+            {cityShort !== 'Set location'
+              ? `Discover what's near ${cityShort}`
+              : 'Set your location to see nearby listings'}
           </Text>
         </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 14, gap: 10, paddingBottom: 4 }}>
-          {NEARBY_RESOURCES.map(r => (
-            <TouchableOpacity
-              key={r.id}
-              style={[s.resourceCard, { borderColor: r.color + '44' }]}
-              onPress={() => navigation.navigate(r.route)}
-              activeOpacity={0.85}
-            >
-              <View style={[s.resourceIconWrap, { backgroundColor: r.bg }]}>
-                <Ionicons name={r.icon} size={20} color={r.color} />
-              </View>
-              <Text style={s.resourceTitle} numberOfLines={1}>{r.category}</Text>
-              <Text style={[s.resourceBadgeTxt, { color: r.color }]}>{r.count} near you</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
 
-        {/* ── FEED ───────────────────────────────────────────────── */}
-        {/* <View style={[s.sectionHeader, { marginTop: 20 }]}>
-          <Text style={s.sectionTitle}>
-            {activeScope === 'country' ? `${countryFlag} ${homeCountry} posts` : '🌍 All posts'}
-          </Text>
-          {!loading && posts.length > 0 && (
-            <Text style={s.sectionSub}>{posts.length} post{posts.length !== 1 ? 's' : ''}</Text>
+        {/* ── LATEST COMMUNITY LISTINGS ──────────────────────────── */}
+        <View style={s.previewSection}>
+          <View style={s.previewHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View style={[s.previewHeaderDot, { backgroundColor: C.vivid }]} />
+              <Text style={s.previewHeaderTitle}>Latest Community Listings</Text>
+            </View>
+            <View style={{ flexDirection: 'row', gap: 6 }}>
+              {[
+                { label: 'Jobs',    route: 'Jobs',        color: '#3EC878' },
+                { label: 'Housing', route: 'Housing',     color: '#F5A623' },
+                { label: 'Market',  route: 'Marketplace', color: '#00B4D8' },
+              ].map(t => (
+                <TouchableOpacity key={t.route} onPress={() => navigation.navigate(t.route)} activeOpacity={0.7} style={[s.typeLink, { backgroundColor: t.color + '18' }]}>
+                  <Text style={[s.typeLinkTxt, { color: t.color }]}>{t.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          {(jobsLoading && housingLoading && marketLoading && combinedListings.length === 0) ? (
+            <View style={s.previewLoadingRow}>
+              <ActivityIndicator size="small" color={C.vivid} />
+            </View>
+          ) : combinedListings.length === 0 ? (
+            <View style={s.previewLoadingRow}>
+              <Text style={s.previewEmpty}>No listings yet — be the first to post!</Text>
+            </View>
+          ) : (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 12, paddingBottom: 2 }}>
+              {combinedListings.map(item => (
+                <ListingCard
+                  key={`${item._type}-${item.id}`}
+                  item={item}
+                  C={C} s={s}
+                  onPress={() => {
+                    if (item._type === 'job')     navigation.navigate('Jobs');
+                    if (item._type === 'housing') navigation.navigate('HousingDetail', { listing: item });
+                    if (item._type === 'market')  navigation.navigate('MarketplaceDetail', { item });
+                  }}
+                />
+              ))}
+            </ScrollView>
           )}
-        </View> */}
+        </View>
+
+        {/* ── COMMUNITY FEED HEADER ──────────────────────────────── */}
+        <View style={s.feedDivider}>
+          <View style={s.feedDividerLine} />
+          <View style={s.feedDividerPill}>
+            <Ionicons name="people-outline" size={12} color={C.c35} />
+            <Text style={s.feedDividerTxt}>
+              {activeScope === 'country' ? `${homeCountry} Community Feed` : 'Community Feed'}
+            </Text>
+          </View>
+          <View style={s.feedDividerLine} />
+        </View>
 
         <View style={s.feedList}>
           {/* Loading */}
@@ -583,19 +851,44 @@ const getStyles = (C) => StyleSheet.create({
   av:             { width: 36, height: 36, borderRadius: 12, backgroundColor: C.vivid, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: 'rgba(232,54,74,0.3)' },
   avOnline:       { position: 'absolute', bottom: -2, right: -2, width: 9, height: 9, backgroundColor: C.green, borderRadius: 5, borderWidth: 2, borderColor: C.bg },
   uname:          { fontSize: 13, fontWeight: '700', color: C.cream },
-  locationChipTxt:{ fontSize: 10, color: C.c35 },
-  locationChevron:{ fontSize: 9, color: C.c35 },
 
-  // Section headers
-  sectionHeader:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, marginTop: 16, marginBottom: 10 },
+  // City picker in header
+  cityPickerRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 1 },
+  cityPickerTxt: { fontSize: 11, fontWeight: '600', color: C.vivid, flex: 1 },
+
+  // Dropdown overlay (tap-outside dismiss)
+  dropdownOverlay: { position: 'absolute', top: 0, left: -1000, right: -1000, bottom: -2000, zIndex: 49 },
+
+  // Inline city dropdown panel
+  cityDropdown: {
+    position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50,
+    backgroundColor: C.nav, borderWidth: 1, borderTopWidth: 0, borderColor: C.border,
+    borderBottomLeftRadius: 18, borderBottomRightRadius: 18, overflow: 'hidden',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 12,
+  },
+
+  // Each row inside the dropdown
+  cityRow:     { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 13 },
+  cityRowIcon: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  cityRowName: { fontSize: 14, fontWeight: '700' },
+  cityRowSub:  { fontSize: 11, marginTop: 1 },
+
+  // Category bar
+  catBarWrap:    { overflow: 'hidden', borderBottomWidth: 1 },
+  catBar:        { flex: 1 },
+  catBarContent: { paddingHorizontal: 14, paddingVertical: 10, gap: 6, flexDirection: 'row' },
+  catItem:       { alignItems: 'center', gap: 5, width: 66 },
+  catIcon:       { width: 46, height: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  catLabel:      { fontSize: 10, fontWeight: '600', textAlign: 'center' },
+
+  // Greeting
+  greeting:        { paddingHorizontal: 16, paddingTop: 18, paddingBottom: 6 },
+  greetingLine:    { fontSize: 20, fontWeight: '800', color: C.cream, letterSpacing: -0.4 },
+  greetingSubLine: { fontSize: 13, color: C.c35, marginTop: 3 },
+
+  // Section labels (kept for reference)
   sectionTitle:    { fontSize: 13, fontWeight: '800', color: C.cream },
   sectionSub:      { fontSize: 10, color: C.c35 },
-
-  // Nearby resources
-  resourceCard:      { backgroundColor: C.card, borderWidth: 1, borderRadius: 16, padding: 12, width: 86, gap: 6, alignItems: 'center' },
-  resourceIconWrap:  { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  resourceBadgeTxt:  { fontSize: 9, fontWeight: '700', textAlign: 'center' },
-  resourceTitle:     { fontSize: 11, fontWeight: '800', color: C.cream, textAlign: 'center' },
 
   iconBtn:       { width: 36, height: 36, borderRadius: 12, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, alignItems: 'center', justifyContent: 'center' },
   iconBtnActive: { backgroundColor: C.vividD, borderColor: C.vivid + '66' },
@@ -640,6 +933,7 @@ const getStyles = (C) => StyleSheet.create({
   sheetCity:        { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 11, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: C.border },
   sheetCityActive:  { backgroundColor: C.vividD + '55', marginHorizontal: -4, paddingHorizontal: 8, borderRadius: 10, borderBottomWidth: 0 },
   sheetCityTxt:     { fontSize: 14, color: C.c60, flex: 1 },
+  sheetCityList:    { backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 14, marginBottom: 10, overflow: 'hidden' },
 
   // Map
   mapWrap:          { borderRadius: 16, overflow: 'hidden', height: 200, marginBottom: 12, position: 'relative' },
@@ -651,7 +945,6 @@ const getStyles = (C) => StyleSheet.create({
   zoomBtn:          { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   zoomTxt:          { fontSize: 22, fontWeight: '300', color: '#fff', lineHeight: 26 },
   zoomDivider:      { height: 1, backgroundColor: 'rgba(255,255,255,0.2)' },
-  cityDropdown:     { backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 14, marginBottom: 10, overflow: 'hidden' },
 
   // Radius
   radiusPills:      { flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginBottom: 12 },
@@ -661,4 +954,35 @@ const getStyles = (C) => StyleSheet.create({
   radiusPillTxtActive: { color: C.vivid, fontWeight: '700' },
   radiusConfirm:    { backgroundColor: C.vivid, borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
   radiusConfirmTxt: { fontSize: 14, fontWeight: '800', color: '#fff' },
+
+  // Preview sections
+  previewSection:     { marginTop: 24 },
+  previewHeader:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, marginBottom: 12 },
+  previewHeaderDot:   { width: 4, height: 16, borderRadius: 2 },
+  previewHeaderTitle: { fontSize: 15, fontWeight: '800', color: C.cream, letterSpacing: -0.2 },
+  seeAllBtn:          { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  seeAllTxt:          { fontSize: 12, fontWeight: '700' },
+  previewLoadingRow:  { height: 130, alignItems: 'center', justifyContent: 'center', gap: 8 },
+  previewEmpty:       { fontSize: 12, color: C.c35 },
+
+  previewCard:     { width: 162, backgroundColor: C.card, borderRadius: 16, borderWidth: 1, borderColor: C.border, overflow: 'hidden' },
+  previewImg:      { width: '100%', height: 90, backgroundColor: C.card2 },
+  previewImgEmpty: { width: '100%', height: 90, alignItems: 'center', justifyContent: 'center' },
+  typeBadge:    { position: 'absolute', top: 8, left: 8, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 3 },
+  typeBadgeTxt: { fontSize: 9, fontWeight: '800', color: '#fff', letterSpacing: 0.3 },
+  previewHotBadge: { position: 'absolute', top: 8, right: 8, backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 50, paddingHorizontal: 6, paddingVertical: 2 },
+  previewHotTxt:   { fontSize: 9 },
+  typeLink:    { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 50 },
+  typeLinkTxt: { fontSize: 10, fontWeight: '700' },
+  previewBody:     { padding: 11 },
+  previewTitle:    { fontSize: 12, fontWeight: '700', color: C.cream, lineHeight: 17 },
+  previewSubPill:  { alignSelf: 'flex-start', marginTop: 5, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 },
+  previewSubTxt:   { fontSize: 10, fontWeight: '700' },
+  previewLoc:      { fontSize: 10, color: C.c35, flex: 1 },
+
+  // Community feed divider
+  feedDivider:     { flexDirection: 'row', alignItems: 'center', marginHorizontal: 16, marginTop: 28, marginBottom: 4, gap: 10 },
+  feedDividerLine: { flex: 1, height: 1, backgroundColor: C.border },
+  feedDividerPill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 50, backgroundColor: C.card, borderWidth: 1, borderColor: C.border },
+  feedDividerTxt:  { fontSize: 10, fontWeight: '700', color: C.c35, letterSpacing: 0.5 },
 });

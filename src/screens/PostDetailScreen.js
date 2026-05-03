@@ -309,10 +309,10 @@ export default function PostDetailScreen({ navigation, route }) {
             <View style={s.actionBar}>
               <TouchableOpacity onPress={onLikePost} activeOpacity={0.75} style={s.actionBtn}>
                 <Animated.View style={{ transform: [{ scale: heartScale }] }}>
-                  <Ionicons name={liked ? 'heart' : 'heart-outline'} size={16} color={liked ? '#F4A227' : C.c35} />
+                  <Ionicons name={liked ? 'thumbs-up' : 'thumbs-up-outline'} size={16} color={liked ? '#F4A227' : C.c35} />
                 </Animated.View>
                 <Text style={[s.actionTxt, liked && { color: '#F4A227' }]}>
-                  {likeCount > 0 ? `${likeCount.toLocaleString()} ` : ''}{liked ? 'Liked' : 'Like'}
+                  {likeCount > 0 ? `${likeCount.toLocaleString()} ` : ''}Helpful
                 </Text>
               </TouchableOpacity>
 

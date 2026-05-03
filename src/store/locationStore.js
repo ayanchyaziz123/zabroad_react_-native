@@ -19,9 +19,12 @@ export const useLocationStore = create((set, get) => ({
         return;
       }
 
-      const loc = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
+      const loc = await Promise.race([
+        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('GPS timeout')), 10_000)
+        ),
+      ]);
       const { latitude, longitude } = loc.coords;
 
       const [place] = await Location.reverseGeocodeAsync({ latitude, longitude });

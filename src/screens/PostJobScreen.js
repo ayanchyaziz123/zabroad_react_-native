@@ -2,11 +2,12 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
   StyleSheet, TextInput, KeyboardAvoidingView,
-  Platform, Animated, ActivityIndicator, Modal,
+  Platform, Animated, ActivityIndicator, Modal, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../theme/ThemeContext';
 import { G_PRIMARY, G_SUCCESS, BRAND } from '../theme/colors';
 import { useJobsStore } from '../store/jobsStore';
@@ -62,6 +63,7 @@ export default function PostJobScreen({ navigation }) {
   const locLat             = useLocationStore(s => s.latitude);
   const locLng             = useLocationStore(s => s.longitude);
 
+  const [image,       setImage]       = useState(null);
   const [paying,      setPaying]      = useState(false);
   const [showPayment, setShowPayment] = useState(false);
   const [cardNumber,  setCardNumber]  = useState('');
@@ -84,6 +86,18 @@ export default function PostJobScreen({ navigation }) {
     if (locCity && !location) setLocation(locCity);
   }, [locCity]);
 
+  async function pickImage() {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) { alert('Please allow photo access to add an image.'); return; }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [16, 9],
+      quality: 0.8,
+    });
+    if (!result.canceled) setImage(result.assets[0]);
+  }
+
   const canPost = title.trim().length > 2 && company.trim().length > 1 && location.trim().length > 1 && desc.trim().length >= 20;
 
   async function postJob() {
@@ -95,6 +109,7 @@ export default function PostJobScreen({ navigation }) {
       longitude:   locLng,
       desc,
       plan,
+      image,
       homeCountry: authUser?.profile?.home_country || '',
       countryFlag: authUser?.profile?.country_flag || '🌍',
       postedFrom:  authUser?.profile?.lives_in     || '',
@@ -253,6 +268,26 @@ export default function PostJobScreen({ navigation }) {
             <Text style={[s.charCount, { color: desc.length >= 20 ? C.green : C.c35 }]}>
               {desc.length} chars {desc.length < 20 && desc.length > 0 ? `· ${20 - desc.length} more needed` : desc.length >= 20 ? '· Looks good' : ''}
             </Text>
+          </View>
+
+          {/* Photo */}
+          <View style={s.fieldGroup}>
+            <Text style={s.fieldLabel}>PHOTO (OPTIONAL)</Text>
+            <TouchableOpacity style={s.imagePicker} onPress={pickImage} activeOpacity={0.8}>
+              {image ? (
+                <>
+                  <Image source={{ uri: image.uri }} style={s.imagePreview} resizeMode="cover" />
+                  <TouchableOpacity style={s.imageRemove} onPress={() => setImage(null)} hitSlop={8}>
+                    <Ionicons name="close-circle" size={22} color="white" />
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <View style={s.imageEmpty}>
+                  <Ionicons name="image-outline" size={28} color={C.c35} />
+                  <Text style={s.imageEmptyTxt}>Tap to add a photo</Text>
+                </View>
+              )}
+            </TouchableOpacity>
           </View>
 
           {/* Plans */}
@@ -508,6 +543,12 @@ const getStyles = (C) => StyleSheet.create({
   payBtnTxt:     { fontSize: 15, fontWeight: '800', color: 'white' },
   secureRow:     { flexDirection: 'row', alignItems: 'center', gap: 5, justifyContent: 'center', paddingBottom: 8 },
   secureTxt:     { fontSize: 11, color: C.c35, fontWeight: '500' },
+
+  imagePicker:   { borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: C.border, backgroundColor: C.card, height: 180 },
+  imagePreview:  { width: '100%', height: '100%' },
+  imageEmpty:    { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8 },
+  imageEmptyTxt: { fontSize: 13, color: C.c35, fontWeight: '600' },
+  imageRemove:   { position: 'absolute', top: 8, right: 8 },
 
   // Success
   successWrap:      { flex: 1, padding: 24, justifyContent: 'center' },

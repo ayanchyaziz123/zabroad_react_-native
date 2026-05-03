@@ -16,17 +16,6 @@ import { useLocationStore } from '../store/locationStore';
 const ACCENT     = '#00B4D8';
 const ACCENT_DIM = '#00B4D81A';
 
-const CATEGORIES = [
-  { key: 'electronics', label: 'Electronics',  icon: 'phone-portrait-outline' },
-  { key: 'furniture',   label: 'Furniture',    icon: 'bed-outline' },
-  { key: 'clothing',    label: 'Clothing',     icon: 'shirt-outline' },
-  { key: 'vehicles',    label: 'Vehicles',     icon: 'car-outline' },
-  { key: 'books',       label: 'Books',        icon: 'book-outline' },
-  { key: 'services',    label: 'Services',     icon: 'construct-outline' },
-  { key: 'food',        label: 'Food',         icon: 'fast-food-outline' },
-  { key: 'other',       label: 'Other',        icon: 'ellipsis-horizontal-circle-outline' },
-];
-
 const PLANS = [
   {
     key: 'free', label: 'Basic', price: 'Free', color: null,
@@ -54,7 +43,6 @@ export default function PostMarketplaceScreen({ navigation }) {
   const [title,     setTitle]     = useState('');
   const [desc,      setDesc]      = useState('');
   const [price,     setPrice]     = useState('');
-  const [category,  setCategory]  = useState('other');
   const [location,  setLocation]  = useState('');
   const [image,     setImage]     = useState(null);
   const [plan,      setPlan]      = useState('free');
@@ -95,7 +83,6 @@ export default function PostMarketplaceScreen({ navigation }) {
       fd.append('title',        title.trim());
       fd.append('description',  desc.trim());
       fd.append('price',        price.trim());
-      fd.append('category',     category);
       fd.append('location',     location.trim());
       fd.append('plan',         plan);
       fd.append('home_country', user?.profile?.home_country || '');
@@ -146,7 +133,7 @@ export default function PostMarketplaceScreen({ navigation }) {
                 <Text style={s.doneBtnTxt}>View Marketplace</Text>
               </LinearGradient>
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => { setSubmitted(false); setTitle(''); setDesc(''); setPrice(''); setCategory('other'); setImage(null); setPlan('free'); }} style={{ marginTop: 12 }}>
+            <TouchableOpacity onPress={() => { setSubmitted(false); setTitle(''); setDesc(''); setPrice(''); setImage(null); setPlan('free'); }} style={{ marginTop: 12 }}>
               <Text style={[s.postAnotherTxt, { color: C.c35 }]}>Post another listing</Text>
             </TouchableOpacity>
           </View>
@@ -185,27 +172,6 @@ export default function PostMarketplaceScreen({ navigation }) {
                 maxLength={100}
               />
             </View>
-          </View>
-
-          {/* Category */}
-          <View style={s.fieldGroup}>
-            <Text style={s.fieldLabel}>CATEGORY</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.catScroll}>
-              {CATEGORIES.map(cat => {
-                const active = cat.key === category;
-                return (
-                  <TouchableOpacity
-                    key={cat.key}
-                    style={[s.catChip, { backgroundColor: C.card, borderColor: C.border }, active && { backgroundColor: ACCENT_DIM, borderColor: ACCENT + '66' }]}
-                    onPress={() => setCategory(cat.key)}
-                    activeOpacity={0.8}
-                  >
-                    <Ionicons name={cat.icon} size={14} color={active ? ACCENT : C.c35} />
-                    <Text style={[s.catTxt, { color: C.c35 }, active && { color: ACCENT }]}>{cat.label}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
           </View>
 
           {/* Price */}
@@ -371,10 +337,6 @@ const getStyles = (C) => StyleSheet.create({
   textAreaRow: { borderWidth: 1, borderRadius: 14, padding: 14 },
   textArea:    { fontSize: 14, lineHeight: 22, minHeight: 100 },
   charCount:   { fontSize: 11, textAlign: 'right', marginTop: 6 },
-
-  catScroll: { gap: 8, paddingBottom: 2 },
-  catChip:   { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 50, borderWidth: 1 },
-  catTxt:    { fontSize: 12, fontWeight: '600' },
 
   imgPicker:       { height: 140, borderWidth: 1, borderRadius: 14, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', gap: 8, overflow: 'hidden' },
   imgPickerFilled: { borderStyle: 'solid', padding: 0 },
