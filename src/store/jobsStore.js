@@ -27,7 +27,10 @@ function normalize(j) {
     countryFlag: j.country_flag || '',
     hot:         j.is_hot,
     image_url:   j.image_url || null,
+    category:    j.category  || 'other',
     posted:      timeAgo(j.created_at),
+    lat:         j.latitude  ?? null,
+    lng:         j.longitude ?? null,
   };
 }
 
@@ -36,7 +39,7 @@ export const useJobsStore = create((set, get) => ({
   loading: false,
   error:   null,
 
-  fetchJobs: async ({ scope = 'all', search = '', homeCountry = '' } = {}) => {
+  fetchJobs: async ({ scope = 'all', search = '', homeCountry = '', lat = null, lng = null, category = '' } = {}) => {
     set({ loading: true, error: null });
     try {
       const api    = useAuthStore.getState().api;
@@ -45,11 +48,14 @@ export const useJobsStore = create((set, get) => ({
 
       if (scope === 'community' && homeCountry) {
         params.append('community', homeCountry);
-      } else if (scope === 'nearby') {
-        if (loc.latitude  != null) params.append('lat', loc.latitude);
-        if (loc.longitude != null) params.append('lng', loc.longitude);
       }
+      // City-selected lat/lng takes priority over GPS
+      const useLat = lat ?? loc.latitude;
+      const useLng = lng ?? loc.longitude;
+      if (useLat != null) params.append('lat', useLat);
+      if (useLng != null) params.append('lng', useLng);
       if (search.trim()) params.append('search', search.trim());
+      if (category && category !== 'all') params.append('category', category);
 
       const query = params.toString();
       const url   = `/jobs/${query ? '?' + query : ''}`;
@@ -72,6 +78,7 @@ export const useJobsStore = create((set, get) => ({
     fd.append('home_country', jobData.homeCountry || '');
     fd.append('country_flag', jobData.countryFlag || '');
     fd.append('posted_from',  jobData.postedFrom  || '');
+    fd.append('category',     jobData.category    || 'other');
     if (jobData.latitude  != null) fd.append('latitude',  parseFloat(Number(jobData.latitude).toFixed(6)));
     if (jobData.longitude != null) fd.append('longitude', parseFloat(Number(jobData.longitude).toFixed(6)));
     if (jobData.image) {

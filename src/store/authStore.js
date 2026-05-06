@@ -2,11 +2,9 @@ import { create } from 'zustand';
 import * as SecureStore from 'expo-secure-store';
 import Constants from 'expo-constants';
 
-// Production: set extra.apiUrl in app.json.
-// Development: simulator uses localhost; physical device uses your Mac's LAN IP.
 const BASE_URL =
   Constants.expoConfig?.extra?.apiUrl ||
-  (Constants.isDevice ? 'http://192.168.1.202:8000/api' : 'http://localhost:8000/api');
+  'http://192.168.1.202:8000/api';
 
 const TIMEOUT_MS = 15_000; // 15 s request timeout
 

@@ -3,8 +3,10 @@ import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/ThemeContext';
+
+const NAVY = '#1B3266';
 
 const INTERESTS = [
   { icon: '💼', label: 'Jobs & Careers',      key: 'jobs',      colorKey: 'green'  },
@@ -39,30 +41,33 @@ export default function InterestsScreen({ navigation, route }) {
   };
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: C.bg }]} edges={['top', 'bottom']}>
+    <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
 
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={[styles.back, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => navigation.goBack()}>
-          <Text style={[styles.backTxt, { color: C.cream }]}>‹</Text>
-        </TouchableOpacity>
-        <View style={styles.progress}>
-          {[1,2,3].map(i => (
-            <View key={i} style={[styles.progressDot, { backgroundColor: C.vivid }]} />
-          ))}
+      {/* ── Navy header ─────────────────────────────────────── */}
+      <View style={s.header}>
+        <View style={s.headerTopRow}>
+          <TouchableOpacity style={s.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.8}>
+            <Ionicons name="chevron-back" size={20} color="#fff" />
+          </TouchableOpacity>
+          <View style={s.progress}>
+            {[0, 1, 2, 3].map(i => (
+              <View key={i} style={[s.progressDot, { backgroundColor: '#F4A227' }]} />
+            ))}
+          </View>
+          <View style={{ width: 34 }} />
         </View>
-        <View style={{ width: 38 }} />
+        <Text style={s.headerLogo}>Zabroad ✈</Text>
+        <Text style={s.headerTitle}>What do you{'\n'}need help with? ✨</Text>
+        <Text style={s.headerSub}>Pick at least 1 — we'll personalise your feed</Text>
       </View>
 
-      <ScrollView contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
-        <View style={styles.titleWrap}>
-          <Text style={[styles.step, { color: C.vivid }]}>Step 3 of 3</Text>
-          <Text style={[styles.title, { color: C.cream }]}>What do you{'\n'}need help with? ✨</Text>
-          <Text style={[styles.sub, { color: C.c35 }]}>Pick at least 1 — we'll personalise your feed</Text>
-        </View>
-
-        {/* Interests Grid */}
-        <View style={styles.grid}>
+      {/* ── Body ────────────────────────────────────────────── */}
+      <ScrollView
+        style={{ backgroundColor: C.bg }}
+        contentContainerStyle={[s.body, { backgroundColor: C.bg }]}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={s.grid}>
           {INTERESTS.map((item) => {
             const isSelected = selected.includes(item.key);
             const color = C[item.colorKey];
@@ -71,81 +76,85 @@ export default function InterestsScreen({ navigation, route }) {
               <TouchableOpacity
                 key={item.key}
                 style={[
-                  styles.interestCard,
+                  s.interestCard,
                   { backgroundColor: C.card, borderColor: C.border },
-                  isSelected && { backgroundColor: bg, borderColor: color + '66' },
+                  isSelected && { backgroundColor: bg, borderColor: (color || '#3B8BF7') + '66' },
                 ]}
                 onPress={() => toggle(item.key)}
                 activeOpacity={0.8}
               >
                 {isSelected && (
-                  <View style={[styles.checkMark, { backgroundColor: color }]}>
+                  <View style={[s.checkMark, { backgroundColor: color || '#3B8BF7' }]}>
                     <Text style={{ fontSize: 9, color: 'white', fontWeight: '800' }}>✓</Text>
                   </View>
                 )}
                 <Text style={{ fontSize: 28, marginBottom: 8 }}>{item.icon}</Text>
-                <Text style={[styles.interestLabel, { color: isSelected ? color : C.cream }]}>
+                <Text style={[s.interestLabel, { color: isSelected ? (color || '#3B8BF7') : C.cream }]}>
                   {item.label}
                 </Text>
                 {isSelected && (
-                  <View style={[styles.selectedDot, { backgroundColor: color }]} />
+                  <View style={[s.selectedDot, { backgroundColor: color || '#3B8BF7' }]} />
                 )}
               </TouchableOpacity>
             );
           })}
         </View>
 
-        {/* Count indicator */}
         {selected.length > 0 && (
-          <View style={[styles.countBadge, { backgroundColor: C.vividD, borderColor: C.vivid + '44' }]}>
-            <Text style={[styles.countTxt, { color: C.vivid }]}>
+          <View style={[s.countBadge, { backgroundColor: C.card, borderColor: C.border }]}>
+            <Text style={[s.countTxt, { color: C.cream }]}>
               {selected.length} topic{selected.length > 1 ? 's' : ''} selected ✓
             </Text>
           </View>
         )}
+
+        <View style={{ height: 120 }} />
       </ScrollView>
 
-      {/* Finish */}
-      <View style={[styles.footer, { borderTopColor: C.border, backgroundColor: C.bg }]}>
+      {/* ── Footer ──────────────────────────────────────────── */}
+      <View style={[s.footer, { borderTopColor: C.border, backgroundColor: C.bg }]}>
         <TouchableOpacity
           onPress={handleFinish}
           activeOpacity={selected.length > 0 ? 0.88 : 1}
-          style={[styles.nextBtn, selected.length === 0 && { opacity: 0.4 }]}
+          style={[s.btn, selected.length === 0 && { opacity: 0.4 }]}
         >
-          <LinearGradient colors={[C.vivid, '#B82838']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.nextGrad}>
-            <Text style={styles.nextTxt}>Finish Setup</Text>
-            <Text style={{ fontSize: 18, color: 'white' }}>🚀</Text>
-          </LinearGradient>
+          <Text style={s.btnTxt}>Finish Setup  🚀</Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={() => navigation.navigate('AllDone', { ...userData, interests: [] })}>
-          <Text style={[styles.skip, { color: C.c35 }]}>Skip for now</Text>
+          <Text style={[s.skip, { color: C.c35 }]}>Skip for now</Text>
         </TouchableOpacity>
       </View>
+
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8 },
-  back: { width: 38, height: 38, borderRadius: 13, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  backTxt: { fontSize: 24, lineHeight: 28 },
-  progress: { flexDirection: 'row', gap: 6 },
-  progressDot: { width: 28, height: 4, borderRadius: 2 },
-  titleWrap: { paddingHorizontal: 24, paddingBottom: 20 },
-  step: { fontSize: 12, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 6 },
-  title: { fontSize: 30, fontWeight: '900', letterSpacing: -1, lineHeight: 36, marginBottom: 6 },
-  sub: { fontSize: 14, lineHeight: 20 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 20, gap: 10 },
-  interestCard: { width: '30%', flexGrow: 1, borderRadius: 18, borderWidth: 1, padding: 14, alignItems: 'center', position: 'relative', minHeight: 90, justifyContent: 'center' },
-  checkMark: { position: 'absolute', top: 8, right: 8, width: 18, height: 18, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
+const s = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: NAVY },
+
+  // ── Navy header ────────────────────────────────────────────────────────────
+  header:       { backgroundColor: NAVY, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 24 },
+  headerTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 },
+  backBtn:      { width: 34, height: 34, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' },
+  progress:     { flexDirection: 'row', gap: 6 },
+  progressDot:  { width: 24, height: 4, borderRadius: 2 },
+  headerLogo:   { fontSize: 20, fontWeight: '900', color: '#fff', letterSpacing: -0.4, marginBottom: 10 },
+  headerTitle:  { fontSize: 26, fontWeight: '900', color: '#fff', letterSpacing: -0.5, lineHeight: 32, marginBottom: 6 },
+  headerSub:    { fontSize: 13, color: 'rgba(255,255,255,0.60)', lineHeight: 19 },
+
+  // ── Body ──────────────────────────────────────────────────────────────────
+  body:          { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 20 },
+  grid:          { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  interestCard:  { width: '30%', flexGrow: 1, borderRadius: 18, borderWidth: 1, padding: 14, alignItems: 'center', position: 'relative', minHeight: 90, justifyContent: 'center' },
+  checkMark:     { position: 'absolute', top: 8, right: 8, width: 18, height: 18, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
   interestLabel: { fontSize: 11, fontWeight: '700', textAlign: 'center', lineHeight: 15 },
-  selectedDot: { width: 4, height: 4, borderRadius: 2, marginTop: 6 },
-  countBadge: { alignSelf: 'center', marginTop: 16, borderRadius: 50, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 8 },
-  countTxt: { fontSize: 13, fontWeight: '700' },
+  selectedDot:   { width: 4, height: 4, borderRadius: 2, marginTop: 6 },
+  countBadge:    { alignSelf: 'center', marginTop: 16, borderRadius: 50, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 8 },
+  countTxt:      { fontSize: 13, fontWeight: '700' },
+
+  // ── Footer ────────────────────────────────────────────────────────────────
   footer: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 24, paddingTop: 12, paddingBottom: 28, borderTopWidth: 1, gap: 10, alignItems: 'center' },
-  nextBtn: { borderRadius: 18, overflow: 'hidden', alignSelf: 'stretch' },
-  nextGrad: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 16 },
-  nextTxt: { fontSize: 16, fontWeight: '800', color: 'white' },
-  skip: { fontSize: 13, fontWeight: '500' },
+  btn:    { backgroundColor: NAVY, borderRadius: 13, paddingVertical: 15, alignItems: 'center', alignSelf: 'stretch' },
+  btnTxt: { fontSize: 16, fontWeight: '800', color: '#fff', letterSpacing: 0.2 },
+  skip:   { fontSize: 13, fontWeight: '500' },
 });

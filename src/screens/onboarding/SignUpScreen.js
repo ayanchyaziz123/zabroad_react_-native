@@ -5,11 +5,9 @@ import {
   Platform, ActivityIndicator, Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/ThemeContext';
 import { useAuthStore } from '../../store/authStore';
-import { G_PRIMARY } from '../../theme/colors';
 
 export default function SignUpScreen({ navigation }) {
   const { colors: C } = useTheme();
@@ -78,45 +76,36 @@ export default function SignUpScreen({ navigation }) {
   }
 
   return (
-    <SafeAreaView style={[s.safe, { backgroundColor: C.bg }]} edges={['top', 'bottom']}>
+    <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
 
-        {/* Top bar */}
-        <View style={s.topBar}>
-          <TouchableOpacity
-            style={[s.backBtn, { backgroundColor: C.card, borderColor: C.border }]}
-            onPress={() => navigation.goBack()}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="chevron-back" size={20} color={C.cream} />
-          </TouchableOpacity>
-          {/* Progress dots */}
-          <View style={s.progress}>
-            {[0, 1, 2, 3].map(i => (
-              <View key={i} style={[s.progressDot, { backgroundColor: i === 0 ? C.vivid : C.border }]} />
-            ))}
+        {/* ── Navy header ─────────────────────────────────────── */}
+        <View style={s.header}>
+          <View style={s.headerTopRow}>
+            <TouchableOpacity style={s.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.8}>
+              <Ionicons name="chevron-back" size={20} color="#fff" />
+            </TouchableOpacity>
+            {/* Progress dots */}
+            <View style={s.progress}>
+              {[0, 1, 2, 3].map(i => (
+                <View key={i} style={[s.progressDot, { backgroundColor: i === 0 ? '#F4A227' : 'rgba(255,255,255,0.25)' }]} />
+              ))}
+            </View>
+            <View style={{ width: 34 }} />
           </View>
-          <View style={{ width: 40 }} />
+
+          <Text style={s.headerLogo}>Zabroad ✈</Text>
+          <Text style={s.headerTitle}>Create your{'\n'}account</Text>
+          <Text style={s.headerSub}>Join thousands of immigrants building a better life abroad</Text>
         </View>
 
+        {/* ── Form body ────────────────────────────────────────── */}
         <ScrollView
-          contentContainerStyle={s.body}
+          contentContainerStyle={[s.body, { backgroundColor: C.bg }]}
+          style={{ backgroundColor: C.bg }}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Logo + headline */}
-          <View style={s.logoRow}>
-            <LinearGradient colors={G_PRIMARY} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.logoGrad}>
-              <Text style={{ fontSize: 24 }}>🌍</Text>
-            </LinearGradient>
-            <Text style={[s.brand, { color: C.cream }]}>
-              <Text style={{ color: C.vivid }}>Z</Text>abroad
-            </Text>
-          </View>
-
-          <Text style={[s.title, { color: C.cream }]}>Create your{'\n'}account</Text>
-          <Text style={[s.sub, { color: C.c35 }]}>Join thousands of immigrants building a better life abroad</Text>
-
           <Animated.View style={{ transform: [{ translateX: shakeAnim }] }}>
 
             {/* Name row */}
@@ -163,7 +152,7 @@ export default function SignUpScreen({ navigation }) {
             <View style={s.fieldWrap}>
               <Text style={[s.fieldLabel, { color: C.c35 }]}>Email Address</Text>
               <View style={[s.inputRow, { backgroundColor: C.card, borderColor: errors.email ? '#FF3B30' : C.border }]}>
-                <Ionicons name="mail-outline" size={17} color={C.c35} />
+                <Ionicons name="mail-outline" size={16} color={C.c35} />
                 <TextInput
                   ref={emailRef}
                   style={[s.input, { color: C.cream }]}
@@ -185,7 +174,7 @@ export default function SignUpScreen({ navigation }) {
             <View style={s.fieldWrap}>
               <Text style={[s.fieldLabel, { color: C.c35 }]}>Password</Text>
               <View style={[s.inputRow, { backgroundColor: C.card, borderColor: errors.password ? '#FF3B30' : C.border }]}>
-                <Ionicons name="lock-closed-outline" size={17} color={C.c35} />
+                <Ionicons name="lock-closed-outline" size={16} color={C.c35} />
                 <TextInput
                   ref={passRef}
                   style={[s.input, { color: C.cream }]}
@@ -211,7 +200,7 @@ export default function SignUpScreen({ navigation }) {
             <View style={s.fieldWrap}>
               <Text style={[s.fieldLabel, { color: C.c35 }]}>Confirm Password</Text>
               <View style={[s.inputRow, { backgroundColor: C.card, borderColor: errors.confirm ? '#FF3B30' : C.border }]}>
-                <Ionicons name="lock-closed-outline" size={17} color={C.c35} />
+                <Ionicons name="lock-closed-outline" size={16} color={C.c35} />
                 <TextInput
                   ref={confRef}
                   style={[s.input, { color: C.cream }]}
@@ -238,9 +227,9 @@ export default function SignUpScreen({ navigation }) {
           {/* Terms */}
           <Text style={[s.terms, { color: C.c35 }]}>
             By creating an account you agree to our{' '}
-            <Text style={{ color: C.vivid, fontWeight: '600' }}>Terms</Text>
+            <Text style={{ color: '#3B8BF7', fontWeight: '600' }}>Terms</Text>
             {' '}and{' '}
-            <Text style={{ color: C.vivid, fontWeight: '600' }}>Privacy Policy</Text>
+            <Text style={{ color: '#3B8BF7', fontWeight: '600' }}>Privacy Policy</Text>
           </Text>
 
           {/* CTA */}
@@ -250,26 +239,20 @@ export default function SignUpScreen({ navigation }) {
             disabled={sending}
             activeOpacity={0.88}
           >
-            <LinearGradient
-              colors={G_PRIMARY}
-              start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-              style={s.btnGrad}
-            >
-              {sending
-                ? <ActivityIndicator color="white" />
-                : <>
-                    <Text style={s.btnTxt}>Continue</Text>
-                    <Ionicons name="arrow-forward" size={18} color="white" />
-                  </>
-              }
-            </LinearGradient>
+            {sending
+              ? <ActivityIndicator color="white" />
+              : <>
+                  <Text style={s.btnTxt}>Continue</Text>
+                  <Ionicons name="arrow-forward" size={18} color="white" />
+                </>
+            }
           </TouchableOpacity>
 
           {/* Sign in link */}
-          <View style={s.signInRow}>
-            <Text style={[s.signInTxt, { color: C.c35 }]}>Already have an account?</Text>
+          <View style={s.switchRow}>
+            <Text style={[s.switchTxt, { color: C.c35 }]}>Already have an account?</Text>
             <TouchableOpacity onPress={() => navigation.navigate('Login')} activeOpacity={0.75}>
-              <Text style={[s.signInLink, { color: C.vivid }]}>Sign In</Text>
+              <Text style={s.switchLink}>Sign In</Text>
             </TouchableOpacity>
           </View>
 
@@ -279,43 +262,53 @@ export default function SignUpScreen({ navigation }) {
   );
 }
 
+const NAVY = '#1B3266';
+
 const s = StyleSheet.create({
-  safe:    { flex: 1 },
-  topBar:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 12, paddingBottom: 4 },
-  backBtn: { width: 40, height: 40, borderRadius: 13, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  safe: { flex: 1, backgroundColor: NAVY },
 
-  // Progress
+  // ── Navy header ────────────────────────────────────────────────────────────
+  header: { backgroundColor: NAVY, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 24 },
+
+  headerTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 },
+  backBtn: {
+    width: 34, height: 34, borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    alignItems: 'center', justifyContent: 'center',
+  },
   progress:    { flexDirection: 'row', gap: 6 },
-  progressDot: { width: 26, height: 4, borderRadius: 2 },
+  progressDot: { width: 24, height: 4, borderRadius: 2 },
 
-  body:     { paddingHorizontal: 26, paddingTop: 12, paddingBottom: 40 },
+  headerLogo:  { fontSize: 20, fontWeight: '900', color: '#fff', letterSpacing: -0.4, marginBottom: 10 },
+  headerTitle: { fontSize: 26, fontWeight: '900', color: '#fff', letterSpacing: -0.5, lineHeight: 32, marginBottom: 6 },
+  headerSub:   { fontSize: 13, color: 'rgba(255,255,255,0.60)', lineHeight: 19 },
 
-  // Brand
-  logoRow:  { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 28 },
-  logoGrad: { width: 50, height: 50, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  brand:    { fontSize: 28, fontWeight: '900', letterSpacing: -1 },
+  // ── Form body ──────────────────────────────────────────────────────────────
+  body: { paddingHorizontal: 20, paddingTop: 24, paddingBottom: 40 },
 
-  // Headline
-  title:    { fontSize: 32, fontWeight: '900', letterSpacing: -1, lineHeight: 38, marginBottom: 8 },
-  sub:      { fontSize: 14, lineHeight: 22, marginBottom: 28 },
+  nameRow:    { flexDirection: 'row', gap: 12, marginBottom: 16 },
+  fieldWrap:  { marginBottom: 16 },
+  fieldLabel: { fontSize: 12, fontWeight: '700', letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 7 },
+  inputRow:   {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    borderRadius: 12, borderWidth: 1,
+    paddingHorizontal: 14, paddingVertical: 13,
+  },
+  input:    { flex: 1, fontSize: 15 },
+  errorTxt: { fontSize: 12, color: '#FF3B30', fontWeight: '600', marginTop: 4 },
 
-  // Fields
-  nameRow:    { flexDirection: 'row', gap: 12, marginBottom: 18 },
-  fieldWrap:  { marginBottom: 18 },
-  fieldLabel: { fontSize: 12, fontWeight: '700', letterSpacing: 0.6, textTransform: 'uppercase', marginBottom: 8 },
-  inputRow:   { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 14, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 14 },
-  input:      { flex: 1, fontSize: 15 },
-  errorTxt:   { fontSize: 12, color: '#FF3B30', fontWeight: '600', marginTop: 5 },
-
-  terms:    { fontSize: 12, lineHeight: 19, textAlign: 'center', marginBottom: 22 },
+  terms: { fontSize: 12, lineHeight: 19, textAlign: 'center', marginBottom: 20 },
 
   // CTA
-  btn:     { borderRadius: 16, overflow: 'hidden', marginBottom: 22 },
-  btnGrad: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 17 },
-  btnTxt:  { fontSize: 16, fontWeight: '800', color: 'white', letterSpacing: 0.2 },
+  btn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+    backgroundColor: NAVY, borderRadius: 13,
+    paddingVertical: 15, marginBottom: 20,
+  },
+  btnTxt: { fontSize: 16, fontWeight: '800', color: '#fff', letterSpacing: 0.2 },
 
-  // Sign in
-  signInRow:  { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6 },
-  signInTxt:  { fontSize: 14 },
-  signInLink: { fontSize: 14, fontWeight: '700' },
+  // Switch
+  switchRow:  { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6 },
+  switchTxt:  { fontSize: 14 },
+  switchLink: { fontSize: 14, fontWeight: '700', color: '#3B8BF7' },
 });

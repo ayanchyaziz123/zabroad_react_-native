@@ -1,16 +1,25 @@
 import React, { useState, useMemo, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  StyleSheet, Animated, Share,
+  StyleSheet, Animated, Share, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
+import { useAuthStore } from '../store/authStore';
+import { useJobsStore } from '../store/jobsStore';
+import { JOB_CATEGORIES } from './JobsScreen';
 
 export default function JobDetailScreen({ route, navigation }) {
   const { colors: C } = useTheme();
   const s = useMemo(() => getStyles(C), [C]);
-  const { job } = route.params;
+
+  const [job, setJob] = useState(route.params.job);
+  const { user: authUser } = useAuthStore();
+  const deleteJob = useJobsStore(st => st.deleteJob);
+
+  const isOwn = authUser?.id && job.poster_id && String(authUser.id) === String(job.poster_id);
+  const catInfo = JOB_CATEGORIES.find(c => c.key === job.category);
 
   const [saved,    setSaved]    = useState(false);
   const [messaged, setMessaged] = useState(false);
@@ -33,6 +42,23 @@ export default function JobDetailScreen({ route, navigation }) {
 
   async function onShare() {
     await Share.share({ message: `${job.title} at ${job.company} — shared via Zabroad` });
+  }
+
+  function onDelete() {
+    Alert.alert('Delete job', 'Remove this job listing permanently?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete', style: 'destructive',
+        onPress: async () => {
+          try {
+            await deleteJob(job.id);
+            navigation.navigate('Jobs');
+          } catch {
+            Alert.alert('Error', 'Could not delete. Please try again.');
+          }
+        },
+      },
+    ]);
   }
 
   return (
@@ -86,6 +112,12 @@ export default function JobDetailScreen({ route, navigation }) {
               <Ionicons name="time-outline" size={15} color={C.c35} />
               <Text style={s.infoTxt}>{job.posted}</Text>
             </View>
+            {catInfo && catInfo.key !== 'all' && (
+              <View style={[s.infoItem, { backgroundColor: C.greenD, borderColor: C.green + '44' }]}>
+                <Ionicons name={catInfo.icon} size={14} color={C.green} />
+                <Text style={[s.infoTxt, { color: C.green }]}>{catInfo.label}</Text>
+              </View>
+            )}
           </View>
         </View>
 
@@ -116,18 +148,19 @@ export default function JobDetailScreen({ route, navigation }) {
         </View>
 
         {/* Community */}
-        <View style={s.section}>
-          <Text style={s.sectionTitle}>Communities sharing this</Text>
-          <View style={s.communityRow}>
-            {job.communities.map(c => (
-              <View key={c} style={[s.communityChip, { backgroundColor: C.card2, borderColor: C.border }]}>
-                <Text style={s.communityTxt}>{c}</Text>
-              </View>
-            ))}
+        {job.communities?.length > 0 && (
+          <View style={s.section}>
+            <Text style={s.sectionTitle}>Communities sharing this</Text>
+            <View style={s.communityRow}>
+              {job.communities.map(c => (
+                <View key={c} style={[s.communityChip, { backgroundColor: C.card2, borderColor: C.border }]}>
+                  <Text style={s.communityTxt}>{c}</Text>
+                </View>
+              ))}
+            </View>
           </View>
-        </View>
+        )}
 
-        {/* Similar tip */}
         <View style={[s.tipCard, { backgroundColor: C.card, borderColor: C.border }]}>
           <Ionicons name="information-circle-outline" size={18} color={C.c35} />
           <Text style={s.tipTxt}>
@@ -139,16 +172,37 @@ export default function JobDetailScreen({ route, navigation }) {
 
       {/* Bottom CTA */}
       <View style={s.footer}>
-        <TouchableOpacity
-          style={[s.msgBtn, messaged && { backgroundColor: C.vividD, borderColor: C.vivid + '55' }]}
-          onPress={onMessage}
-          activeOpacity={0.85}
-        >
-          <Ionicons name={messaged ? 'checkmark-circle' : 'chatbubble'} size={18} color={messaged ? C.vivid : 'white'} />
-          <Text style={[s.msgTxt, messaged && { color: C.vivid }]}>
-            {messaged ? 'Message Sent' : `Message ${(job.poster || 'Poster').split(' ')[0]}`}
-          </Text>
-        </TouchableOpacity>
+        {isOwn ? (
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <TouchableOpacity
+              style={[s.editBtn, { backgroundColor: C.greenD, borderColor: C.green + '55' }]}
+              onPress={() => navigation.navigate('EditJob', { job, onSave: setJob })}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="pencil-outline" size={18} color={C.green} />
+              <Text style={[s.editBtnTxt, { color: C.green }]}>Edit</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[s.deleteBtn, { backgroundColor: '#FF4D4D18', borderColor: '#FF4D4D44' }]}
+              onPress={onDelete}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="trash-outline" size={18} color="#FF4D4D" />
+              <Text style={[s.deleteBtnTxt, { color: '#FF4D4D' }]}>Delete</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={[s.msgBtn, messaged && { backgroundColor: C.vividD, borderColor: C.vivid + '55' }]}
+            onPress={onMessage}
+            activeOpacity={0.85}
+          >
+            <Ionicons name={messaged ? 'checkmark-circle' : 'chatbubble'} size={18} color={messaged ? C.vivid : 'white'} />
+            <Text style={[s.msgTxt, messaged && { color: C.vivid }]}>
+              {messaged ? 'Message Sent' : `Message ${(job.poster || 'Poster').split(' ')[0]}`}
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
 
     </SafeAreaView>
@@ -158,13 +212,11 @@ export default function JobDetailScreen({ route, navigation }) {
 const getStyles = (C) => StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
 
-  // Header
   header:      { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 10 },
   backBtn:     { width: 38, height: 38, borderRadius: 13, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { flex: 1, fontSize: 15, fontWeight: '700', color: C.cream },
   iconBtn:     { width: 38, height: 38, borderRadius: 13, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, alignItems: 'center', justifyContent: 'center' },
 
-  // Hero
   heroCard:    { margin: 16, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 20, padding: 16 },
   heroTop:     { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 16 },
   companyLogo: { width: 58, height: 58, borderRadius: 18, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
@@ -173,36 +225,34 @@ const getStyles = (C) => StyleSheet.create({
   hotBadge:    { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, borderWidth: 1 },
   hotTxt:      { fontSize: 11, fontWeight: '700' },
 
-  // Info row
-  infoRow:     { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
-  infoItem:    { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: C.card2, borderWidth: 1, borderColor: C.border, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 },
-  infoTxt:     { fontSize: 12, color: C.c35, fontWeight: '500' },
+  infoRow:  { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+  infoItem: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: C.card2, borderWidth: 1, borderColor: C.border, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 },
+  infoTxt:  { fontSize: 12, color: C.c35, fontWeight: '500' },
 
-  // Section
-  section:     { paddingHorizontal: 16, marginBottom: 20 },
-  sectionTitle:{ fontSize: 13, fontWeight: '800', color: C.cream, letterSpacing: 0.2, marginBottom: 10, textTransform: 'uppercase', fontSize: 10, color: C.c35, letterSpacing: 1.5 },
-  descTxt:     { fontSize: 14, color: C.c60, lineHeight: 22 },
+  section:      { paddingHorizontal: 16, marginBottom: 20 },
+  sectionTitle: { fontSize: 10, fontWeight: '800', color: C.c35, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 10 },
+  descTxt:      { fontSize: 14, color: C.c60, lineHeight: 22 },
 
-  // Poster card
-  posterCard:  { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 16, padding: 14 },
-  posterAv:    { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  posterCard:   { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 16, padding: 14 },
+  posterAv:     { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   posterInitial:{ fontSize: 18, fontWeight: '800' },
-  posterName:  { fontSize: 14, fontWeight: '700', color: C.cream, marginBottom: 2 },
-  posterSub:   { fontSize: 11, color: C.c35 },
-  followBtn:   { borderWidth: 1, borderRadius: 50, paddingHorizontal: 12, paddingVertical: 6 },
-  followTxt:   { fontSize: 12, fontWeight: '700' },
+  posterName:   { fontSize: 14, fontWeight: '700', color: C.cream, marginBottom: 2 },
+  posterSub:    { fontSize: 11, color: C.c35 },
+  followBtn:    { borderWidth: 1, borderRadius: 50, paddingHorizontal: 12, paddingVertical: 6 },
+  followTxt:    { fontSize: 12, fontWeight: '700' },
 
-  // Community chips
   communityRow:  { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   communityChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 50, borderWidth: 1 },
   communityTxt:  { fontSize: 12, color: C.c35, fontWeight: '600' },
 
-  // Tip
-  tipCard:     { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginHorizontal: 16, marginBottom: 16, borderWidth: 1, borderRadius: 14, padding: 14 },
-  tipTxt:      { flex: 1, fontSize: 12, color: C.c35, lineHeight: 18 },
+  tipCard:  { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginHorizontal: 16, marginBottom: 16, borderWidth: 1, borderRadius: 14, padding: 14 },
+  tipTxt:   { flex: 1, fontSize: 12, color: C.c35, lineHeight: 18 },
 
-  // Footer
   footer:      { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 16, paddingBottom: 32, paddingTop: 12, backgroundColor: C.bg, borderTopWidth: 1, borderTopColor: C.border },
   msgBtn:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: C.vivid, borderRadius: 16, paddingVertical: 15, borderWidth: 1, borderColor: 'transparent' },
   msgTxt:      { fontSize: 15, fontWeight: '800', color: 'white' },
+  editBtn:     { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 16, paddingVertical: 15, borderWidth: 1 },
+  editBtnTxt:  { fontSize: 15, fontWeight: '800' },
+  deleteBtn:   { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 16, paddingVertical: 15, borderWidth: 1 },
+  deleteBtnTxt:{ fontSize: 15, fontWeight: '800' },
 });

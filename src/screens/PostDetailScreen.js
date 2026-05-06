@@ -2,13 +2,25 @@ import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   TextInput, KeyboardAvoidingView, Platform, Animated,
-  ActivityIndicator, Image, Modal, Alert,
+  ActivityIndicator, Image, Modal, Alert, Share,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../theme/ThemeContext';
 import { useAuthStore } from '../store/authStore';
 import UserAvatar from '../components/UserAvatar';
+
+const TOPICS = [
+  { label: '#OPT',        icon: 'card-outline' },
+  { label: '#H1B',        icon: 'briefcase-outline' },
+  { label: '#Housing',    icon: 'home-outline' },
+  { label: '#Jobs',       icon: 'search-outline' },
+  { label: '#Healthcare', icon: 'medkit-outline' },
+  { label: '#Legal',      icon: 'shield-checkmark-outline' },
+  { label: '#Community',  icon: 'people-outline' },
+  { label: '#Visa',       icon: 'document-text-outline' },
+];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function formatTime(iso) {
@@ -95,6 +107,9 @@ export default function PostDetailScreen({ navigation, route }) {
   const [sending,     setSending]     = useState(false);
   const [sheetMode,   setSheetMode]   = useState(null); // null | 'menu' | 'edit'
   const [editBody,    setEditBody]    = useState('');
+  const [editTopics,  setEditTopics]  = useState([]);
+  // null = unchanged, 'remove' = clear image, { uri, ... } = new image asset
+  const [editImage,   setEditImage]   = useState(null);
   const [saving,      setSaving]      = useState(false);
 
   const heartScale = useRef(new Animated.Value(1)).current;
@@ -178,8 +193,31 @@ export default function PostDetailScreen({ navigation, route }) {
 
   const openEdit = () => {
     setEditBody(post.body || '');
+    setEditTopics((post.topics_list || []).map(t => `#${t}`));
+    setEditImage(null);
     setSheetMode('edit');
   };
+
+  const pickEditImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission needed', 'Please allow photo access to change the image.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsMultipleSelection: false,
+      quality: 0.85,
+    });
+    if (!result.canceled && result.assets.length > 0) {
+      setEditImage(result.assets[0]);
+    }
+  };
+
+  const toggleEditTopic = (label) =>
+    setEditTopics(prev =>
+      prev.includes(label) ? prev.filter(t => t !== label) : [...prev, label]
+    );
 
   const closeSheet = () => setSheetMode(null);
 
@@ -188,8 +226,31 @@ export default function PostDetailScreen({ navigation, route }) {
     if (!body || saving) return;
     setSaving(true);
     try {
-      const updated = await api(`/posts/${initialPost.id}/`, { method: 'PATCH', body: { body } });
-      setPost(prev => ({ ...prev, body: updated.body }));
+      let requestBody;
+      const topicValues = editTopics.map(t => t.replace('#', ''));
+
+      if (editImage && editImage !== 'remove') {
+        const fd = new FormData();
+        fd.append('body', body);
+        topicValues.forEach(t => fd.append('topics', t));
+        fd.append('image', {
+          uri:  editImage.uri,
+          name: editImage.fileName || `post_${Date.now()}.jpg`,
+          type: editImage.mimeType || 'image/jpeg',
+        });
+        requestBody = fd;
+      } else {
+        requestBody = { body, topics: topicValues };
+        if (editImage === 'remove') requestBody.image = null;
+      }
+
+      const updated = await api(`/posts/${initialPost.id}/`, { method: 'PATCH', body: requestBody });
+      setPost(prev => ({
+        ...prev,
+        body:       updated.body,
+        image_url:  updated.image_url ?? (editImage === 'remove' ? null : prev.image_url),
+        topics_list: updated.topics_list ?? topicValues,
+      }));
       setSheetMode(null);
     } catch {
       Alert.alert('Error', 'Could not save changes. Please try again.');
@@ -221,6 +282,14 @@ export default function PostDetailScreen({ navigation, route }) {
   const postBody     = post.body || '';
   const isOwnPost    = authorId && user?.id && authorId === user.id;
 
+  async function onShare() {
+    const author = post.author_name || post.author_handle || 'someone';
+    const body   = (post.body || '').slice(0, 120);
+    await Share.share({
+      message: `${body}${body.length >= 120 ? '…' : ''}\n\n— ${author} on Zabroad`,
+    });
+  }
+
   return (
     <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
 
@@ -230,9 +299,16 @@ export default function PostDetailScreen({ navigation, route }) {
           <Ionicons name="chevron-back" size={22} color={C.cream} />
         </TouchableOpacity>
         <Text style={s.headerTitle}>Post</Text>
-        <TouchableOpacity style={s.headerBtn} activeOpacity={0.7} onPress={isOwnPost ? openMenu : undefined}>
-          <Ionicons name="ellipsis-horizontal" size={20} color={isOwnPost ? C.cream : C.c35} />
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <TouchableOpacity style={s.headerBtn} activeOpacity={0.7} onPress={onShare}>
+            <Ionicons name="share-outline" size={19} color={C.cream} />
+          </TouchableOpacity>
+          {isOwnPost && (
+            <TouchableOpacity style={s.headerBtn} activeOpacity={0.7} onPress={openMenu}>
+              <Ionicons name="ellipsis-horizontal" size={20} color={C.cream} />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
@@ -464,33 +540,141 @@ export default function PostDetailScreen({ navigation, route }) {
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           >
             <View style={[s.editSheet, { backgroundColor: C.nav }]}>
+              {/* Handle */}
+              <View style={[s.editHandle, { backgroundColor: C.border }]} />
+
+              {/* Header */}
               <View style={s.editHeader}>
-                <Text style={[s.editTitle, { color: C.cream }]}>Edit post</Text>
-                <TouchableOpacity style={s.editClose} onPress={closeSheet} activeOpacity={0.7}>
-                  <Ionicons name="close" size={20} color={C.c35} />
+                <TouchableOpacity style={[s.editClose, { backgroundColor: C.card, borderColor: C.border }]} onPress={closeSheet} activeOpacity={0.7}>
+                  <Ionicons name="close" size={18} color={C.c35} />
+                </TouchableOpacity>
+                <Text style={[s.editTitle, { color: C.cream }]}>Edit Post</Text>
+                <TouchableOpacity
+                  style={[s.editSaveBtn, { backgroundColor: C.vivid }, (!editBody.trim() || saving) && { opacity: 0.45 }]}
+                  onPress={handleEditSave}
+                  disabled={!editBody.trim() || saving}
+                  activeOpacity={0.85}
+                >
+                  {saving
+                    ? <ActivityIndicator size="small" color="white" />
+                    : <Text style={s.editSaveTxt}>Save</Text>}
                 </TouchableOpacity>
               </View>
-              <TextInput
-                style={[s.editInput, { color: C.cream, borderColor: C.border, backgroundColor: C.card }]}
-                value={editBody}
-                onChangeText={setEditBody}
-                multiline
-                autoFocus
-                maxLength={500}
-                placeholderTextColor={C.c35}
-                placeholder="What's on your mind?"
-              />
-              <Text style={[s.editCharCount, { color: C.c35 }]}>{editBody.length}/500</Text>
-              <TouchableOpacity
-                style={[s.editSaveBtn, { backgroundColor: C.vivid }, (!editBody.trim() || saving) && { opacity: 0.5 }]}
-                onPress={handleEditSave}
-                disabled={!editBody.trim() || saving}
-                activeOpacity={0.85}
+
+              <ScrollView
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: 24 }}
               >
-                {saving
-                  ? <ActivityIndicator size="small" color="white" />
-                  : <Text style={s.editSaveTxt}>Save changes</Text>}
-              </TouchableOpacity>
+                {/* ── Image section ─────────────────────────────── */}
+                <View style={[s.editImgSection, { borderBottomColor: C.border }]}>
+                  {/* Current / new image preview */}
+                  {(() => {
+                    if (editImage === 'remove') return null;
+                    const previewUri = editImage?.uri || post.image_url;
+                    if (!previewUri) return null;
+                    return (
+                      <View style={s.editImgWrap}>
+                        <Image source={{ uri: previewUri }} style={s.editImgPreview} resizeMode="cover" />
+                        <TouchableOpacity
+                          style={[s.editImgRemove, { backgroundColor: 'rgba(0,0,0,0.65)' }]}
+                          onPress={() => setEditImage('remove')}
+                          activeOpacity={0.8}
+                        >
+                          <Ionicons name="trash-outline" size={15} color="#fff" />
+                        </TouchableOpacity>
+                      </View>
+                    );
+                  })()}
+
+                  {/* Photo action row */}
+                  <View style={s.editImgActions}>
+                    <TouchableOpacity
+                      style={[s.editImgBtn, { backgroundColor: C.card, borderColor: C.border }]}
+                      onPress={pickEditImage}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="image-outline" size={17} color={C.vivid} />
+                      <Text style={[s.editImgBtnTxt, { color: C.vivid }]}>
+                        {(editImage && editImage !== 'remove') || (editImage !== 'remove' && post.image_url)
+                          ? 'Change photo'
+                          : 'Add photo'}
+                      </Text>
+                    </TouchableOpacity>
+                    {editImage === 'remove' && (
+                      <TouchableOpacity
+                        style={[s.editImgBtn, { backgroundColor: C.card, borderColor: C.border }]}
+                        onPress={() => setEditImage(null)}
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons name="refresh-outline" size={17} color={C.c35} />
+                        <Text style={[s.editImgBtnTxt, { color: C.c35 }]}>Restore photo</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+
+                {/* ── Text editor ───────────────────────────────── */}
+                <View style={[s.editTextWrap, { borderBottomColor: C.border }]}>
+                  <TextInput
+                    style={[s.editInput, { color: C.cream }]}
+                    value={editBody}
+                    onChangeText={setEditBody}
+                    multiline
+                    autoFocus
+                    maxLength={500}
+                    placeholderTextColor={C.c35}
+                    placeholder="What's on your mind?"
+                    textAlignVertical="top"
+                  />
+                  {/* Char bar */}
+                  <View style={s.editCharRow}>
+                    <View style={[s.editCharBar, { backgroundColor: C.border }]}>
+                      <View style={[s.editCharFill, {
+                        width: `${Math.min((editBody.length / 500) * 100, 100)}%`,
+                        backgroundColor: editBody.length > 450 ? C.vivid : editBody.length > 350 ? '#F5A623' : C.c35,
+                      }]} />
+                    </View>
+                    <Text style={[s.editCharCount, {
+                      color: editBody.length > 450 ? C.vivid : C.c35,
+                    }]}>{500 - editBody.length}</Text>
+                  </View>
+                </View>
+
+                {/* ── Topics ────────────────────────────────────── */}
+                <View style={s.editTopicsSection}>
+                  <View style={s.editSectionHeader}>
+                    <Ionicons name="pricetag-outline" size={13} color={C.c35} />
+                    <Text style={[s.editSectionLabel, { color: C.c35 }]}>Topics</Text>
+                    {editTopics.length > 0 && (
+                      <View style={[s.editTopicBadge, { backgroundColor: C.vivid }]}>
+                        <Text style={s.editTopicBadgeTxt}>{editTopics.length}</Text>
+                      </View>
+                    )}
+                  </View>
+                  <View style={s.editTopicsWrap}>
+                    {TOPICS.map(({ label, icon }) => {
+                      const sel = editTopics.includes(label);
+                      return (
+                        <TouchableOpacity
+                          key={label}
+                          style={[s.editTopicPill,
+                            { borderColor: C.border, backgroundColor: C.card },
+                            sel && { backgroundColor: C.vividD, borderColor: C.vivid + '66' },
+                          ]}
+                          onPress={() => toggleEditTopic(label)}
+                          activeOpacity={0.8}
+                        >
+                          <Ionicons name={icon} size={11} color={sel ? C.vivid : C.c35} />
+                          <Text style={[s.editTopicTxt, { color: sel ? C.vivid : C.c35 }, sel && { fontWeight: '700' }]}>
+                            {label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+              </ScrollView>
             </View>
           </KeyboardAvoidingView>
         )}
@@ -565,15 +749,41 @@ const getStyles = (C) => StyleSheet.create({
   menuDivider:  { height: 1, marginHorizontal: 0 },
 
   // Edit modal
-  editOverlay:   { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  editSheet:     { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 36 },
-  editHeader:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
-  editTitle:     { fontSize: 17, fontWeight: '800' },
-  editClose:     { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  editInput:     { borderWidth: 1, borderRadius: 14, padding: 14, fontSize: 15, lineHeight: 22, minHeight: 120, textAlignVertical: 'top', marginBottom: 6 },
-  editCharCount: { fontSize: 11, textAlign: 'right', marginBottom: 14 },
-  editSaveBtn:   { borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
-  editSaveTxt:   { fontSize: 15, fontWeight: '800', color: 'white' },
+  editOverlay:   { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' },
+  editSheet:     { borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '92%' },
+  editHandle:    { width: 38, height: 4, borderRadius: 2, alignSelf: 'center', marginTop: 10, marginBottom: 4 },
+  editHeader:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12 },
+  editTitle:     { fontSize: 17, fontWeight: '800', flex: 1, textAlign: 'center' },
+  editClose:     { width: 34, height: 34, borderRadius: 11, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  editSaveBtn:   { borderRadius: 50, paddingHorizontal: 18, paddingVertical: 9, minWidth: 68, alignItems: 'center' },
+  editSaveTxt:   { fontSize: 13, fontWeight: '800', color: 'white' },
+
+  // Image section
+  editImgSection:  { paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, gap: 10 },
+  editImgWrap:     { position: 'relative', borderRadius: 14, overflow: 'hidden' },
+  editImgPreview:  { width: '100%', height: 180, borderRadius: 14 },
+  editImgRemove:   { position: 'absolute', top: 10, right: 10, width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  editImgActions:  { flexDirection: 'row', gap: 10 },
+  editImgBtn:      { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 50, borderWidth: 1 },
+  editImgBtnTxt:   { fontSize: 13, fontWeight: '700' },
+
+  // Text section
+  editTextWrap:  { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 10, borderBottomWidth: 1 },
+  editInput:     { fontSize: 15, lineHeight: 24, minHeight: 110, textAlignVertical: 'top' },
+  editCharRow:   { flexDirection: 'row', alignItems: 'center', gap: 10, paddingTop: 8 },
+  editCharBar:   { flex: 1, height: 3, borderRadius: 2, overflow: 'hidden' },
+  editCharFill:  { height: '100%', borderRadius: 2 },
+  editCharCount: { fontSize: 11, fontWeight: '600', minWidth: 32, textAlign: 'right' },
+
+  // Topics section
+  editTopicsSection: { paddingHorizontal: 16, paddingVertical: 16 },
+  editSectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
+  editSectionLabel:  { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', flex: 1 },
+  editTopicBadge:    { width: 17, height: 17, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  editTopicBadgeTxt: { fontSize: 9, fontWeight: '800', color: 'white' },
+  editTopicsWrap:    { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  editTopicPill:     { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 11, paddingVertical: 7, borderRadius: 50, borderWidth: 1 },
+  editTopicTxt:      { fontSize: 12, fontWeight: '600' },
 
   // Input bar
   inputArea:    { borderTopWidth: 1, borderTopColor: C.border, backgroundColor: C.nav },

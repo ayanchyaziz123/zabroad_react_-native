@@ -2,14 +2,17 @@ import React, { useMemo, useState, useRef, useEffect, useCallback } from 'react'
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   Modal, Alert, TextInput, KeyboardAvoidingView, Platform,
-  ActivityIndicator, Animated, Image,
+  ActivityIndicator, Animated, Image, RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import UserAvatar from '../components/UserAvatar';
 import { useTheme } from '../theme/ThemeContext';
 import { useAuthStore } from '../store/authStore';
+
+const GOLD = '#F5A623';
 
 const COUNTRIES = [
   { flag: '🇧🇩', name: 'Bangladesh' }, { flag: '🇮🇳', name: 'India' },
@@ -21,23 +24,17 @@ const COUNTRIES = [
   { flag: '🇨🇴', name: 'Colombia' },   { flag: '🇪🇬', name: 'Egypt' },
   { flag: '🇹🇷', name: 'Turkey' },     { flag: '🇮🇩', name: 'Indonesia' },
   { flag: '🇳🇵', name: 'Nepal' },      { flag: '🇱🇰', name: 'Sri Lanka' },
+  { flag: '🇺🇦', name: 'Ukraine' },    { flag: '🇲🇦', name: 'Morocco' },
+  { flag: '🇸🇳', name: 'Senegal' },    { flag: '🇵🇪', name: 'Peru' },
+  { flag: '🇵🇸', name: 'Palestine' },  { flag: '🇸🇴', name: 'Somalia' },
   { flag: '🌍', name: 'Other' },
 ];
 
-const VISA_OPTIONS = [
-  'OPT', 'CPT', 'H1B', 'H4', 'L1', 'O1', 'GC', 'CITIZEN', 'F1', 'ASYLUM', 'OTHER',
-];
-const VISA_LABELS = {
-  OPT: 'OPT', CPT: 'CPT', H1B: 'H-1B', H4: 'H-4 EAD',
-  L1: 'L-1', O1: 'O-1', GC: 'Green Card', CITIZEN: 'Citizen',
-  F1: 'F-1', ASYLUM: 'Asylum', OTHER: 'Other',
-};
 
-const SETTINGS_ITEMS = [
-  { icon: 'notifications-outline', label: 'Notifications',  sub: 'Manage alerts',            route: 'Notifications' },
-  { icon: 'lock-closed-outline',   label: 'Privacy',        sub: 'Who can see your profile',  route: 'Settings'      },
-  { icon: 'moon-outline',          label: 'Appearance',     sub: 'Dark / light mode',          route: 'Settings'      },
-  { icon: 'help-circle-outline',   label: 'Help & Support', sub: 'FAQs and contact us',        route: null            },
+const TABS = [
+  { key: 'Posts',    icon: 'grid-outline',     iconActive: 'grid' },
+  { key: 'Saved',    icon: 'bookmark-outline', iconActive: 'bookmark' },
+  { key: 'Settings', icon: 'settings-outline', iconActive: 'settings' },
 ];
 
 function formatTime(iso) {
@@ -49,16 +46,15 @@ function formatTime(iso) {
   return `${Math.floor(s / 86400)}d ago`;
 }
 
-// ── Post card ─────────────────────────────────────────────────────────────────
-function PostCard({ post, navigation, C, s }) {
+// ── Post Card ─────────────────────────────────────────────────────────────────
+function PostCard({ post, isOwn, onDelete, navigation, C, s }) {
   const [liked, setLiked] = useState(post.is_liked || false);
   const [count, setCount] = useState(post.likes_count || 0);
   const { api } = useAuthStore();
   const scale = useRef(new Animated.Value(1)).current;
 
   async function onLike() {
-    const prev = liked;
-    const prevCount = count;
+    const prev = liked, prevCount = count;
     setLiked(!prev);
     setCount(c => prev ? c - 1 : c + 1);
     Animated.sequence([
@@ -75,13 +71,27 @@ function PostCard({ post, navigation, C, s }) {
     }
   }
 
+  function confirmDelete() {
+    Alert.alert('Delete Post', 'Remove this post permanently?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: () => onDelete(post.id) },
+    ]);
+  }
+
   return (
     <TouchableOpacity
-      style={s.postCard}
+      style={[s.postCard, { backgroundColor: C.card, borderColor: C.border }]}
       onPress={() => navigation.navigate('PostDetail', { post })}
       activeOpacity={0.92}
     >
-      <Text style={s.postBody} numberOfLines={3}>{post.body}</Text>
+      {post.image_url ? (
+        <Image source={{ uri: post.image_url }} style={s.postImage} resizeMode="cover" />
+      ) : null}
+      <View style={s.postBody}>
+        <Text style={[s.postBodyTxt, { color: C.c60 }]} numberOfLines={post.image_url ? 2 : 3}>
+          {post.body}
+        </Text>
+      </View>
       {post.topics_list?.length > 0 && (
         <View style={s.postTopics}>
           {post.topics_list.slice(0, 3).map(t => (
@@ -91,18 +101,23 @@ function PostCard({ post, navigation, C, s }) {
           ))}
         </View>
       )}
-      <View style={s.postFooter}>
+      <View style={[s.postFooter, { borderTopColor: C.border }]}>
         <TouchableOpacity style={s.postStat} onPress={onLike} activeOpacity={0.7}>
           <Animated.View style={{ transform: [{ scale }] }}>
-            <Ionicons name={liked ? 'thumbs-up' : 'thumbs-up-outline'} size={14} color={liked ? '#F4A227' : C.c35} />
+            <Ionicons name={liked ? 'thumbs-up' : 'thumbs-up-outline'} size={14} color={liked ? GOLD : C.c35} />
           </Animated.View>
-          <Text style={[s.postStatTxt, liked && { color: '#F4A227' }]}>{count}</Text>
+          <Text style={[s.postStatTxt, { color: liked ? GOLD : C.c35 }]}>{count}</Text>
         </TouchableOpacity>
         <View style={s.postStat}>
           <Ionicons name="chatbubble-outline" size={13} color={C.c35} />
-          <Text style={s.postStatTxt}>{post.comments_count || 0}</Text>
+          <Text style={[s.postStatTxt, { color: C.c35 }]}>{post.comments_count || 0}</Text>
         </View>
-        <Text style={s.postTime}>{formatTime(post.created_at)}</Text>
+        <Text style={[s.postTime, { color: C.c35 }]}>{formatTime(post.created_at)}</Text>
+        {isOwn && (
+          <TouchableOpacity onPress={confirmDelete} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} activeOpacity={0.7}>
+            <Ionicons name="trash-outline" size={15} color="#FF4D4D" />
+          </TouchableOpacity>
+        )}
       </View>
     </TouchableOpacity>
   );
@@ -111,64 +126,67 @@ function PostCard({ post, navigation, C, s }) {
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function ProfileScreen({ navigation }) {
   const { colors: C } = useTheme();
-  const { user: authUser, api, logout, updateProfile } = useAuthStore();
   const s = useMemo(() => getStyles(C), [C]);
+  const { user: authUser, api, logout, updateProfile } = useAuthStore();
 
-  // ── Tabs & content state ───────────────────────────────────────────────────
+  // ── Tab & content state ───────────────────────────────────────────────────
   const [activeTab,    setActiveTab]    = useState('Posts');
   const [posts,        setPosts]        = useState([]);
-  const [loadingPosts, setLoadingPosts] = useState(true);
   const [savedPosts,   setSavedPosts]   = useState([]);
+  const [loadingPosts, setLoadingPosts] = useState(false);
   const [loadingSaved, setLoadingSaved] = useState(false);
+  const [errorPosts,   setErrorPosts]   = useState(null);
+  const [errorSaved,   setErrorSaved]   = useState(null);
+  const [refreshing,   setRefreshing]   = useState(false);
 
-  // ── Photo upload state ─────────────────────────────────────────────────────
+  // Track which tabs have been fetched so we don't refetch on tab switch
+  const hasFetchedSaved = useRef(false);
+
+  // ── Photo state ───────────────────────────────────────────────────────────
   const [avatarUri,       setAvatarUri]       = useState(null);
   const [coverUri,        setCoverUri]        = useState(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [uploadingCover,  setUploadingCover]  = useState(false);
 
-  // ── Modals ─────────────────────────────────────────────────────────────────
+  // ── Modal state ───────────────────────────────────────────────────────────
   const [editModal,    setEditModal]    = useState(false);
   const [countryModal, setCountryModal] = useState(false);
+  const [pwModal,      setPwModal]      = useState(false);
+  const [countrySearch, setCountrySearch] = useState('');
 
-  // ── Edit form controlled state ─────────────────────────────────────────────
+  // ── Edit form ─────────────────────────────────────────────────────────────
   const [editFirstName, setEditFirstName] = useState('');
   const [editLastName,  setEditLastName]  = useState('');
   const [editHandle,    setEditHandle]    = useState('');
   const [editBio,       setEditBio]       = useState('');
   const [editLivesIn,   setEditLivesIn]   = useState('');
-  const [editVisa,      setEditVisa]      = useState('');
   const [saving,        setSaving]        = useState(false);
   const [saveError,     setSaveError]     = useState('');
 
-  // Sync server photo URLs on mount / auth user change
+  // ── Change password ───────────────────────────────────────────────────────
+  const [oldPw,      setOldPw]      = useState('');
+  const [newPw,      setNewPw]      = useState('');
+  const [confirmPw,  setConfirmPw]  = useState('');
+  const [changingPw, setChangingPw] = useState(false);
+  const [pwError,    setPwError]    = useState('');
+  const [pwSuccess,  setPwSuccess]  = useState(false);
+
+  // ── Sync server photo URLs ────────────────────────────────────────────────
   useEffect(() => {
     if (authUser?.profile?.avatar_url) setAvatarUri(authUser.profile.avatar_url);
     if (authUser?.profile?.cover_url)  setCoverUri(authUser.profile.cover_url);
   }, [authUser?.profile?.avatar_url, authUser?.profile?.cover_url]);
 
-  // Seed edit form when modal opens
-  function openEditModal() {
-    const nameParts = (authUser?.name || '').split(' ');
-    setEditFirstName(nameParts[0] || '');
-    setEditLastName(nameParts.slice(1).join(' '));
-    setEditHandle((authUser?.profile?.handle || '').replace(/^@/, ''));
-    setEditBio(authUser?.profile?.bio || '');
-    setEditLivesIn(authUser?.profile?.lives_in || '');
-    setEditVisa(authUser?.profile?.visa_status || 'OPT');
-    setSaveError('');
-    setEditModal(true);
-  }
-
-  // ── Fetch own posts (uses author filter on the backend) ────────────────────
+  // ── Data fetching ─────────────────────────────────────────────────────────
   const fetchMyPosts = useCallback(async () => {
     if (!authUser?.id) return;
     setLoadingPosts(true);
+    setErrorPosts(null);
     try {
       const data = await api(`/posts/?author=${authUser.id}`);
-      setPosts(Array.isArray(data) ? data : (data.results || []));
-    } catch {
-      setPosts([]);
+      setPosts(Array.isArray(data) ? data : (data.results ?? []));
+    } catch (e) {
+      setErrorPosts(e.message || 'Could not load posts.');
     } finally {
       setLoadingPosts(false);
     }
@@ -176,22 +194,51 @@ export default function ProfileScreen({ navigation }) {
 
   const fetchSavedPosts = useCallback(async () => {
     setLoadingSaved(true);
+    setErrorSaved(null);
     try {
       const data = await api('/posts/saved/');
-      setSavedPosts(Array.isArray(data) ? data : (data.results || []));
-    } catch {
-      setSavedPosts([]);
+      setSavedPosts(Array.isArray(data) ? data : (data.results ?? []));
+    } catch (e) {
+      setErrorSaved(e.message || 'Could not load saved posts.');
     } finally {
       setLoadingSaved(false);
     }
   }, [api]);
 
+  // Refresh posts whenever the profile screen gains focus
+  useFocusEffect(useCallback(() => {
+    fetchMyPosts();
+  }, [fetchMyPosts]));
+
+  // Lazy-load saved posts on first visit to that tab
   useEffect(() => {
-    if (activeTab === 'Posts') fetchMyPosts();
-    if (activeTab === 'Saved') fetchSavedPosts();
+    if (activeTab === 'Saved' && !hasFetchedSaved.current) {
+      hasFetchedSaved.current = true;
+      fetchSavedPosts();
+    }
+  }, [activeTab, fetchSavedPosts]);
+
+  // Pull-to-refresh
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    if (activeTab === 'Posts') await fetchMyPosts();
+    if (activeTab === 'Saved') await fetchSavedPosts();
+    setRefreshing(false);
   }, [activeTab, fetchMyPosts, fetchSavedPosts]);
 
-  // ── Photo pickers ──────────────────────────────────────────────────────────
+  // ── Delete post (optimistic) ──────────────────────────────────────────────
+  const handleDeletePost = useCallback(async (postId) => {
+    const snapshot = posts;
+    setPosts(prev => prev.filter(p => String(p.id) !== String(postId)));
+    try {
+      await api(`/posts/${postId}/`, { method: 'DELETE' });
+    } catch {
+      setPosts(snapshot);
+      Alert.alert('Error', 'Could not delete post. Please try again.');
+    }
+  }, [api, posts]);
+
+  // ── Photo pickers ─────────────────────────────────────────────────────────
   async function pickAndUpload(type) {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
@@ -199,44 +246,52 @@ export default function ProfileScreen({ navigation }) {
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaType.Images,
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: type === 'avatar' ? [1, 1] : [3, 1],
       quality: 0.85,
     });
     if (result.canceled || !result.assets?.[0]) return;
-    const uri = result.assets[0].uri;
-    const ext = uri.split('.').pop().toLowerCase();
-    const mime = ext === 'png' ? 'image/png' : 'image/jpeg';
+    const asset = result.assets[0];
+    const ext   = asset.uri.split('.').pop().toLowerCase();
+    const mime  = ext === 'png' ? 'image/png' : 'image/jpeg';
 
-    if (type === 'avatar') {
-      setAvatarUri(uri);
-      setUploadingAvatar(true);
-    } else {
-      setCoverUri(uri);
-      setUploadingCover(true);
-    }
+    if (type === 'avatar') { setAvatarUri(asset.uri); setUploadingAvatar(true); }
+    else                   { setCoverUri(asset.uri);  setUploadingCover(true);  }
 
     try {
       const fd = new FormData();
-      fd.append(type, { uri, name: `${type}.${ext}`, type: mime });
+      fd.append(type, { uri: asset.uri, name: `${type}.${ext}`, type: mime });
       await api('/auth/me/', { method: 'PATCH', body: fd });
     } catch {
       Alert.alert('Upload failed', 'Could not save your photo. Please try again.');
       if (type === 'avatar') setAvatarUri(authUser?.profile?.avatar_url || null);
-      else setCoverUri(authUser?.profile?.cover_url || null);
+      else                   setCoverUri(authUser?.profile?.cover_url   || null);
     } finally {
       if (type === 'avatar') setUploadingAvatar(false);
-      else setUploadingCover(false);
+      else                   setUploadingCover(false);
     }
   }
 
-  // ── Save profile ───────────────────────────────────────────────────────────
+  // ── Edit profile ──────────────────────────────────────────────────────────
+  function openEditModal() {
+    // Use first_name/last_name directly (now returned by backend) with name-split fallback
+    const nameParts = (authUser?.name || '').split(' ');
+    setEditFirstName(authUser?.first_name || nameParts[0] || '');
+    setEditLastName(authUser?.last_name   || nameParts.slice(1).join(' ') || '');
+    setEditHandle((authUser?.profile?.handle || '').replace(/^@/, ''));
+    setEditBio(authUser?.profile?.bio     || '');
+    setEditLivesIn(authUser?.profile?.lives_in    || '');
+    setSaveError('');
+    setEditModal(true);
+  }
+
   async function handleSaveProfile() {
     const firstName = editFirstName.trim();
     if (!firstName) { setSaveError('First name is required.'); return; }
     const handle = editHandle.trim().replace(/^@/, '');
-    if (!handle) { setSaveError('Handle is required.'); return; }
+    if (!handle)    { setSaveError('Handle is required.');     return; }
+    if (handle.length < 3) { setSaveError('Handle must be at least 3 characters.'); return; }
 
     setSaving(true);
     setSaveError('');
@@ -247,7 +302,6 @@ export default function ProfileScreen({ navigation }) {
         handle,
         bio:         editBio.trim(),
         lives_in:    editLivesIn.trim(),
-        visa_status: editVisa,
       });
       setEditModal(false);
     } catch (e) {
@@ -257,9 +311,35 @@ export default function ProfileScreen({ navigation }) {
     }
   }
 
-  // ── Country / community change ─────────────────────────────────────────────
+  // ── Change password ───────────────────────────────────────────────────────
+  function openPwModal() {
+    setOldPw(''); setNewPw(''); setConfirmPw('');
+    setPwError(''); setPwSuccess(false);
+    setPwModal(true);
+  }
+
+  async function handleChangePassword() {
+    if (!oldPw || !newPw || !confirmPw) { setPwError('All fields are required.'); return; }
+    if (newPw.length < 8)               { setPwError('New password must be at least 8 characters.'); return; }
+    if (newPw !== confirmPw)            { setPwError('New passwords do not match.'); return; }
+
+    setChangingPw(true);
+    setPwError('');
+    try {
+      await api('/auth/change-password/', { method: 'POST', body: { old_password: oldPw, new_password: newPw } });
+      setPwSuccess(true);
+      setOldPw(''); setNewPw(''); setConfirmPw('');
+    } catch (e) {
+      setPwError(e.message || 'Could not change password.');
+    } finally {
+      setChangingPw(false);
+    }
+  }
+
+  // ── Community picker ──────────────────────────────────────────────────────
   async function handleCountrySelect(c) {
     setCountryModal(false);
+    setCountrySearch('');
     try {
       await updateProfile({ home_country: c.name, country_flag: c.flag });
     } catch (e) {
@@ -267,8 +347,8 @@ export default function ProfileScreen({ navigation }) {
     }
   }
 
-  // ── Logout ─────────────────────────────────────────────────────────────────
-  async function handleLogout() {
+  // ── Logout ────────────────────────────────────────────────────────────────
+  function handleLogout() {
     Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Sign Out', style: 'destructive', onPress: async () => {
@@ -278,7 +358,7 @@ export default function ProfileScreen({ navigation }) {
     ]);
   }
 
-  // ── Derived display values (single source of truth: authStore) ─────────────
+  // ── Derived display values ────────────────────────────────────────────────
   const displayName   = authUser?.name || '';
   const displayHandle = authUser?.profile?.handle ? `@${authUser.profile.handle}` : '';
   const displayEmoji  = authUser?.profile?.avatar_emoji || '🧑‍💻';
@@ -286,23 +366,81 @@ export default function ProfileScreen({ navigation }) {
   const displayBio    = authUser?.profile?.bio || '';
   const countryFlag   = authUser?.profile?.country_flag || '🌍';
   const homeCountry   = authUser?.profile?.home_country || '';
-  const visaStatus    = authUser?.profile?.visa_status || '';
+  const displayEmail  = authUser?.email || '';
 
-  const TABS = [
-    { key: 'Posts',    icon: 'grid-outline' },
-    { key: 'Saved',    icon: 'bookmark-outline' },
-    { key: 'Settings', icon: 'settings-outline' },
-  ];
+  const filteredCountries = useMemo(() =>
+    COUNTRIES.filter(c => c.name.toLowerCase().includes(countrySearch.toLowerCase())),
+    [countrySearch],
+  );
 
+  // ── Tab content renderer ──────────────────────────────────────────────────
+  function renderPosts(list, loading, error, onRetry, isOwn) {
+    if (loading) {
+      return (
+        <View style={s.centerState}>
+          <ActivityIndicator size="small" color={C.vivid} />
+        </View>
+      );
+    }
+    if (error) {
+      return (
+        <View style={s.centerState}>
+          <Ionicons name="cloud-offline-outline" size={36} color={C.c35} />
+          <Text style={[s.emptyTxt, { color: C.cream }]}>Failed to load</Text>
+          <Text style={[s.emptySub, { color: C.c35 }]}>{error}</Text>
+          <TouchableOpacity style={[s.retryBtn, { backgroundColor: C.vividD, borderColor: C.vivid + '44' }]} onPress={onRetry} activeOpacity={0.85}>
+            <Ionicons name="refresh" size={14} color={C.vivid} />
+            <Text style={[s.retryBtnTxt, { color: C.vivid }]}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    if (list.length === 0) {
+      return (
+        <View style={s.centerState}>
+          <View style={[s.emptyIcon, { backgroundColor: C.card }]}>
+            <Ionicons name={isOwn ? 'document-text-outline' : 'bookmark-outline'} size={28} color={C.c35} />
+          </View>
+          <Text style={[s.emptyTxt, { color: C.cream }]}>{isOwn ? 'No posts yet' : 'Nothing saved yet'}</Text>
+          <Text style={[s.emptySub, { color: C.c35 }]}>
+            {isOwn ? 'Share something with your community' : 'Tap Save on any post to bookmark it here'}
+          </Text>
+          {isOwn && (
+            <TouchableOpacity style={[s.emptyBtn, { backgroundColor: C.vivid }]} onPress={() => navigation.navigate('CreatePost')} activeOpacity={0.85}>
+              <Ionicons name="add" size={16} color="white" />
+              <Text style={s.emptyBtnTxt}>Create a post</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      );
+    }
+    return list.map(post => (
+      <PostCard
+        key={post.id}
+        post={post}
+        isOwn={isOwn}
+        onDelete={handleDeletePost}
+        navigation={navigation}
+        C={C}
+        s={s}
+      />
+    ));
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 48 }}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 48 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.vivid} />}
+      >
 
-        {/* ── Cover ──────────────────────────────────────────── */}
+        {/* ── Cover ──────────────────────────────────────────────── */}
         <TouchableOpacity style={s.coverWrap} onPress={() => pickAndUpload('cover')} activeOpacity={0.9}>
           {coverUri
             ? <Image source={{ uri: coverUri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
-            : <View style={s.coverPlaceholder} />
+            : <View style={[s.coverPlaceholder, { backgroundColor: C.vividD }]} />
           }
           <View style={s.coverOverlay} />
           <View style={s.coverCameraBtn}>
@@ -311,22 +449,14 @@ export default function ProfileScreen({ navigation }) {
               : <Ionicons name="camera" size={16} color="white" />
             }
           </View>
-          <TouchableOpacity
-            style={s.coverSettingsBtn}
-            onPress={() => navigation.navigate('Settings')}
-            activeOpacity={0.8}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Ionicons name="settings-outline" size={20} color="white" />
-          </TouchableOpacity>
         </TouchableOpacity>
 
-        {/* ── Avatar ─────────────────────────────────────────── */}
+        {/* ── Avatar ─────────────────────────────────────────────── */}
         <View style={s.avatarWrap}>
-          <TouchableOpacity style={s.avatarRing} onPress={() => pickAndUpload('avatar')} activeOpacity={0.85}>
+          <TouchableOpacity style={[s.avatarRing, { borderColor: C.vivid, backgroundColor: C.bg }]} onPress={() => pickAndUpload('avatar')} activeOpacity={0.85}>
             <UserAvatar uri={avatarUri} emoji={displayEmoji} name={displayName} size={80} bg={C.vividD} />
           </TouchableOpacity>
-          <View style={s.editAvatarBadge}>
+          <View style={[s.editAvatarBadge, { backgroundColor: C.vivid, borderColor: C.bg }]}>
             {uploadingAvatar
               ? <ActivityIndicator size="small" color="white" />
               : <Ionicons name="camera" size={13} color="white" />
@@ -334,186 +464,164 @@ export default function ProfileScreen({ navigation }) {
           </View>
         </View>
 
-        {/* ── Name / handle / meta ──────────────────────────── */}
+        {/* ── Name / handle / meta ───────────────────────────────── */}
         <View style={s.infoBlock}>
-          <Text style={s.displayName}>{displayName}</Text>
-          {displayHandle ? <Text style={s.displayHandle}>{displayHandle}</Text> : null}
-          {displayBio ? <Text style={s.displayBio}>{displayBio}</Text> : null}
+          <Text style={[s.displayName, { color: C.cream }]}>{displayName}</Text>
+          {displayHandle ? <Text style={[s.displayHandle, { color: C.c35 }]}>{displayHandle}</Text> : null}
+          {displayBio ? (
+            <Text style={[s.displayBio, { color: C.c60 }]}>{displayBio}</Text>
+          ) : null}
 
           <View style={s.metaRow}>
             {displayCity ? (
-              <View style={s.metaChip}>
+              <View style={[s.metaChip, { backgroundColor: C.card, borderColor: C.border }]}>
                 <Ionicons name="location-outline" size={12} color={C.c35} />
-                <Text style={s.metaChipTxt}>{displayCity}</Text>
+                <Text style={[s.metaChipTxt, { color: C.c35 }]}>{displayCity}</Text>
               </View>
             ) : null}
             {homeCountry ? (
-              <View style={s.metaChip}>
+              <View style={[s.metaChip, { backgroundColor: C.card, borderColor: C.border }]}>
                 <Text style={{ fontSize: 13 }}>{countryFlag}</Text>
-                <Text style={s.metaChipTxt}>{homeCountry}</Text>
-              </View>
-            ) : null}
-            {visaStatus ? (
-              <View style={[s.metaChip, { backgroundColor: C.vividD, borderColor: C.vivid + '44' }]}>
-                <Ionicons name="card-outline" size={12} color={C.vivid} />
-                <Text style={[s.metaChipTxt, { color: C.vivid }]}>{VISA_LABELS[visaStatus] || visaStatus}</Text>
+                <Text style={[s.metaChipTxt, { color: C.c35 }]}>{homeCountry}</Text>
               </View>
             ) : null}
           </View>
 
-          {/* Action buttons */}
           <View style={s.actionRow}>
-            <TouchableOpacity style={s.editBtn} onPress={openEditModal} activeOpacity={0.85}>
+            <TouchableOpacity style={[s.editBtn, { backgroundColor: C.card, borderColor: C.border }]} onPress={openEditModal} activeOpacity={0.85}>
               <Ionicons name="create-outline" size={15} color={C.cream} />
-              <Text style={s.editBtnTxt}>Edit Profile</Text>
+              <Text style={[s.editBtnTxt, { color: C.cream }]}>Edit Profile</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={s.communityBtn} onPress={() => setCountryModal(true)} activeOpacity={0.85}>
+            <TouchableOpacity style={[s.communityBtn, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => setCountryModal(true)} activeOpacity={0.85}>
               <Text style={{ fontSize: 16 }}>{countryFlag}</Text>
               <Ionicons name="chevron-down" size={14} color={C.c35} />
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* ── Stats ──────────────────────────────────────────── */}
-        <View style={s.statsRow}>
-          {[
-            { num: posts.length,      label: 'Posts'     },
-            { num: VISA_LABELS[visaStatus] || '—', label: 'Visa' },
-            { num: savedPosts.length, label: 'Saved'     },
-          ].map((st, i) => (
-            <View key={i} style={[s.statItem, i < 2 && { borderRightWidth: 1, borderRightColor: C.border }]}>
-              <Text style={s.statNum} numberOfLines={1}>{st.num}</Text>
-              <Text style={s.statLabel}>{st.label}</Text>
-            </View>
-          ))}
+        {/* ── Stats ──────────────────────────────────────────────── */}
+        <View style={[s.statsRow, { backgroundColor: C.card, borderColor: C.border }]}>
+          <TouchableOpacity style={[s.statItem, { borderRightWidth: 1, borderRightColor: C.border }]} onPress={() => setActiveTab('Posts')} activeOpacity={0.8}>
+            <Text style={[s.statNum, { color: C.cream }]}>{loadingPosts ? '—' : posts.length}</Text>
+            <Text style={[s.statLabel, { color: C.c35 }]}>Posts</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={s.statItem} onPress={() => setActiveTab('Saved')} activeOpacity={0.8}>
+            <Text style={[s.statNum, { color: C.cream }]}>{loadingSaved ? '—' : savedPosts.length}</Text>
+            <Text style={[s.statLabel, { color: C.c35 }]}>Saved</Text>
+          </TouchableOpacity>
         </View>
 
-        {/* ── Tabs ───────────────────────────────────────────── */}
-        <View style={s.tabBar}>
+        {/* ── Tabs ───────────────────────────────────────────────── */}
+        <View style={[s.tabBar, { backgroundColor: C.card, borderColor: C.border }]}>
           {TABS.map(tab => {
             const active = activeTab === tab.key;
             return (
               <TouchableOpacity
                 key={tab.key}
-                style={[s.tabBtn, active && s.tabBtnActive]}
+                style={[s.tabBtn, active && { borderBottomColor: C.vivid }]}
                 onPress={() => setActiveTab(tab.key)}
                 activeOpacity={0.8}
               >
-                <Ionicons
-                  name={active ? tab.icon.replace('-outline', '') : tab.icon}
-                  size={19}
-                  color={active ? C.vivid : C.c35}
-                />
-                <Text style={[s.tabTxt, active && { color: C.vivid }]}>{tab.key}</Text>
+                <Ionicons name={active ? tab.iconActive : tab.icon} size={18} color={active ? C.vivid : C.c35} />
+                <Text style={[s.tabTxt, { color: active ? C.vivid : C.c35 }]}>{tab.key}</Text>
               </TouchableOpacity>
             );
           })}
         </View>
 
-        {/* ── Posts tab ──────────────────────────────────────── */}
+        {/* ── Posts tab ──────────────────────────────────────────── */}
         {activeTab === 'Posts' && (
           <View style={s.section}>
-            {loadingPosts ? (
-              <View style={s.centerState}>
-                <ActivityIndicator size="small" color={C.vivid} />
-              </View>
-            ) : posts.length === 0 ? (
-              <View style={s.centerState}>
-                <View style={[s.emptyIcon, { backgroundColor: C.card }]}>
-                  <Ionicons name="document-text-outline" size={28} color={C.c35} />
-                </View>
-                <Text style={s.emptyTxt}>No posts yet</Text>
-                <Text style={s.emptySub}>Share something with your community</Text>
-                <TouchableOpacity style={s.emptyBtn} onPress={() => navigation.navigate('CreatePost')} activeOpacity={0.85}>
-                  <Ionicons name="add" size={16} color="white" />
-                  <Text style={s.emptyBtnTxt}>Create a post</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              posts.map(post => (
-                <PostCard key={post.id} post={post} navigation={navigation} C={C} s={s} />
-              ))
-            )}
+            {renderPosts(posts, loadingPosts, errorPosts, fetchMyPosts, true)}
           </View>
         )}
 
-        {/* ── Saved tab ──────────────────────────────────────── */}
+        {/* ── Saved tab ──────────────────────────────────────────── */}
         {activeTab === 'Saved' && (
           <View style={s.section}>
-            {loadingSaved ? (
-              <View style={s.centerState}>
-                <ActivityIndicator size="small" color={C.vivid} />
-              </View>
-            ) : savedPosts.length === 0 ? (
-              <View style={s.centerState}>
-                <View style={[s.emptyIcon, { backgroundColor: C.card }]}>
-                  <Ionicons name="bookmark-outline" size={28} color={C.c35} />
-                </View>
-                <Text style={s.emptyTxt}>Nothing saved yet</Text>
-                <Text style={s.emptySub}>Tap Save on any post to bookmark it here</Text>
-              </View>
-            ) : (
-              savedPosts.map(post => (
-                <PostCard key={post.id} post={post} navigation={navigation} C={C} s={s} />
-              ))
-            )}
+            {renderPosts(savedPosts, loadingSaved, errorSaved, fetchSavedPosts, false)}
           </View>
         )}
 
-        {/* ── Settings tab ───────────────────────────────────── */}
+        {/* ── Settings tab ───────────────────────────────────────── */}
         {activeTab === 'Settings' && (
           <View style={s.section}>
-            <View style={s.menuCard}>
-              {SETTINGS_ITEMS.map((item, i) => (
-                <TouchableOpacity
-                  key={item.label}
-                  style={[s.menuRow, i < SETTINGS_ITEMS.length - 1 && { borderBottomWidth: 1, borderBottomColor: C.border }]}
-                  onPress={() => item.route && navigation.navigate(item.route)}
-                  activeOpacity={0.75}
-                >
-                  <View style={[s.menuIconWrap, { backgroundColor: C.card2 || C.card }]}>
-                    <Ionicons name={item.icon} size={18} color={C.c35} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.menuLabel}>{item.label}</Text>
-                    <Text style={s.menuSub}>{item.sub}</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={17} color={C.c35} />
-                </TouchableOpacity>
-              ))}
+
+            <View style={[s.menuCard, { backgroundColor: C.card, borderColor: C.border }]}>
+              {/* Email */}
+              <View style={[s.menuRow, { borderBottomWidth: 1, borderBottomColor: C.border }]}>
+                <View style={[s.menuIconWrap, { backgroundColor: C.card2 || C.bg }]}>
+                  <Ionicons name="mail-outline" size={18} color={C.c35} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.menuLabel, { color: C.cream }]}>Email</Text>
+                  <Text style={[s.menuSub, { color: C.c35 }]}>{displayEmail || 'Not set'}</Text>
+                </View>
+              </View>
+
+              {/* Change Password */}
+              <TouchableOpacity
+                style={[s.menuRow, { borderBottomWidth: 1, borderBottomColor: C.border }]}
+                onPress={openPwModal}
+                activeOpacity={0.75}
+              >
+                <View style={[s.menuIconWrap, { backgroundColor: C.card2 || C.bg }]}>
+                  <Ionicons name="lock-closed-outline" size={18} color={C.c35} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.menuLabel, { color: C.cream }]}>Change Password</Text>
+                  <Text style={[s.menuSub, { color: C.c35 }]}>Update your account password</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={17} color={C.c35} />
+              </TouchableOpacity>
+
+              {/* Appearance */}
+              <TouchableOpacity
+                style={s.menuRow}
+                onPress={() => navigation.navigate('Settings')}
+                activeOpacity={0.75}
+              >
+                <View style={[s.menuIconWrap, { backgroundColor: C.card2 || C.bg }]}>
+                  <Ionicons name="moon-outline" size={18} color={C.c35} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.menuLabel, { color: C.cream }]}>Appearance</Text>
+                  <Text style={[s.menuSub, { color: C.c35 }]}>Dark / light mode</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={17} color={C.c35} />
+              </TouchableOpacity>
             </View>
 
-            <TouchableOpacity style={s.logoutBtn} onPress={handleLogout} activeOpacity={0.85}>
-              <Ionicons name="log-out-outline" size={18} color={C.vivid} />
-              <Text style={s.logoutTxt}>Sign Out</Text>
+            {/* Sign out */}
+            <TouchableOpacity
+              style={[s.logoutBtn, { backgroundColor: '#FF4D4D18', borderColor: '#FF4D4D44' }]}
+              onPress={handleLogout}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="log-out-outline" size={18} color="#FF4D4D" />
+              <Text style={[s.logoutTxt, { color: '#FF4D4D' }]}>Sign Out</Text>
             </TouchableOpacity>
+
           </View>
         )}
 
       </ScrollView>
 
-      {/* ── Edit Profile Modal ────────────────────────────────── */}
+      {/* ── Edit Profile Modal ─────────────────────────────────────────────── */}
       <Modal visible={editModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setEditModal(false)}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={[{ flex: 1 }, { backgroundColor: C.bg }]}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={[{ flex: 1, backgroundColor: C.bg }]}>
           <View style={[s.modalHeader, { borderBottomColor: C.border }]}>
             <TouchableOpacity onPress={() => setEditModal(false)} style={s.modalHeaderBtn}>
               <Ionicons name="close" size={22} color={C.c35} />
             </TouchableOpacity>
-            <Text style={s.modalTitle}>Edit Profile</Text>
-            <TouchableOpacity
-              style={[s.modalSaveBtn, saving && { opacity: 0.6 }]}
-              onPress={handleSaveProfile}
-              disabled={saving}
-            >
-              {saving
-                ? <ActivityIndicator size="small" color="white" />
-                : <Text style={s.modalSaveTxt}>Save</Text>
-              }
+            <Text style={[s.modalTitle, { color: C.cream }]}>Edit Profile</Text>
+            <TouchableOpacity style={[s.modalSaveBtn, { backgroundColor: C.vivid }, saving && { opacity: 0.6 }]} onPress={handleSaveProfile} disabled={saving}>
+              {saving ? <ActivityIndicator size="small" color="white" /> : <Text style={s.modalSaveTxt}>Save</Text>}
             </TouchableOpacity>
           </View>
 
           <ScrollView contentContainerStyle={s.modalBody} keyboardShouldPersistTaps="handled">
-            {/* Avatar / cover row */}
+            {/* Photo row */}
             <View style={s.editPhotoRow}>
               <TouchableOpacity style={s.editAvatarPreview} onPress={() => pickAndUpload('avatar')} activeOpacity={0.85}>
                 <UserAvatar uri={avatarUri} emoji={displayEmoji} name={displayName} size={68} bg={C.vividD} />
@@ -532,16 +640,16 @@ export default function ProfileScreen({ navigation }) {
             </View>
 
             {saveError ? (
-              <View style={[s.saveErrorBox, { backgroundColor: C.vividD, borderColor: C.vivid + '44' }]}>
-                <Ionicons name="alert-circle-outline" size={15} color={C.vivid} />
-                <Text style={[s.saveErrorTxt, { color: C.vivid }]}>{saveError}</Text>
+              <View style={[s.alertBox, { backgroundColor: '#FF4D4D18', borderColor: '#FF4D4D44' }]}>
+                <Ionicons name="alert-circle-outline" size={15} color="#FF4D4D" />
+                <Text style={[s.alertTxt, { color: '#FF4D4D' }]}>{saveError}</Text>
               </View>
             ) : null}
 
-            {/* Name row */}
+            {/* Name */}
             <View style={s.nameRow}>
               <View style={[s.fieldWrap, { flex: 1 }]}>
-                <Text style={s.fieldLabel}>First Name</Text>
+                <Text style={[s.fieldLabel, { color: C.c35 }]}>FIRST NAME</Text>
                 <TextInput
                   style={[s.fieldInput, { backgroundColor: C.card, borderColor: C.border, color: C.cream }]}
                   value={editFirstName}
@@ -552,7 +660,7 @@ export default function ProfileScreen({ navigation }) {
                 />
               </View>
               <View style={[s.fieldWrap, { flex: 1 }]}>
-                <Text style={s.fieldLabel}>Last Name</Text>
+                <Text style={[s.fieldLabel, { color: C.c35 }]}>LAST NAME</Text>
                 <TextInput
                   style={[s.fieldInput, { backgroundColor: C.card, borderColor: C.border, color: C.cream }]}
                   value={editLastName}
@@ -564,8 +672,9 @@ export default function ProfileScreen({ navigation }) {
               </View>
             </View>
 
+            {/* Handle */}
             <View style={s.fieldWrap}>
-              <Text style={s.fieldLabel}>Handle</Text>
+              <Text style={[s.fieldLabel, { color: C.c35 }]}>HANDLE</Text>
               <View style={[s.fieldWithPrefix, { backgroundColor: C.card, borderColor: C.border }]}>
                 <Text style={[s.fieldPrefix, { color: C.c35 }]}>@</Text>
                 <TextInput
@@ -580,8 +689,9 @@ export default function ProfileScreen({ navigation }) {
               </View>
             </View>
 
+            {/* Bio */}
             <View style={s.fieldWrap}>
-              <Text style={s.fieldLabel}>Bio</Text>
+              <Text style={[s.fieldLabel, { color: C.c35 }]}>BIO</Text>
               <TextInput
                 style={[s.fieldInput, s.fieldMultiline, { backgroundColor: C.card, borderColor: C.border, color: C.cream }]}
                 value={editBio}
@@ -594,8 +704,9 @@ export default function ProfileScreen({ navigation }) {
               />
             </View>
 
+            {/* City */}
             <View style={s.fieldWrap}>
-              <Text style={s.fieldLabel}>City / Location</Text>
+              <Text style={[s.fieldLabel, { color: C.c35 }]}>CITY / LOCATION</Text>
               <TextInput
                 style={[s.fieldInput, { backgroundColor: C.card, borderColor: C.border, color: C.cream }]}
                 value={editLivesIn}
@@ -606,36 +717,104 @@ export default function ProfileScreen({ navigation }) {
               />
             </View>
 
-            {/* Visa status picker */}
-            <View style={s.fieldWrap}>
-              <Text style={s.fieldLabel}>Visa Status</Text>
-              <View style={s.visaGrid}>
-                {VISA_OPTIONS.map(v => (
-                  <TouchableOpacity
-                    key={v}
-                    style={[s.visaChip, editVisa === v && { backgroundColor: C.vividD, borderColor: C.vivid }]}
-                    onPress={() => setEditVisa(v)}
-                    activeOpacity={0.75}
-                  >
-                    <Text style={[s.visaChipTxt, { color: editVisa === v ? C.vivid : C.c35 }]}>
-                      {VISA_LABELS[v]}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
           </ScrollView>
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* ── Community (country) picker ────────────────────────── */}
+      {/* ── Change Password Modal ─────────────────────────────────────────── */}
+      <Modal visible={pwModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setPwModal(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={[{ flex: 1, backgroundColor: C.bg }]}>
+          <View style={[s.modalHeader, { borderBottomColor: C.border }]}>
+            <TouchableOpacity onPress={() => setPwModal(false)} style={s.modalHeaderBtn}>
+              <Ionicons name="close" size={22} color={C.c35} />
+            </TouchableOpacity>
+            <Text style={[s.modalTitle, { color: C.cream }]}>Change Password</Text>
+            <View style={{ width: 60 }} />
+          </View>
+
+          <ScrollView contentContainerStyle={s.modalBody} keyboardShouldPersistTaps="handled">
+            {pwSuccess ? (
+              <View style={[s.alertBox, { backgroundColor: C.greenD, borderColor: C.green + '44' }]}>
+                <Ionicons name="checkmark-circle-outline" size={16} color={C.green} />
+                <Text style={[s.alertTxt, { color: C.green }]}>Password changed successfully!</Text>
+              </View>
+            ) : null}
+
+            {pwError ? (
+              <View style={[s.alertBox, { backgroundColor: '#FF4D4D18', borderColor: '#FF4D4D44' }]}>
+                <Ionicons name="alert-circle-outline" size={15} color="#FF4D4D" />
+                <Text style={[s.alertTxt, { color: '#FF4D4D' }]}>{pwError}</Text>
+              </View>
+            ) : null}
+
+            <View style={s.fieldWrap}>
+              <Text style={[s.fieldLabel, { color: C.c35 }]}>CURRENT PASSWORD</Text>
+              <TextInput
+                style={[s.fieldInput, { backgroundColor: C.card, borderColor: C.border, color: C.cream }]}
+                value={oldPw}
+                onChangeText={v => { setOldPw(v); setPwError(''); }}
+                placeholder="Enter current password"
+                placeholderTextColor={C.c35}
+                secureTextEntry
+                autoCapitalize="none"
+              />
+            </View>
+
+            <View style={s.fieldWrap}>
+              <Text style={[s.fieldLabel, { color: C.c35 }]}>NEW PASSWORD</Text>
+              <TextInput
+                style={[s.fieldInput, { backgroundColor: C.card, borderColor: C.border, color: C.cream }]}
+                value={newPw}
+                onChangeText={v => { setNewPw(v); setPwError(''); }}
+                placeholder="Min. 8 characters"
+                placeholderTextColor={C.c35}
+                secureTextEntry
+                autoCapitalize="none"
+              />
+            </View>
+
+            <View style={s.fieldWrap}>
+              <Text style={[s.fieldLabel, { color: C.c35 }]}>CONFIRM NEW PASSWORD</Text>
+              <TextInput
+                style={[s.fieldInput, { backgroundColor: C.card, borderColor: C.border, color: C.cream }]}
+                value={confirmPw}
+                onChangeText={v => { setConfirmPw(v); setPwError(''); }}
+                placeholder="Repeat new password"
+                placeholderTextColor={C.c35}
+                secureTextEntry
+                autoCapitalize="none"
+              />
+            </View>
+
+            <TouchableOpacity
+              style={[s.savePwBtn, { backgroundColor: C.vivid }, changingPw && { opacity: 0.6 }]}
+              onPress={handleChangePassword}
+              disabled={changingPw || pwSuccess}
+              activeOpacity={0.85}
+            >
+              {changingPw
+                ? <ActivityIndicator size="small" color="white" />
+                : <Ionicons name="lock-closed" size={16} color="white" />
+              }
+              <Text style={s.savePwBtnTxt}>{changingPw ? 'Saving…' : 'Change Password'}</Text>
+            </TouchableOpacity>
+
+            {pwSuccess && (
+              <TouchableOpacity onPress={() => setPwModal(false)} style={{ alignItems: 'center', marginTop: 8 }}>
+                <Text style={[s.editPhotoLink, { color: C.c35 }]}>Close</Text>
+              </TouchableOpacity>
+            )}
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* ── Community picker ──────────────────────────────────────────────── */}
       <Modal visible={countryModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setCountryModal(false)}>
-        <View style={[{ flex: 1 }, { backgroundColor: C.bg }]}>
+        <View style={[{ flex: 1, backgroundColor: C.bg }]}>
           <View style={[s.modalHeader, { borderBottomColor: C.border }]}>
             <View style={s.modalHeaderBtn} />
-            <Text style={s.modalTitle}>Your Community</Text>
-            <TouchableOpacity style={s.modalHeaderBtn} onPress={() => setCountryModal(false)}>
+            <Text style={[s.modalTitle, { color: C.cream }]}>Your Community</Text>
+            <TouchableOpacity style={s.modalHeaderBtn} onPress={() => { setCountryModal(false); setCountrySearch(''); }}>
               <Ionicons name="close" size={22} color={C.c35} />
             </TouchableOpacity>
           </View>
@@ -647,8 +826,30 @@ export default function ProfileScreen({ navigation }) {
             </Text>
           </View>
 
+          {/* Search */}
+          <View style={[s.countrySearch, { backgroundColor: C.card, borderColor: C.border }]}>
+            <Ionicons name="search-outline" size={16} color={C.c35} />
+            <TextInput
+              style={[s.countrySearchInput, { color: C.cream }]}
+              placeholder="Search countries…"
+              placeholderTextColor={C.c35}
+              value={countrySearch}
+              onChangeText={setCountrySearch}
+              autoCapitalize="words"
+            />
+            {countrySearch.length > 0 && (
+              <TouchableOpacity onPress={() => setCountrySearch('')} hitSlop={8}>
+                <Ionicons name="close-circle" size={15} color={C.c35} />
+              </TouchableOpacity>
+            )}
+          </View>
+
           <ScrollView contentContainerStyle={{ padding: 16, gap: 8, paddingBottom: 40 }}>
-            {COUNTRIES.map(c => {
+            {filteredCountries.length === 0 ? (
+              <Text style={[{ textAlign: 'center', paddingTop: 20, color: C.c35, fontSize: 14 }]}>
+                No results for "{countrySearch}"
+              </Text>
+            ) : filteredCountries.map(c => {
               const active = c.name === homeCountry;
               return (
                 <TouchableOpacity
@@ -680,103 +881,108 @@ const getStyles = (C) => StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
 
   // Cover
-  coverWrap:        { height: 130, position: 'relative' },
-  coverPlaceholder: { ...StyleSheet.absoluteFillObject, backgroundColor: C.vividD },
-  coverOverlay:     { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.28)' },
-  coverCameraBtn:   { position: 'absolute', bottom: 10, right: 54, width: 34, height: 34, borderRadius: 10, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
-  coverSettingsBtn: { position: 'absolute', top: 14, right: 14, width: 36, height: 36, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.35)', alignItems: 'center', justifyContent: 'center' },
+  coverWrap:        { height: 140, position: 'relative' },
+  coverPlaceholder: { ...StyleSheet.absoluteFillObject },
+  coverOverlay:     { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.25)' },
+  coverCameraBtn:   { position: 'absolute', bottom: 12, right: 16, width: 34, height: 34, borderRadius: 10, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
 
   // Avatar
-  avatarWrap:      { alignItems: 'center', marginTop: -44, zIndex: 5, position: 'relative' },
-  avatarRing:      { width: 90, height: 90, borderRadius: 45, borderWidth: 3, borderColor: C.vivid, alignItems: 'center', justifyContent: 'center', backgroundColor: C.bg },
-  editAvatarBadge: { position: 'absolute', bottom: 0, right: '33%', width: 26, height: 26, borderRadius: 13, backgroundColor: C.vivid, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: C.bg },
+  avatarWrap:      { alignItems: 'center', marginTop: -46, zIndex: 5 },
+  avatarRing:      { width: 92, height: 92, borderRadius: 46, borderWidth: 3, alignItems: 'center', justifyContent: 'center' },
+  editAvatarBadge: { position: 'absolute', bottom: 0, marginLeft: 46, width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center', borderWidth: 2 },
 
-  // Info
+  // Info block
   infoBlock:    { alignItems: 'center', paddingHorizontal: 20, paddingTop: 10, gap: 6 },
-  displayName:  { fontSize: 22, fontWeight: '800', color: C.cream, letterSpacing: -0.5 },
-  displayHandle:{ fontSize: 13, color: C.c35 },
-  displayBio:   { fontSize: 14, color: C.c60, textAlign: 'center', lineHeight: 21, paddingHorizontal: 20 },
+  displayName:  { fontSize: 22, fontWeight: '800', letterSpacing: -0.5 },
+  displayHandle:{ fontSize: 13 },
+  displayBio:   { fontSize: 14, textAlign: 'center', lineHeight: 21, paddingHorizontal: 16 },
   metaRow:      { flexDirection: 'row', flexWrap: 'wrap', gap: 6, justifyContent: 'center', marginTop: 2 },
-  metaChip:     { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 50, backgroundColor: C.card, borderWidth: 1, borderColor: C.border },
-  metaChipTxt:  { fontSize: 12, fontWeight: '600', color: C.c35 },
-  actionRow:    { flexDirection: 'row', gap: 8, marginTop: 4 },
-  editBtn:      { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 12, borderWidth: 1, borderColor: C.border, backgroundColor: C.card, paddingVertical: 10 },
-  editBtnTxt:   { fontSize: 13, fontWeight: '700', color: C.cream },
-  communityBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: C.border, backgroundColor: C.card },
+  metaChip:     { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 50, borderWidth: 1 },
+  metaChipTxt:  { fontSize: 12, fontWeight: '600' },
+  actionRow:    { flexDirection: 'row', gap: 8, marginTop: 6 },
+  editBtn:      { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 12, borderWidth: 1, paddingVertical: 10 },
+  editBtnTxt:   { fontSize: 13, fontWeight: '700' },
+  communityBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, borderWidth: 1 },
 
   // Stats
-  statsRow:  { flexDirection: 'row', marginHorizontal: 20, marginTop: 18, borderRadius: 18, overflow: 'hidden', borderWidth: 1, borderColor: C.border, backgroundColor: C.card },
+  statsRow:  { flexDirection: 'row', marginHorizontal: 20, marginTop: 18, borderRadius: 18, overflow: 'hidden', borderWidth: 1 },
   statItem:  { flex: 1, paddingVertical: 14, alignItems: 'center', gap: 2 },
-  statNum:   { fontSize: 15, fontWeight: '800', color: C.cream, textAlign: 'center', paddingHorizontal: 4 },
-  statLabel: { fontSize: 10, fontWeight: '600', color: C.c35, textTransform: 'uppercase', letterSpacing: 0.5 },
+  statNum:   { fontSize: 14, fontWeight: '800', textAlign: 'center', paddingHorizontal: 2 },
+  statLabel: { fontSize: 10, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
 
   // Tabs
-  tabBar:      { flexDirection: 'row', marginHorizontal: 20, marginTop: 16, borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: C.border, backgroundColor: C.card },
+  tabBar:      { flexDirection: 'row', marginHorizontal: 20, marginTop: 16, borderRadius: 16, overflow: 'hidden', borderWidth: 1 },
   tabBtn:      { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 11, borderBottomWidth: 2, borderBottomColor: 'transparent' },
-  tabBtnActive:{ borderBottomColor: C.vivid },
-  tabTxt:      { fontSize: 12, fontWeight: '700', color: C.c35 },
+  tabTxt:      { fontSize: 12, fontWeight: '700' },
 
-  // Content sections
-  section:     { paddingHorizontal: 16, marginTop: 14 },
-  centerState: { alignItems: 'center', paddingVertical: 40, gap: 10 },
-  emptyIcon:   { width: 60, height: 60, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
-  emptyTxt:    { fontSize: 15, fontWeight: '700', color: C.cream },
-  emptySub:    { fontSize: 13, color: C.c35, textAlign: 'center' },
-  emptyBtn:    { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 12, backgroundColor: C.vivid },
-  emptyBtnTxt: { fontSize: 13, fontWeight: '700', color: 'white' },
+  // Section
+  section:      { paddingHorizontal: 16, marginTop: 14 },
+  sectionLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 8, marginTop: 16 },
+  centerState:  { alignItems: 'center', paddingVertical: 40, gap: 10 },
+  emptyIcon:    { width: 60, height: 60, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
+  emptyTxt:     { fontSize: 15, fontWeight: '700', textAlign: 'center' },
+  emptySub:     { fontSize: 13, textAlign: 'center' },
+  emptyBtn:     { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 12 },
+  emptyBtnTxt:  { fontSize: 13, fontWeight: '700', color: 'white' },
+  retryBtn:     { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4, paddingHorizontal: 18, paddingVertical: 9, borderRadius: 50, borderWidth: 1 },
+  retryBtnTxt:  { fontSize: 13, fontWeight: '700' },
 
   // Post cards
-  postCard:      { backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 16, padding: 14, marginBottom: 10 },
-  postBody:      { fontSize: 14, color: C.c60, lineHeight: 21, marginBottom: 10 },
-  postTopics:    { flexDirection: 'row', gap: 6, marginBottom: 10, flexWrap: 'wrap' },
-  postTopicChip: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 50, borderWidth: 1 },
-  postTopicTxt:  { fontSize: 10, fontWeight: '700' },
-  postFooter:    { flexDirection: 'row', alignItems: 'center', gap: 14, paddingTop: 10, borderTopWidth: 1, borderTopColor: C.border },
-  postStat:      { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  postStatTxt:   { fontSize: 12, fontWeight: '600', color: C.c35 },
-  postTime:      { marginLeft: 'auto', fontSize: 11, color: C.c35 },
+  postCard:     { borderWidth: 1, borderRadius: 16, marginBottom: 10, overflow: 'hidden' },
+  postImage:    { width: '100%', height: 160 },
+  postBody:     { padding: 14, paddingBottom: 0 },
+  postBodyTxt:  { fontSize: 14, lineHeight: 21, marginBottom: 10 },
+  postTopics:   { flexDirection: 'row', gap: 6, marginBottom: 8, flexWrap: 'wrap', paddingHorizontal: 14 },
+  postTopicChip:{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 50, borderWidth: 1 },
+  postTopicTxt: { fontSize: 10, fontWeight: '700' },
+  postFooter:   { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 12, paddingTop: 10, borderTopWidth: 1 },
+  postStat:     { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  postStatTxt:  { fontSize: 12, fontWeight: '600' },
+  postTime:     { marginLeft: 'auto', fontSize: 11 },
 
-  // Settings menu
-  menuCard:    { borderRadius: 18, borderWidth: 1, borderColor: C.border, overflow: 'hidden', backgroundColor: C.card },
+  // Settings
+  menuCard:    { borderRadius: 18, borderWidth: 1, overflow: 'hidden' },
   menuRow:     { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 },
   menuIconWrap:{ width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  menuLabel:   { fontSize: 14, fontWeight: '600', color: C.cream, marginBottom: 2 },
-  menuSub:     { fontSize: 11, color: C.c35 },
-  logoutBtn:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 14, borderWidth: 1, borderColor: C.vivid + '44', borderRadius: 14, paddingVertical: 14, backgroundColor: C.vividD },
-  logoutTxt:   { fontSize: 14, fontWeight: '700', color: C.vivid },
+  menuLabel:   { fontSize: 14, fontWeight: '600', marginBottom: 2 },
+  menuSub:     { fontSize: 11 },
+  logoutBtn:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 14, borderWidth: 1, borderRadius: 14, paddingVertical: 14 },
+  logoutTxt:   { fontSize: 14, fontWeight: '700' },
 
-  // Edit modal
+  // Modals
   modalHeader:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1 },
-  modalHeaderBtn: { width: 36, alignItems: 'center' },
-  modalTitle:     { fontSize: 17, fontWeight: '800', color: C.cream },
-  modalSaveBtn:   { paddingHorizontal: 18, paddingVertical: 8, borderRadius: 50, backgroundColor: C.vivid, minWidth: 60, alignItems: 'center' },
+  modalHeaderBtn: { width: 60, alignItems: 'center' },
+  modalTitle:     { fontSize: 17, fontWeight: '800' },
+  modalSaveBtn:   { paddingHorizontal: 18, paddingVertical: 8, borderRadius: 50, minWidth: 60, alignItems: 'center' },
   modalSaveTxt:   { fontSize: 13, fontWeight: '700', color: 'white' },
   modalBody:      { padding: 20, gap: 16, paddingBottom: 40 },
 
-  editPhotoRow:   { flexDirection: 'row', alignItems: 'center', gap: 16, paddingBottom: 4 },
-  editAvatarPreview: { width: 70, height: 70, borderRadius: 35, overflow: 'hidden', position: 'relative' },
-  editPhotoOverlay:  { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.35)', alignItems: 'center', justifyContent: 'center' },
-  editPhotoLink:  { fontSize: 14, fontWeight: '700' },
+  alertBox:   { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderRadius: 12, borderWidth: 1 },
+  alertTxt:   { flex: 1, fontSize: 13, fontWeight: '600' },
 
-  saveErrorBox:  { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderRadius: 12, borderWidth: 1 },
-  saveErrorTxt:  { flex: 1, fontSize: 13, fontWeight: '600' },
+  editPhotoRow:     { flexDirection: 'row', alignItems: 'center', gap: 16, paddingBottom: 4 },
+  editAvatarPreview:{ width: 70, height: 70, borderRadius: 35, overflow: 'hidden', position: 'relative' },
+  editPhotoOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.35)', alignItems: 'center', justifyContent: 'center' },
+  editPhotoLink:    { fontSize: 14, fontWeight: '700' },
 
-  nameRow:    { flexDirection: 'row', gap: 10 },
-  fieldWrap:  { gap: 5 },
-  fieldLabel: { fontSize: 11, fontWeight: '700', color: C.c35, letterSpacing: 0.8, textTransform: 'uppercase' },
-  fieldInput: { borderRadius: 14, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 13, fontSize: 15 },
-  fieldMultiline: { minHeight: 90, paddingTop: 13 },
-  fieldWithPrefix:{ flexDirection: 'row', alignItems: 'center', borderRadius: 14, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 13 },
-  fieldPrefix:    { fontSize: 16, fontWeight: '600', marginRight: 4 },
+  nameRow:         { flexDirection: 'row', gap: 10 },
+  fieldWrap:       { gap: 5 },
+  fieldLabel:      { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase' },
+  fieldInput:      { borderRadius: 14, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 13, fontSize: 15 },
+  fieldMultiline:  { minHeight: 90, paddingTop: 13 },
+  fieldWithPrefix: { flexDirection: 'row', alignItems: 'center', borderRadius: 14, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 13 },
+  fieldPrefix:     { fontSize: 16, fontWeight: '600', marginRight: 4 },
   fieldInputInline:{ flex: 1, fontSize: 15 },
 
-  visaGrid:    { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  visaChip:    { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 50, borderWidth: 1, borderColor: C.border, backgroundColor: C.card },
-  visaChipTxt: { fontSize: 12, fontWeight: '700' },
+
+  savePwBtn:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 14, paddingVertical: 15, marginTop: 8 },
+  savePwBtnTxt: { fontSize: 15, fontWeight: '800', color: 'white' },
 
   // Country modal
-  communityNote:    { flexDirection: 'row', alignItems: 'center', gap: 8, margin: 16, padding: 12, borderRadius: 12, borderWidth: 1 },
+  communityNote:    { flexDirection: 'row', alignItems: 'center', gap: 8, margin: 16, marginBottom: 8, padding: 12, borderRadius: 12, borderWidth: 1 },
   communityNoteTxt: { flex: 1, fontSize: 12, fontWeight: '600' },
+  countrySearch:    { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, marginBottom: 8, borderWidth: 1, borderRadius: 14, paddingHorizontal: 14, height: 42 },
+  countrySearchInput:{ flex: 1, fontSize: 13, paddingVertical: 0 },
   countryOption:    { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 14, borderWidth: 1 },
   countryName:      { flex: 1, fontSize: 15, fontWeight: '600' },
 });

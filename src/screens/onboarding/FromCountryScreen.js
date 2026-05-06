@@ -4,8 +4,10 @@ import {
   TextInput, FlatList,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/ThemeContext';
+
+const NAVY = '#1B3266';
 
 const COUNTRIES = [
   { flag: '🇧🇩', name: 'Bangladesh' },
@@ -64,50 +66,52 @@ export default function FromCountryScreen({ navigation, route }) {
   };
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: C.bg }]} edges={['top', 'bottom']}>
+    <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
 
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={[styles.back, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => navigation.goBack()}>
-          <Text style={[styles.backTxt, { color: C.cream }]}>‹</Text>
-        </TouchableOpacity>
-        <View style={styles.progress}>
-          {[1,2,3].map(i => (
-            <View key={i} style={[styles.progressDot, { backgroundColor: i <= 2 ? C.vivid : C.border }]} />
-          ))}
-        </View>
-        <View style={{ width: 38 }} />
-      </View>
-
-      <View style={styles.titleWrap}>
-        <Text style={[styles.step, { color: C.vivid }]}>Step 2 of 3</Text>
-        <Text style={[styles.title, { color: C.cream }]}>Where are{'\n'}you from? 🌍</Text>
-        <Text style={[styles.sub, { color: C.c35 }]}>We'll connect you with people from your home country</Text>
-      </View>
-
-      {/* Search */}
-      <View style={[styles.searchWrap, { backgroundColor: C.card, borderColor: C.border }]}>
-        <Text style={{ fontSize: 16 }}>🔍</Text>
-        <TextInput
-          style={[styles.searchInput, { color: C.cream }]}
-          placeholder="Search your country…"
-          placeholderTextColor={C.c35}
-          value={search}
-          onChangeText={setSearch}
-        />
-        {search.length > 0 && (
-          <TouchableOpacity onPress={() => setSearch('')}>
-            <Text style={{ fontSize: 16, color: C.c35 }}>✕</Text>
+      {/* ── Navy header ─────────────────────────────────────── */}
+      <View style={s.header}>
+        <View style={s.headerTopRow}>
+          <TouchableOpacity style={s.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.8}>
+            <Ionicons name="chevron-back" size={20} color="#fff" />
           </TouchableOpacity>
-        )}
+          <View style={s.progress}>
+            {[0, 1, 2, 3].map(i => (
+              <View key={i} style={[s.progressDot, { backgroundColor: i <= 2 ? '#F4A227' : 'rgba(255,255,255,0.25)' }]} />
+            ))}
+          </View>
+          <View style={{ width: 34 }} />
+        </View>
+        <Text style={s.headerLogo}>Zabroad ✈</Text>
+        <Text style={s.headerTitle}>Where are{'\n'}you from? 🌍</Text>
+        <Text style={s.headerSub}>We'll connect you with people from your home country</Text>
       </View>
 
-      {/* Country list */}
+      {/* ── Search ──────────────────────────────────────────── */}
+      <View style={[s.searchWrap, { backgroundColor: C.bg }]}>
+        <View style={[s.searchBox, { backgroundColor: C.card, borderColor: C.border }]}>
+          <Ionicons name="search-outline" size={16} color={C.c35} />
+          <TextInput
+            style={[s.searchInput, { color: C.cream }]}
+            placeholder="Search your country…"
+            placeholderTextColor={C.c35}
+            value={search}
+            onChangeText={setSearch}
+          />
+          {search.length > 0 && (
+            <TouchableOpacity onPress={() => setSearch('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name="close-circle" size={16} color={C.c35} />
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+
+      {/* ── Country grid ────────────────────────────────────── */}
       <FlatList
         data={filtered}
         keyExtractor={item => item.name}
         numColumns={2}
-        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 100, gap: 10 }}
+        style={{ backgroundColor: C.bg }}
+        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 120, gap: 10 }}
         columnWrapperStyle={{ gap: 10 }}
         showsVerticalScrollIndicator={false}
         renderItem={({ item }) => {
@@ -115,19 +119,19 @@ export default function FromCountryScreen({ navigation, route }) {
           return (
             <TouchableOpacity
               style={[
-                styles.countryCard,
+                s.countryCard,
                 { backgroundColor: C.card, borderColor: C.border },
-                isSelected && { backgroundColor: C.vividD, borderColor: C.vivid },
+                isSelected && { backgroundColor: C.vividD, borderColor: '#3B8BF7' },
               ]}
               onPress={() => setSelected(item)}
               activeOpacity={0.8}
             >
               <Text style={{ fontSize: 28 }}>{item.flag}</Text>
-              <Text style={[styles.countryName, { color: isSelected ? C.vivid : C.cream }]} numberOfLines={1}>
+              <Text style={[s.countryName, { color: isSelected ? '#3B8BF7' : C.cream }]} numberOfLines={1}>
                 {item.name}
               </Text>
               {isSelected && (
-                <View style={[styles.checkMark, { backgroundColor: C.vivid }]}>
+                <View style={s.checkMark}>
                   <Text style={{ fontSize: 10, color: 'white', fontWeight: '800' }}>✓</Text>
                 </View>
               )}
@@ -136,49 +140,54 @@ export default function FromCountryScreen({ navigation, route }) {
         }}
       />
 
-      {/* Next */}
-      <View style={[styles.footer, { borderTopColor: C.border, backgroundColor: C.bg }]}>
+      {/* ── Footer ──────────────────────────────────────────── */}
+      <View style={[s.footer, { borderTopColor: C.border, backgroundColor: C.bg }]}>
         {selected && (
-          <View style={[styles.selectedBanner, { backgroundColor: C.vividD, borderColor: C.vivid + '44' }]}>
+          <View style={[s.selectedBanner, { backgroundColor: C.card, borderColor: C.border }]}>
             <Text style={{ fontSize: 20 }}>{selected.flag}</Text>
-            <Text style={[styles.selectedTxt, { color: C.cream }]}>{selected.name} selected</Text>
+            <Text style={[s.selectedTxt, { color: C.cream }]}>{selected.name} selected</Text>
           </View>
         )}
         <TouchableOpacity
           onPress={handleNext}
           activeOpacity={selected ? 0.88 : 1}
-          style={[styles.nextBtn, !selected && { opacity: 0.4 }]}
+          style={[s.btn, !selected && { opacity: 0.4 }]}
         >
-          <LinearGradient colors={[C.vivid, '#B82838']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.nextGrad}>
-            <Text style={styles.nextTxt}>Continue</Text>
-            <Text style={{ fontSize: 16, color: 'white' }}>→</Text>
-          </LinearGradient>
+          <Text style={s.btnTxt}>Continue  →</Text>
         </TouchableOpacity>
       </View>
+
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8 },
-  back: { width: 38, height: 38, borderRadius: 13, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  backTxt: { fontSize: 24, lineHeight: 28 },
-  progress: { flexDirection: 'row', gap: 6 },
-  progressDot: { width: 28, height: 4, borderRadius: 2 },
-  titleWrap: { paddingHorizontal: 24, paddingBottom: 16 },
-  step: { fontSize: 12, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 6 },
-  title: { fontSize: 30, fontWeight: '900', letterSpacing: -1, lineHeight: 36, marginBottom: 6 },
-  sub: { fontSize: 14, lineHeight: 20 },
-  searchWrap: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 20, marginBottom: 14, borderRadius: 16, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 12 },
+const s = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: NAVY },
+
+  // ── Navy header ────────────────────────────────────────────────────────────
+  header:       { backgroundColor: NAVY, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 24 },
+  headerTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 },
+  backBtn:      { width: 34, height: 34, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' },
+  progress:     { flexDirection: 'row', gap: 6 },
+  progressDot:  { width: 24, height: 4, borderRadius: 2 },
+  headerLogo:   { fontSize: 20, fontWeight: '900', color: '#fff', letterSpacing: -0.4, marginBottom: 10 },
+  headerTitle:  { fontSize: 26, fontWeight: '900', color: '#fff', letterSpacing: -0.5, lineHeight: 32, marginBottom: 6 },
+  headerSub:    { fontSize: 13, color: 'rgba(255,255,255,0.60)', lineHeight: 19 },
+
+  // ── Search ────────────────────────────────────────────────────────────────
+  searchWrap:  { paddingHorizontal: 20, paddingTop: 14, paddingBottom: 10 },
+  searchBox:   { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 12, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 12 },
   searchInput: { flex: 1, fontSize: 15 },
+
+  // ── Country card ──────────────────────────────────────────────────────────
   countryCard: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14, borderRadius: 16, borderWidth: 1, position: 'relative' },
   countryName: { fontSize: 13, fontWeight: '600', flex: 1 },
-  checkMark: { position: 'absolute', top: 8, right: 8, width: 18, height: 18, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
-  footer: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 24, paddingTop: 12, paddingBottom: 24, borderTopWidth: 1, gap: 10 },
+  checkMark:   { position: 'absolute', top: 8, right: 8, width: 18, height: 18, borderRadius: 6, backgroundColor: '#3B8BF7', alignItems: 'center', justifyContent: 'center' },
+
+  // ── Footer ────────────────────────────────────────────────────────────────
+  footer:         { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 24, paddingTop: 12, paddingBottom: 28, borderTopWidth: 1, gap: 10 },
   selectedBanner: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, borderWidth: 1 },
-  selectedTxt: { fontSize: 14, fontWeight: '600' },
-  nextBtn: { borderRadius: 18, overflow: 'hidden' },
-  nextGrad: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 16 },
-  nextTxt: { fontSize: 16, fontWeight: '800', color: 'white' },
+  selectedTxt:    { fontSize: 14, fontWeight: '600' },
+  btn:            { backgroundColor: NAVY, borderRadius: 13, paddingVertical: 15, alignItems: 'center' },
+  btnTxt:         { fontSize: 16, fontWeight: '800', color: '#fff', letterSpacing: 0.2 },
 });

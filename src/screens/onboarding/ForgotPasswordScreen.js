@@ -5,12 +5,12 @@ import {
   Platform, ActivityIndicator, Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/ThemeContext';
 import { useAuthStore } from '../../store/authStore';
 
-// Two steps: 1 = enter email, 2 = enter OTP + new password
+const NAVY = '#1B3266';
+
 export default function ForgotPasswordScreen({ navigation }) {
   const { colors: C } = useTheme();
   const { api } = useAuthStore();
@@ -41,13 +41,11 @@ export default function ForgotPasswordScreen({ navigation }) {
     ]).start();
   }
 
-  // Step 1 — send OTP
   async function handleSendCode() {
     const e = {};
     if (!email.trim() || !email.includes('@')) e.email = 'Enter a valid email address';
     setErrors(e);
     if (Object.keys(e).length) { shake(); return; }
-
     setLoading(true);
     try {
       await api('/auth/password/forgot/', { method: 'POST', body: { email: email.trim().toLowerCase() } });
@@ -60,7 +58,6 @@ export default function ForgotPasswordScreen({ navigation }) {
     }
   }
 
-  // Step 2 — verify OTP + set new password
   async function handleReset() {
     const e = {};
     if (code.length < 6)         e.code     = 'Enter the 6-digit code';
@@ -68,7 +65,6 @@ export default function ForgotPasswordScreen({ navigation }) {
     if (password !== confirmPass) e.confirm  = 'Passwords do not match';
     setErrors(e);
     if (Object.keys(e).length) { shake(); return; }
-
     setLoading(true);
     try {
       await api('/auth/password/reset/', {
@@ -84,16 +80,16 @@ export default function ForgotPasswordScreen({ navigation }) {
     }
   }
 
-  // Success screen
+  // ── Success screen ─────────────────────────────────────────────────────────
   if (done) {
     return (
-      <SafeAreaView style={[s.safe, { backgroundColor: C.bg }]} edges={['top', 'bottom']}>
+      <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
         <View style={s.successWrap}>
-          <LinearGradient colors={[C.vivid, '#8B1525']} style={s.successIcon}>
-            <Ionicons name="checkmark" size={36} color="white" />
-          </LinearGradient>
-          <Text style={[s.successTitle, { color: C.cream }]}>Password Reset!</Text>
-          <Text style={[s.successSub, { color: C.c35 }]}>
+          <View style={s.successIcon}>
+            <Ionicons name="checkmark" size={36} color={NAVY} />
+          </View>
+          <Text style={s.successTitle}>Password Reset!</Text>
+          <Text style={s.successSub}>
             Your password has been updated successfully.{'\n'}Sign in with your new password.
           </Text>
           <TouchableOpacity
@@ -101,10 +97,7 @@ export default function ForgotPasswordScreen({ navigation }) {
             onPress={() => navigation.replace('Login')}
             activeOpacity={0.88}
           >
-            <LinearGradient colors={[C.vivid, '#B82838']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.doneBtnGrad}>
-              <Text style={s.doneBtnTxt}>Sign In</Text>
-              <Ionicons name="arrow-forward" size={18} color="white" />
-            </LinearGradient>
+            <Text style={s.doneBtnTxt}>Sign In  →</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -112,49 +105,48 @@ export default function ForgotPasswordScreen({ navigation }) {
   }
 
   return (
-    <SafeAreaView style={[s.safe, { backgroundColor: C.bg }]} edges={['top', 'bottom']}>
+    <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
 
-        {/* Top bar */}
-        <View style={s.topBar}>
-          <TouchableOpacity
-            style={[s.backBtn, { backgroundColor: C.card, borderColor: C.border }]}
-            onPress={() => step === 1 ? navigation.goBack() : setStep(1)}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="chevron-back" size={20} color={C.cream} />
-          </TouchableOpacity>
-          {/* Step indicator */}
-          <View style={s.steps}>
-            <View style={[s.stepDot, { backgroundColor: C.vivid }]} />
-            <View style={[s.stepLine, { backgroundColor: step === 2 ? C.vivid : C.border }]} />
-            <View style={[s.stepDot, { backgroundColor: step === 2 ? C.vivid : C.border }]} />
+        {/* ── Navy header ─────────────────────────────────────── */}
+        <View style={s.header}>
+          <View style={s.headerTopRow}>
+            <TouchableOpacity
+              style={s.backBtn}
+              onPress={() => step === 1 ? navigation.goBack() : setStep(1)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="chevron-back" size={20} color="#fff" />
+            </TouchableOpacity>
+            {/* Step indicator */}
+            <View style={s.steps}>
+              <View style={s.stepDot} />
+              <View style={[s.stepLine, { backgroundColor: step === 2 ? '#F4A227' : 'rgba(255,255,255,0.25)' }]} />
+              <View style={[s.stepDot, { backgroundColor: step === 2 ? '#F4A227' : 'rgba(255,255,255,0.25)' }]} />
+            </View>
+            <View style={{ width: 34 }} />
           </View>
-          <View style={{ width: 40 }} />
-        </View>
-
-        <ScrollView
-          contentContainerStyle={s.body}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Header */}
-          <View style={[s.iconWrap, { backgroundColor: C.vividD }]}>
-            <Ionicons name={step === 1 ? 'mail-outline' : 'key-outline'} size={28} color={C.vivid} />
-          </View>
-
-          <Text style={[s.title, { color: C.cream }]}>
-            {step === 1 ? 'Forgot Password?' : 'Reset Password'}
+          <Text style={s.headerLogo}>Zabroad ✈</Text>
+          <Text style={s.headerTitle}>
+            {step === 1 ? 'Forgot\nPassword?' : 'Reset\nPassword'}
           </Text>
-          <Text style={[s.sub, { color: C.c35 }]}>
+          <Text style={s.headerSub}>
             {step === 1
               ? 'Enter your email and we\'ll send you a 6-digit reset code.'
               : `Enter the code sent to ${email} and choose a new password.`}
           </Text>
+        </View>
 
+        {/* ── Form body ────────────────────────────────────────── */}
+        <ScrollView
+          contentContainerStyle={[s.body, { backgroundColor: C.bg }]}
+          style={{ backgroundColor: C.bg }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
           <Animated.View style={{ transform: [{ translateX: shakeAnim }] }}>
 
-            {/* ── Step 1: Email ─────────────────────────────── */}
+            {/* ── Step 1: Email ──────────────────────────────── */}
             {step === 1 && (
               <View style={s.fieldWrap}>
                 <Text style={[s.fieldLabel, { color: C.c35 }]}>Email Address</Text>
@@ -177,10 +169,9 @@ export default function ForgotPasswordScreen({ navigation }) {
               </View>
             )}
 
-            {/* ── Step 2: Code + new password ───────────────── */}
+            {/* ── Step 2: Code + new password ─────────────────── */}
             {step === 2 && (
               <>
-                {/* Code */}
                 <View style={s.fieldWrap}>
                   <Text style={[s.fieldLabel, { color: C.c35 }]}>6-Digit Code</Text>
                   <View style={[s.inputRow, { backgroundColor: C.card, borderColor: errors.code ? '#FF3B30' : C.border }]}>
@@ -199,11 +190,10 @@ export default function ForgotPasswordScreen({ navigation }) {
                   </View>
                   {errors.code ? <Text style={s.errorTxt}>{errors.code}</Text> : null}
                   <TouchableOpacity onPress={handleSendCode} style={s.resendRow} activeOpacity={0.7}>
-                    <Text style={[s.resendTxt, { color: C.vivid }]}>Resend code</Text>
+                    <Text style={s.resendTxt}>Resend code</Text>
                   </TouchableOpacity>
                 </View>
 
-                {/* New password */}
                 <View style={s.fieldWrap}>
                   <Text style={[s.fieldLabel, { color: C.c35 }]}>New Password</Text>
                   <View style={[s.inputRow, { backgroundColor: C.card, borderColor: errors.password ? '#FF3B30' : C.border }]}>
@@ -227,7 +217,6 @@ export default function ForgotPasswordScreen({ navigation }) {
                   {errors.password ? <Text style={s.errorTxt}>{errors.password}</Text> : null}
                 </View>
 
-                {/* Confirm password */}
                 <View style={s.fieldWrap}>
                   <Text style={[s.fieldLabel, { color: C.c35 }]}>Confirm Password</Text>
                   <View style={[s.inputRow, { backgroundColor: C.card, borderColor: errors.confirm ? '#FF3B30' : C.border }]}>
@@ -252,6 +241,7 @@ export default function ForgotPasswordScreen({ navigation }) {
                 </View>
               </>
             )}
+
           </Animated.View>
 
           {/* CTA */}
@@ -261,27 +251,19 @@ export default function ForgotPasswordScreen({ navigation }) {
             disabled={loading}
             activeOpacity={0.88}
           >
-            <LinearGradient
-              colors={[C.vivid, '#B82838']}
-              start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-              style={s.btnGrad}
-            >
-              {loading
-                ? <ActivityIndicator color="white" />
-                : <>
-                    <Text style={s.btnTxt}>
-                      {step === 1 ? 'Send Reset Code' : 'Reset Password'}
-                    </Text>
-                    <Ionicons name="arrow-forward" size={18} color="white" />
-                  </>
-              }
-            </LinearGradient>
+            {loading
+              ? <ActivityIndicator color="white" />
+              : <>
+                  <Text style={s.btnTxt}>{step === 1 ? 'Send Reset Code' : 'Reset Password'}</Text>
+                  <Ionicons name="arrow-forward" size={18} color="white" />
+                </>
+            }
           </TouchableOpacity>
 
           <TouchableOpacity style={s.backToLogin} onPress={() => navigation.navigate('Login')} activeOpacity={0.7}>
             <Text style={[s.backToLoginTxt, { color: C.c35 }]}>
               Remember your password?{'  '}
-              <Text style={{ color: C.vivid, fontWeight: '700' }}>Sign In</Text>
+              <Text style={{ color: '#3B8BF7', fontWeight: '700' }}>Sign In</Text>
             </Text>
           </TouchableOpacity>
 
@@ -292,42 +274,43 @@ export default function ForgotPasswordScreen({ navigation }) {
 }
 
 const s = StyleSheet.create({
-  safe:    { flex: 1 },
-  topBar:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8 },
-  backBtn: { width: 40, height: 40, borderRadius: 13, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  safe: { flex: 1, backgroundColor: NAVY },
 
-  // Step indicator
+  // ── Navy header ────────────────────────────────────────────────────────────
+  header:       { backgroundColor: NAVY, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 24 },
+  headerTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 },
+  backBtn:      { width: 34, height: 34, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' },
+
   steps:    { flexDirection: 'row', alignItems: 'center', gap: 0 },
-  stepDot:  { width: 10, height: 10, borderRadius: 5 },
+  stepDot:  { width: 10, height: 10, borderRadius: 5, backgroundColor: '#F4A227' },
   stepLine: { width: 40, height: 2, borderRadius: 1 },
 
-  body:    { paddingHorizontal: 26, paddingTop: 16, paddingBottom: 40, gap: 0 },
+  headerLogo:  { fontSize: 20, fontWeight: '900', color: '#fff', letterSpacing: -0.4, marginBottom: 10 },
+  headerTitle: { fontSize: 26, fontWeight: '900', color: '#fff', letterSpacing: -0.5, lineHeight: 32, marginBottom: 6 },
+  headerSub:   { fontSize: 13, color: 'rgba(255,255,255,0.60)', lineHeight: 19 },
 
-  iconWrap: { width: 64, height: 64, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 24 },
-  title:    { fontSize: 30, fontWeight: '900', letterSpacing: -0.8, lineHeight: 36, marginBottom: 10 },
-  sub:      { fontSize: 14, lineHeight: 22, marginBottom: 32 },
+  // ── Form body ──────────────────────────────────────────────────────────────
+  body: { paddingHorizontal: 24, paddingTop: 24, paddingBottom: 40 },
 
   fieldWrap:  { marginBottom: 20 },
   fieldLabel: { fontSize: 12, fontWeight: '700', letterSpacing: 0.6, textTransform: 'uppercase', marginBottom: 8 },
-  inputRow:   { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 14, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 14 },
+  inputRow:   { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 12, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 14 },
   input:      { flex: 1, fontSize: 15 },
   errorTxt:   { fontSize: 12, color: '#FF3B30', fontWeight: '600', marginTop: 5 },
   resendRow:  { alignItems: 'flex-end', marginTop: 8 },
-  resendTxt:  { fontSize: 13, fontWeight: '600' },
+  resendTxt:  { fontSize: 13, fontWeight: '600', color: '#3B8BF7' },
 
-  btn:     { borderRadius: 16, overflow: 'hidden', marginTop: 8, marginBottom: 20 },
-  btnGrad: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 17 },
-  btnTxt:  { fontSize: 16, fontWeight: '800', color: 'white', letterSpacing: 0.2 },
+  btn:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: NAVY, borderRadius: 13, paddingVertical: 15, marginTop: 8, marginBottom: 20 },
+  btnTxt: { fontSize: 16, fontWeight: '800', color: '#fff', letterSpacing: 0.2 },
 
   backToLogin:    { alignItems: 'center' },
   backToLoginTxt: { fontSize: 14, textAlign: 'center' },
 
-  // Success
+  // ── Success ───────────────────────────────────────────────────────────────
   successWrap:  { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 36, gap: 16 },
-  successIcon:  { width: 80, height: 80, borderRadius: 26, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
-  successTitle: { fontSize: 28, fontWeight: '900', letterSpacing: -0.5 },
-  successSub:   { fontSize: 15, lineHeight: 24, textAlign: 'center' },
-  doneBtn:      { borderRadius: 16, overflow: 'hidden', width: '100%', marginTop: 16 },
-  doneBtnGrad:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 17 },
-  doneBtnTxt:   { fontSize: 16, fontWeight: '800', color: 'white' },
+  successIcon:  { width: 80, height: 80, borderRadius: 26, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
+  successTitle: { fontSize: 28, fontWeight: '900', letterSpacing: -0.5, color: '#fff' },
+  successSub:   { fontSize: 15, lineHeight: 24, textAlign: 'center', color: 'rgba(255,255,255,0.65)' },
+  doneBtn:      { backgroundColor: '#fff', borderRadius: 13, paddingVertical: 15, width: '100%', alignItems: 'center', marginTop: 16 },
+  doneBtnTxt:   { fontSize: 16, fontWeight: '800', color: NAVY },
 });

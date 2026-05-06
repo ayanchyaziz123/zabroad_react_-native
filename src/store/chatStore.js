@@ -16,6 +16,11 @@ export function formatMsgTime(isoString) {
   return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
+export function formatBubbleTime(isoString) {
+  if (!isoString) return '';
+  return new Date(isoString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
 export const useChatStore = create((set, get) => ({
   conversations:  [],
   messages:       {},   // { [convoId]: [msg, ...] }
@@ -30,7 +35,6 @@ export const useChatStore = create((set, get) => ({
       const api  = useAuthStore.getState().api;
       const data = await api('/chat/');
       const list = Array.isArray(data) ? data : (data.results ?? []);
-      // Sort by last message time, newest first
       list.sort((a, b) => {
         const at = a.last_message?.created_at || a.created_at;
         const bt = b.last_message?.created_at || b.created_at;
@@ -42,11 +46,9 @@ export const useChatStore = create((set, get) => ({
     }
   },
 
-  // Open or create a convo with a specific user_id, returns conversation
   startConversation: async (userId) => {
     const api  = useAuthStore.getState().api;
     const data = await api('/chat/start/', { method: 'POST', body: { user_id: userId } });
-    // Upsert into conversations list
     set(state => {
       const exists = state.conversations.find(c => c.id === data.id);
       if (exists) return {};
@@ -64,7 +66,6 @@ export const useChatStore = create((set, get) => ({
       set(state => ({
         messages: { ...state.messages, [convoId]: list },
         loadingMsgs: false,
-        // Clear unread count for this convo since backend marks them read on GET
         conversations: state.conversations.map(c =>
           c.id === convoId ? { ...c, unread_count: 0 } : c
         ),
@@ -78,7 +79,6 @@ export const useChatStore = create((set, get) => ({
     const api     = useAuthStore.getState().api;
     const current = useAuthStore.getState().user;
     const tempId  = `temp-${Date.now()}`;
-    // Optimistic update
     const tempMsg = {
       id:               tempId,
       sender_id:        current?.id,
@@ -101,7 +101,7 @@ export const useChatStore = create((set, get) => ({
     try {
       let body;
       if (mediaUri) {
-        const fd = new FormData();
+        const fd       = new FormData();
         if (text) fd.append('text', text);
         const filename = mediaUri.split('/').pop();
         const ext      = filename.split('.').pop().toLowerCase();
@@ -144,7 +144,6 @@ export const useChatStore = create((set, get) => ({
   },
 
   retryMessage: async (convoId, failedMsg) => {
-    // Remove the failed message then re-send
     set(state => ({
       messages: {
         ...state.messages,
@@ -152,5 +151,35 @@ export const useChatStore = create((set, get) => ({
       },
     }));
     await get().sendMessage(convoId, failedMsg.text, failedMsg.media_url);
+  },
+
+  deleteMessage: async (convoId, msgId) => {
+    const snapshot = get().messages[convoId] || [];
+    set(state => ({
+      messages: {
+        ...state.messages,
+        [convoId]: (state.messages[convoId] || []).filter(m => String(m.id) !== String(msgId)),
+      },
+    }));
+    try {
+      const api = useAuthStore.getState().api;
+      await api(`/chat/${convoId}/messages/${msgId}/delete/`, { method: 'DELETE' });
+    } catch {
+      set(state => ({ messages: { ...state.messages, [convoId]: snapshot } }));
+    }
+  },
+
+  deleteConversation: async (convoId) => {
+    const snapshot = get().conversations;
+    set(state => ({
+      conversations: state.conversations.filter(c => c.id !== convoId),
+      messages: { ...state.messages, [convoId]: undefined },
+    }));
+    try {
+      const api = useAuthStore.getState().api;
+      await api(`/chat/${convoId}/delete/`, { method: 'DELETE' });
+    } catch {
+      set({ conversations: snapshot });
+    }
   },
 }));

@@ -13,6 +13,9 @@ import { G_PRIMARY, G_SUCCESS, BRAND } from '../theme/colors';
 import { useJobsStore } from '../store/jobsStore';
 import { useAuthStore } from '../store/authStore';
 import { useLocationStore } from '../store/locationStore';
+import { JOB_CATEGORIES } from './JobsScreen';
+
+const CATEGORY_OPTIONS = JOB_CATEGORIES.filter(c => c.key !== 'all');
 
 const PLANS = [
   {
@@ -62,6 +65,8 @@ export default function PostJobScreen({ navigation }) {
   const locCity            = useLocationStore(s => s.city);
   const locLat             = useLocationStore(s => s.latitude);
   const locLng             = useLocationStore(s => s.longitude);
+  const locStatus          = useLocationStore(s => s.status);
+  const detect             = useLocationStore(s => s.detect);
 
   const [image,       setImage]       = useState(null);
   const [paying,      setPaying]      = useState(false);
@@ -75,16 +80,20 @@ export default function PostJobScreen({ navigation }) {
   const [company,  setCompany]  = useState('');
   const [location, setLocation] = useState('');
   const [desc,     setDesc]     = useState('');
+  const [category, setCategory] = useState('other');
   const [plan,     setPlan]     = useState('free');
 
   const [submitted, setSubmitted] = useState(false);
   const successScale   = useRef(new Animated.Value(0)).current;
   const successOpacity = useRef(new Animated.Value(0)).current;
 
-  // Pre-fill location from device GPS on mount
   useEffect(() => {
-    if (locCity && !location) setLocation(locCity);
-  }, [locCity]);
+    if (locCity) {
+      if (!location) setLocation(locCity);
+    } else if (locStatus === 'idle') {
+      detect();
+    }
+  }, [locCity, locStatus]);
 
   async function pickImage() {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -98,7 +107,7 @@ export default function PostJobScreen({ navigation }) {
     if (!result.canceled) setImage(result.assets[0]);
   }
 
-  const canPost = title.trim().length > 2 && company.trim().length > 1 && location.trim().length > 1 && desc.trim().length >= 20;
+  const canPost = title.trim().length > 2 && company.trim().length > 1 && desc.trim().length >= 20;
 
   async function postJob() {
     await addJob({
@@ -110,6 +119,7 @@ export default function PostJobScreen({ navigation }) {
       desc,
       plan,
       image,
+      category,
       homeCountry: authUser?.profile?.home_country || '',
       countryFlag: authUser?.profile?.country_flag || '🌍',
       postedFrom:  authUser?.profile?.lives_in     || '',
@@ -183,7 +193,7 @@ export default function PostJobScreen({ navigation }) {
                 <Text style={s.doneBtnTxt}>View Listings</Text>
               </LinearGradient>
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => { setSubmitted(false); setTitle(''); setCompany(''); setLocation(''); setDesc(''); setPlan('free'); }} style={{ marginTop: 12 }}>
+            <TouchableOpacity onPress={() => { setSubmitted(false); setTitle(''); setCompany(''); setLocation(''); setDesc(''); setCategory('other'); setPlan('free'); }} style={{ marginTop: 12 }}>
               <Text style={{ fontSize: 13, color: C.c35, fontWeight: '600' }}>Post another job</Text>
             </TouchableOpacity>
           </View>
@@ -238,18 +248,26 @@ export default function PostJobScreen({ navigation }) {
             </View>
           </View>
 
-          {/* Location */}
+          {/* Category */}
           <View style={s.fieldGroup}>
-            <Text style={s.fieldLabel}>LOCATION *</Text>
-            <View style={s.inputRow}>
-              <Ionicons name="location-outline" size={16} color={C.c35} />
-              <TextInput
-                style={s.input}
-                placeholder="e.g. Jackson Heights, NY"
-                placeholderTextColor={C.c35}
-                value={location}
-                onChangeText={setLocation}
-              />
+            <Text style={s.fieldLabel}>CATEGORY</Text>
+            <View style={s.catGrid}>
+              {CATEGORY_OPTIONS.map(cat => {
+                const active  = category === cat.key;
+                const accent  = C.green;
+                const accentD = C.greenD;
+                return (
+                  <TouchableOpacity
+                    key={cat.key}
+                    style={[s.catOption, active && { borderColor: accent, backgroundColor: accentD }]}
+                    onPress={() => setCategory(cat.key)}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name={cat.icon} size={14} color={active ? accent : C.c35} />
+                    <Text style={[s.catOptionTxt, { color: active ? accent : C.c35 }]}>{cat.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           </View>
 
@@ -500,6 +518,9 @@ const getStyles = (C) => StyleSheet.create({
   inputRow:   { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 13 },
   input:      { flex: 1, fontSize: 14, color: C.cream },
 
+  locationBadge:    { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 11 },
+  locationBadgeTxt: { flex: 1, fontSize: 14, fontWeight: '500' },
+
   textArea:   { backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 13, fontSize: 14, color: C.cream, minHeight: 120, textAlignVertical: 'top' },
   charCount:  { fontSize: 11, fontWeight: '600', textAlign: 'right' },
 
@@ -543,6 +564,10 @@ const getStyles = (C) => StyleSheet.create({
   payBtnTxt:     { fontSize: 15, fontWeight: '800', color: 'white' },
   secureRow:     { flexDirection: 'row', alignItems: 'center', gap: 5, justifyContent: 'center', paddingBottom: 8 },
   secureTxt:     { fontSize: 11, color: C.c35, fontWeight: '500' },
+
+  catGrid:      { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  catOption:    { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderColor: C.border, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: C.card },
+  catOptionTxt: { fontSize: 12, fontWeight: '600' },
 
   imagePicker:   { borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: C.border, backgroundColor: C.card, height: 180 },
   imagePreview:  { width: '100%', height: '100%' },

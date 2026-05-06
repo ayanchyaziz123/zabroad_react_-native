@@ -1,12 +1,14 @@
 import React, { useState, useMemo, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  StyleSheet, Image, Share, Animated,
+  StyleSheet, Image, Share, Animated, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 import { useAuthStore } from '../store/authStore';
+import { useHousingStore } from '../store/housingStore';
+import { HOUSING_CATEGORIES } from './HousingScreen';
 
 const GOLD     = '#F5A623';
 const GOLD_DIM = '#F5A6231A';
@@ -18,23 +20,26 @@ function planColor(plan) {
 }
 
 const RENTER_TIPS = [
-  { icon: 'document-text-outline',  text: 'Ask for a written lease before paying any deposit.' },
+  { icon: 'document-text-outline',    text: 'Ask for a written lease before paying any deposit.' },
   { icon: 'shield-checkmark-outline', text: 'Verify the landlord owns or manages the property.' },
-  { icon: 'cash-outline',           text: 'Never send payment via wire transfer or gift cards.' },
-  { icon: 'walk-outline',           text: 'Tour the unit in person before signing anything.' },
+  { icon: 'cash-outline',             text: 'Never send payment via wire transfer or gift cards.' },
+  { icon: 'walk-outline',             text: 'Tour the unit in person before signing anything.' },
 ];
 
 export default function HousingDetailScreen({ route, navigation }) {
   const { colors: C } = useTheme();
   const s = useMemo(() => getStyles(C), [C]);
-  const { listing } = route.params;
+
+  const [listing, setListing] = useState(route.params.listing);
   const { user: authUser } = useAuthStore();
+  const deleteListing = useHousingStore(st => st.deleteListing);
 
-  const accent = planColor(listing.plan);
-  const isOwn  = authUser?.id && listing.poster_id && String(authUser.id) === String(listing.poster_id);
+  const accent  = planColor(listing.plan);
+  const isOwn   = authUser?.id && listing.poster_id && String(authUser.id) === String(listing.poster_id);
+  const catInfo = HOUSING_CATEGORIES.find(c => c.key === listing.category);
 
-  const [saved,    setSaved]    = useState(false);
-  const [contacted, setContacted] = useState(false);
+  const [saved,      setSaved]      = useState(false);
+  const [contacted,  setContacted]  = useState(false);
   const saveScale = useRef(new Animated.Value(1)).current;
 
   function onSave() {
@@ -58,10 +63,27 @@ export default function HousingDetailScreen({ route, navigation }) {
     }
   }
 
+  function onDelete() {
+    Alert.alert('Delete listing', 'Remove this listing permanently?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete', style: 'destructive',
+        onPress: async () => {
+          try {
+            await deleteListing(listing.id);
+            navigation.navigate('Housing');
+          } catch {
+            Alert.alert('Error', 'Could not delete. Please try again.');
+          }
+        },
+      },
+    ]);
+  }
+
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
 
-      {/* ── Header ─────────────────────────────────────────────────── */}
+      {/* Header */}
       <View style={s.header}>
         <TouchableOpacity style={s.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.8}>
           <Ionicons name="chevron-back" size={22} color={C.cream} />
@@ -81,7 +103,7 @@ export default function HousingDetailScreen({ route, navigation }) {
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 110 }}>
 
-        {/* ── Image ──────────────────────────────────────────────────── */}
+        {/* Image */}
         {listing.image_url ? (
           <Image source={{ uri: listing.image_url }} style={s.heroImg} resizeMode="cover" />
         ) : (
@@ -100,10 +122,9 @@ export default function HousingDetailScreen({ route, navigation }) {
           </View>
         )}
 
-        {/* ── Main card ──────────────────────────────────────────────── */}
+        {/* Main card */}
         <View style={[s.mainCard, { backgroundColor: C.card, borderColor: C.border }]}>
 
-          {/* Title + price */}
           <Text style={s.itemTitle}>{listing.title}</Text>
           <Text style={[s.itemPrice, { color: accent }]}>{listing.price || 'Price on request'}</Text>
 
@@ -115,6 +136,12 @@ export default function HousingDetailScreen({ route, navigation }) {
                 <Text style={[s.chipTxt, { color: C.c35 }]}>{listing.location}</Text>
               </View>
             ) : null}
+            {catInfo && catInfo.key !== 'all' && (
+              <View style={[s.chip, { backgroundColor: GOLD_DIM, borderColor: GOLD + '44' }]}>
+                <Ionicons name={catInfo.icon} size={11} color={GOLD} />
+                <Text style={[s.chipTxt, { color: GOLD, fontWeight: '700' }]}>{catInfo.label}</Text>
+              </View>
+            )}
             {listing.communities?.[0] ? (
               <View style={[s.chip, { backgroundColor: C.card2, borderColor: C.border }]}>
                 <Text style={{ fontSize: 12 }}>{listing.countryFlag || '🌍'}</Text>
@@ -137,7 +164,6 @@ export default function HousingDetailScreen({ route, navigation }) {
 
           <View style={[s.divider, { backgroundColor: C.border }]} />
 
-          {/* Description */}
           <Text style={s.sectionLabel}>DESCRIPTION</Text>
           <Text style={[s.description, { color: C.c60 }]}>
             {listing.desc || 'No description provided.'}
@@ -145,7 +171,6 @@ export default function HousingDetailScreen({ route, navigation }) {
 
           <View style={[s.divider, { backgroundColor: C.border }]} />
 
-          {/* Poster */}
           <Text style={s.sectionLabel}>POSTED BY</Text>
           <View style={s.posterRow}>
             <View style={[s.posterAv, { backgroundColor: accent + '22' }]}>
@@ -159,7 +184,6 @@ export default function HousingDetailScreen({ route, navigation }) {
 
           <View style={[s.divider, { backgroundColor: C.border }]} />
 
-          {/* Renter tips */}
           <Text style={s.sectionLabel}>RENTING TIPS</Text>
           <View style={[s.tipsBox, { backgroundColor: C.card2, borderColor: C.border }]}>
             {RENTER_TIPS.map((tip, i) => (
@@ -176,13 +200,27 @@ export default function HousingDetailScreen({ route, navigation }) {
         </View>
       </ScrollView>
 
-      {/* ── Bottom CTA ─────────────────────────────────────────────── */}
+      {/* Bottom CTA */}
       <View style={[s.bottomBar, { backgroundColor: C.nav, borderTopColor: C.border }]}>
         {isOwn ? (
-          <View style={[s.ownBadge, { backgroundColor: C.card, borderColor: C.border }]}>
-            <Ionicons name="person-outline" size={15} color={C.c35} />
-            <Text style={[s.ownTxt, { color: C.c35 }]}>This is your listing</Text>
-          </View>
+          <>
+            <TouchableOpacity
+              style={[s.editBtn, { backgroundColor: GOLD_DIM, borderColor: GOLD + '55' }]}
+              onPress={() => navigation.navigate('EditHousing', { listing, onSave: setListing })}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="pencil-outline" size={18} color={GOLD} />
+              <Text style={[s.editBtnTxt, { color: GOLD }]}>Edit</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[s.deleteBtn, { backgroundColor: '#FF4D4D18', borderColor: '#FF4D4D44' }]}
+              onPress={onDelete}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="trash-outline" size={18} color="#FF4D4D" />
+              <Text style={[s.deleteBtnTxt, { color: '#FF4D4D' }]}>Delete</Text>
+            </TouchableOpacity>
+          </>
         ) : (
           <>
             <TouchableOpacity style={[s.shareBtn, { borderColor: C.border, backgroundColor: C.card }]} onPress={onShare} activeOpacity={0.85}>
@@ -244,10 +282,12 @@ const getStyles = (C) => StyleSheet.create({
   tipRow:  { flexDirection: 'row', alignItems: 'flex-start', gap: 10, padding: 12 },
   tipTxt:  { flex: 1, fontSize: 12, lineHeight: 18 },
 
-  bottomBar:  { position: 'absolute', bottom: 0, left: 0, right: 0, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 32, borderTopWidth: 1 },
-  shareBtn:   { width: 48, height: 48, borderRadius: 14, borderWidth: 1, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  contactBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 50, borderRadius: 14, borderWidth: 1 },
-  contactTxt: { fontSize: 15, fontWeight: '800' },
-  ownBadge:   { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 50, borderRadius: 14, borderWidth: 1 },
-  ownTxt:     { fontSize: 14, fontWeight: '600' },
+  bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 32, borderTopWidth: 1 },
+  shareBtn:  { width: 48, height: 48, borderRadius: 14, borderWidth: 1, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  contactBtn:{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 50, borderRadius: 14, borderWidth: 1 },
+  contactTxt:{ fontSize: 15, fontWeight: '800' },
+  editBtn:   { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 50, borderRadius: 14, borderWidth: 1 },
+  editBtnTxt:{ fontSize: 15, fontWeight: '800' },
+  deleteBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 50, borderRadius: 14, borderWidth: 1 },
+  deleteBtnTxt:{ fontSize: 15, fontWeight: '800' },
 });

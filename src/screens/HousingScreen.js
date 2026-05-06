@@ -1,63 +1,151 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity,
+  View, Text, FlatList, ScrollView, TouchableOpacity,
   StyleSheet, TextInput, ActivityIndicator,
-  RefreshControl, Image, Alert,
+  RefreshControl, Image, Alert, Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 import { useAuthStore } from '../store/authStore';
 import { useHousingStore } from '../store/housingStore';
+import { useLocationStore } from '../store/locationStore';
+import { SUGGESTED_CITIES } from '../components/AppTopBar';
 
-const GOLD = '#F5A623';
+const NAVY     = '#1B3266';
+const GOLD     = '#F5A623';
 const GOLD_DIM = '#F5A62318';
 
-const TIPS = [
-  { icon: 'document-text-outline', title: 'No Credit History?',  desc: 'Offer 2–3 months deposit or show your employment letter.' },
-  { icon: 'card-outline',          title: 'No SSN Yet?',          desc: 'Many landlords accept ITIN, passport, or visa documents.' },
-  { icon: 'people-outline',        title: 'Find a Co-signer',     desc: 'A US citizen co-signer increases approval chances greatly.' },
+const CARD_GAP = 10;
+const H_PAD    = 16;
+const { width: SCREEN_W } = Dimensions.get('window');
+const CARD_W = (SCREEN_W - H_PAD * 2 - CARD_GAP) / 2;
+
+function distanceMiles(lat1, lng1, lat2, lng2) {
+  if (lat1 == null || lng1 == null || lat2 == null || lng2 == null) return null;
+  const R = 3958.8;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+function formatDist(mi) {
+  if (mi == null) return null;
+  if (mi < 0.5)  return '< 1 mi';
+  if (mi < 10)   return `${mi.toFixed(1)} mi`;
+  return `${Math.round(mi)} mi`;
+}
+
+function HousingGridCard({ listing, onPress, C, s, userLat, userLng }) {
+  const dist = formatDist(distanceMiles(userLat, userLng, listing.latitude, listing.longitude));
+  return (
+    <TouchableOpacity
+      style={[s.card, { backgroundColor: C.card, borderColor: listing.featured ? '#9B72EF55' : C.border }]}
+      activeOpacity={0.88}
+      onPress={() => onPress(listing)}
+    >
+      {listing.image_url ? (
+        <Image source={{ uri: listing.image_url }} style={s.cardImg} resizeMode="cover" />
+      ) : (
+        <View style={[s.cardImgPlaceholder, { backgroundColor: C.card2 }]}>
+          <Ionicons name="home-outline" size={26} color={C.c35} />
+        </View>
+      )}
+      {listing.featured && (
+        <View style={[s.hotBadge, { backgroundColor: '#9B72EF22', borderColor: '#9B72EF55' }]}>
+          <Ionicons name="star" size={10} color="#9B72EF" />
+        </View>
+      )}
+      {dist && (
+        <View style={s.distBadge}>
+          <Ionicons name="navigate-outline" size={9} color={GOLD} />
+          <Text style={[s.distTxt, { color: GOLD }]}>{dist}</Text>
+        </View>
+      )}
+      <View style={s.cardBody}>
+        <Text style={[s.cardTitle, { color: C.cream }]} numberOfLines={2}>{listing.title}</Text>
+        <Text style={[s.cardPrice, { color: GOLD }]}>{listing.price}</Text>
+        {listing.location ? (
+          <View style={s.locRow}>
+            <Ionicons name="location-outline" size={9} color={C.c35} />
+            <Text style={[s.locTxt, { color: C.c35 }]} numberOfLines={1}>{listing.location}</Text>
+          </View>
+        ) : null}
+        <Text style={[s.timeTxt, { color: C.c35 }]}>{listing.time}</Text>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+export const HOUSING_CATEGORIES = [
+  { key: 'all',        label: 'All',        icon: 'grid-outline' },
+  { key: 'apartment',  label: 'Apartment',  icon: 'business-outline' },
+  { key: 'house',      label: 'House',      icon: 'home-outline' },
+  { key: 'room',       label: 'Room',       icon: 'bed-outline' },
+  { key: 'studio',     label: 'Studio',     icon: 'cube-outline' },
+  { key: 'condo',      label: 'Condo',      icon: 'layers-outline' },
+  { key: 'shared',     label: 'Shared',     icon: 'people-outline' },
+  { key: 'commercial', label: 'Commercial', icon: 'storefront-outline' },
+  { key: 'other',      label: 'Other',      icon: 'ellipsis-horizontal-outline' },
 ];
+
 
 export default function HousingScreen({ navigation }) {
   const { colors: C } = useTheme();
   const s = useMemo(() => getStyles(C), [C]);
 
-  const user          = useAuthStore(st => st.user);
+  const { user: authUser } = useAuthStore();
+  const homeCountry   = authUser?.profile?.home_country || '';
+  const countryFlag   = authUser?.profile?.country_flag || '';
+  const currentUserId = authUser?.id ?? null;
+
   const listings      = useHousingStore(st => st.listings);
   const loading       = useHousingStore(st => st.loading);
   const fetchListings = useHousingStore(st => st.fetchListings);
   const deleteListing = useHousingStore(st => st.deleteListing);
 
-  const homeCountry = user?.profile?.home_country || '';
-  const countryFlag = user?.profile?.country_flag || '🌍';
+  const currentCity = useLocationStore(st => st.city);
+  const setCity     = useLocationStore(st => st.setCity);
+  const forceDetect = useLocationStore(st => st.forceDetect);
+  const lat         = useLocationStore(st => st.latitude);
+  const lng         = useLocationStore(st => st.longitude);
+  const cityShort   = currentCity?.split(',')[0] || 'Set location';
 
-  const SCOPES = [
-    { key: 'all',       label: '🌍 All' },
-    { key: 'community', label: `${countryFlag} Community` },
-  ];
+  const [scope,      setScope]      = useState('all');
+  const [search,     setSearch]     = useState('');
+  const [activeCat,  setActiveCat]  = useState('all');
+  const [showMine,   setShowMine]   = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [cityOpen,   setCityOpen]   = useState(false);
+  const [locating,   setLocating]   = useState(false);
 
-  const [scope,       setScope]      = useState('all');
-  const [search,      setSearch]     = useState('');
-  const [refreshing,  setRefreshing] = useState(false);
+  const doFetch = useCallback((sc = scope, cat = activeCat, q = search) => {
+    fetchListings({ scope: sc, homeCountry, search: q, category: cat, lat, lng });
+  }, [scope, activeCat, search, homeCountry, lat, lng]);
 
-  const load = useCallback((s = scope, q = search) => {
-    fetchListings({ scope: s, search: q, homeCountry });
-  }, [scope, search, homeCountry]);
-
-  useEffect(() => { load(); }, [scope]);
+  useFocusEffect(useCallback(() => { doFetch(); }, [activeCat, scope, lat, lng]));
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await fetchListings({ scope, search, homeCountry });
+    await fetchListings({ scope, search, homeCountry, category: activeCat, lat, lng });
     setRefreshing(false);
-  }, [scope, search, homeCountry]);
+  }, [scope, search, homeCountry, activeCat, lat, lng]);
 
-  const handleScopeChange = (key) => { setScope(key); };
+  const displayed = useMemo(() => {
+    if (!showMine || !currentUserId) return listings;
+    return listings.filter(l => String(l.poster_id) === String(currentUserId));
+  }, [listings, showMine, currentUserId]);
 
   const handleSearch = (text) => {
     setSearch(text);
-    fetchListings({ scope, search: text, homeCountry });
+    fetchListings({ scope, search: text, homeCountry, category: activeCat, lat, lng });
+  };
+
+  const handleCategory = (key) => {
+    setActiveCat(key);
+    fetchListings({ scope, homeCountry, search, category: key, lat, lng });
   };
 
   const handleDelete = (listing) => {
@@ -67,46 +155,119 @@ export default function HousingScreen({ navigation }) {
     ]);
   };
 
-  const isOwn = (listing) => listing.poster_id && user?.id && listing.poster_id === user.id;
+  const isOwn = (listing) => listing.poster_id && currentUserId && String(listing.poster_id) === String(currentUserId);
+
+  function renderItem({ item, index }) {
+    const isLeft = index % 2 === 0;
+    return (
+      <View style={[s.gridItem, isLeft ? { marginRight: CARD_GAP / 2 } : { marginLeft: CARD_GAP / 2 }]}>
+        <HousingGridCard
+          listing={item}
+          onPress={l => navigation.navigate('HousingDetail', { listing: l })}
+          C={C} s={s} userLat={lat} userLng={lng}
+        />
+      </View>
+    );
+  }
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
 
-      {/* ── Header ─────────────────────────────────────────────── */}
+      {/* Header */}
       <View style={s.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={s.backBtn} activeOpacity={0.8}>
-          <Ionicons name="chevron-back" size={22} color={C.cream} />
+          <Ionicons name="chevron-back" size={20} color="#fff" />
         </TouchableOpacity>
-        <View style={{ flex: 1 }}>
+
+        <TouchableOpacity style={{ flex: 1 }} onPress={() => setCityOpen(v => !v)} activeOpacity={0.75}>
           <Text style={s.title}>Housing</Text>
-          <Text style={s.sub}>Immigrant-friendly listings</Text>
-        </View>
+          <View style={s.cityRow}>
+            <Ionicons name="location" size={10} color={GOLD} />
+            <Text style={[s.cityTxt, { color: GOLD }]} numberOfLines={1}>
+              {cityShort !== 'Set location' ? cityShort : 'Pick city'}
+            </Text>
+            <Ionicons name={cityOpen ? 'chevron-up' : 'chevron-down'} size={10} color={C.c35} />
+          </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[s.mineBtn, scope === 'all' && { backgroundColor: GOLD_DIM, borderColor: GOLD + '66' }]}
+          onPress={() => { setScope('all'); doFetch('all', activeCat, search); }}
+          activeOpacity={0.75}
+        >
+          <Ionicons name="globe-outline" size={16} color={scope === 'all' ? GOLD : 'rgba(255,255,255,0.6)'} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[s.mineBtn, scope === 'community' && { backgroundColor: GOLD + '33', borderColor: GOLD + '66' }]}
+          onPress={() => { setScope('community'); doFetch('community', activeCat, search); }}
+          activeOpacity={0.75}
+        >
+          <Text style={s.scopeFlagEmoji}>{countryFlag || '🌍'}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[s.mineBtn, showMine && { backgroundColor: GOLD + '33', borderColor: GOLD + '55' }]}
+          onPress={() => setShowMine(v => !v)}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="person" size={15} color={showMine ? GOLD : 'rgba(255,255,255,0.6)'} />
+        </TouchableOpacity>
         <TouchableOpacity style={s.addBtn} onPress={() => navigation.navigate('PostHousing')} activeOpacity={0.85}>
-          <Ionicons name="add" size={20} color={GOLD} />
+          <Ionicons name="add" size={18} color="#fff" />
         </TouchableOpacity>
       </View>
 
-      {/* ── Scope tabs ─────────────────────────────────────────── */}
-      <View style={[s.scopeBar, { borderBottomColor: C.border }]}>
-        {SCOPES.map(sc => {
-          const active = sc.key === scope;
-          return (
-            <TouchableOpacity
-              key={sc.key}
-              style={[s.scopeTab, active && s.scopeTabActive]}
-              onPress={() => handleScopeChange(sc.key)}
-              activeOpacity={0.8}
-            >
-              <Text style={[s.scopeTabTxt, { color: active ? GOLD : C.c35 }, active && s.scopeTabTxtActive]}>
-                {sc.label}
-              </Text>
-              {active && <View style={[s.scopeUnderline, { backgroundColor: GOLD }]} />}
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+      {/* City dropdown */}
+      {cityOpen && (
+        <>
+          <TouchableOpacity style={s.cityOverlay} activeOpacity={1} onPress={() => setCityOpen(false)} />
+          <View style={[s.cityDropdown, { backgroundColor: C.nav, borderColor: C.border }]}>
+            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" style={{ maxHeight: 280 }}>
+              <TouchableOpacity
+                style={[s.cityItem, { borderBottomColor: C.border, borderBottomWidth: StyleSheet.hairlineWidth }]}
+                activeOpacity={0.75}
+                disabled={locating}
+                onPress={async () => {
+                  setLocating(true);
+                  await forceDetect();
+                  setLocating(false);
+                  setCityOpen(false);
+                }}
+              >
+                <View style={[s.cityIcon, { backgroundColor: GOLD_DIM }]}>
+                  {locating ? <ActivityIndicator size="small" color={GOLD} /> : <Ionicons name="navigate" size={14} color={GOLD} />}
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.cityName, { color: C.cream }]}>{locating ? 'Getting location…' : 'Near Me'}</Text>
+                  <Text style={[s.citySub, { color: C.c35 }]}>Use your current GPS location</Text>
+                </View>
+              </TouchableOpacity>
+              {SUGGESTED_CITIES.map((city, idx) => {
+                const active = city.name === currentCity;
+                const isLast = idx === SUGGESTED_CITIES.length - 1;
+                return (
+                  <TouchableOpacity
+                    key={city.name}
+                    style={[s.cityItem, !isLast && { borderBottomColor: C.border, borderBottomWidth: StyleSheet.hairlineWidth }]}
+                    activeOpacity={0.75}
+                    onPress={() => { setCity(city.name, city.lat, city.lng); setCityOpen(false); }}
+                  >
+                    <View style={[s.cityIcon, { backgroundColor: active ? GOLD_DIM : C.card2 }]}>
+                      <Ionicons name="location-outline" size={14} color={active ? GOLD : C.c35} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[s.cityName, { color: active ? GOLD : C.cream }]}>{city.name.split(',')[0]}</Text>
+                      <Text style={[s.citySub, { color: C.c35 }]}>{city.name.split(', ')[1] || ''}</Text>
+                    </View>
+                    {active && <Ionicons name="checkmark-circle" size={16} color={GOLD} />}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </>
+      )}
 
-      {/* ── Search ─────────────────────────────────────────────── */}
+      {/* Search */}
       <View style={s.searchWrap}>
         <View style={[s.searchBox, { backgroundColor: C.card, borderColor: C.border }]}>
           <Ionicons name="search-outline" size={16} color={C.c35} />
@@ -126,158 +287,91 @@ export default function HousingScreen({ navigation }) {
         </View>
       </View>
 
+      {/* Category chips */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.chipBar} contentContainerStyle={s.chipBarContent}>
+        {HOUSING_CATEGORIES.map(cat => {
+          const active = activeCat === cat.key;
+          return (
+            <TouchableOpacity
+              key={cat.key}
+              style={[s.chip, active && { backgroundColor: GOLD_DIM, borderColor: GOLD + '77' }]}
+              onPress={() => handleCategory(cat.key)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name={cat.icon} size={13} color={active ? GOLD : C.c35} />
+              <Text style={[s.chipTxt, { color: active ? GOLD : C.c35 }, active && { fontWeight: '700' }]}>
+                {cat.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+
+      {/* Mine banner */}
+      {showMine && (
+        <View style={[s.mineBanner, { backgroundColor: GOLD_DIM, borderColor: GOLD + '33' }]}>
+          <Ionicons name="person-circle-outline" size={14} color={GOLD} />
+          <Text style={[s.mineBannerTxt, { color: GOLD }]}>Showing your listings only</Text>
+          <TouchableOpacity onPress={() => setShowMine(false)} hitSlop={8}>
+            <Ionicons name="close" size={14} color={GOLD} />
+          </TouchableOpacity>
+        </View>
+      )}
+
       {loading && listings.length === 0 ? (
         <View style={s.center}>
           <ActivityIndicator size="large" color={GOLD} />
         </View>
       ) : (
-        <ScrollView
+        <FlatList
+          data={displayed}
+          keyExtractor={item => String(item.id)}
+          renderItem={renderItem}
+          numColumns={2}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={s.list}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={GOLD} />}
-        >
-          {/* Tips card */}
-          <View style={[s.tipsCard, { backgroundColor: C.card, borderColor: GOLD + '33' }]}>
-            <View style={s.tipsHeader}>
-              <Ionicons name="home" size={14} color={GOLD} />
-              <Text style={[s.tipsTitleTxt, { color: C.cream }]}>Renting as an Immigrant</Text>
-            </View>
-            {TIPS.map((tip, i) => (
-              <View key={tip.title} style={[s.tipRow, i < TIPS.length - 1 && { borderBottomWidth: 1, borderBottomColor: C.border }]}>
-                <View style={[s.tipIcon, { backgroundColor: GOLD_DIM }]}>
-                  <Ionicons name={tip.icon} size={16} color={GOLD} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[s.tipTitle, { color: C.cream }]}>{tip.title}</Text>
-                  <Text style={[s.tipDesc, { color: C.c35 }]}>{tip.desc}</Text>
-                </View>
-              </View>
-            ))}
-          </View>
-
-          {/* Count label */}
-          <Text style={s.countLabel}>
-            {listings.length} LISTING{listings.length !== 1 ? 'S' : ''}
-            {scope === 'community' ? ` · ${homeCountry.toUpperCase()}` : ''}
-          </Text>
-
-          {listings.length === 0 ? (
+          ListHeaderComponent={
+            <Text style={s.countLabel}>
+              {displayed.length} LISTING{displayed.length !== 1 ? 'S' : ''}
+              {showMine ? ' · MINE' : scope === 'community' ? ` · ${homeCountry.toUpperCase()}` : ''}
+            </Text>
+          }
+          ListEmptyComponent={
             <View style={s.empty}>
               <Ionicons name="home-outline" size={44} color={C.c35} />
               <Text style={[s.emptyTxt, { color: C.cream }]}>
-                {scope === 'community' ? 'No listings in your community' : 'No listings yet'}
+                {showMine ? 'You have no listings yet' : scope === 'community' ? 'No listings in your community' : 'No listings yet'}
               </Text>
-              <Text style={[s.emptySub, { color: C.c35 }]}>Be the first to post</Text>
-              {scope !== 'all' && (
+              <Text style={[s.emptySub, { color: C.c35 }]}>
+                {showMine ? 'Post your first listing' : 'Be the first to post'}
+              </Text>
+              {(showMine || scope !== 'all') && (
                 <TouchableOpacity
                   style={[s.switchBtn, { backgroundColor: GOLD_DIM, borderColor: GOLD + '44' }]}
-                  onPress={() => handleScopeChange('all')}
+                  onPress={() => { setShowMine(false); setScope('all'); }}
                   activeOpacity={0.8}
                 >
                   <Text style={[s.switchBtnTxt, { color: GOLD }]}>View all listings</Text>
                 </TouchableOpacity>
               )}
             </View>
-          ) : (
-            listings.map(listing => {
-              const planColor = listing.plan === 'premium' ? '#9B72EF' : listing.plan === 'standard' ? '#F5A623' : GOLD;
-              const own       = isOwn(listing);
-              return (
-                <TouchableOpacity key={listing.id} style={[s.card, { backgroundColor: C.card, borderColor: C.border }, listing.featured && s.cardFeatured]} activeOpacity={0.92} onPress={() => navigation.navigate('HousingDetail', { listing })}>
-
-                  {/* Image */}
-                  {listing.image_url ? (
-                    <Image source={{ uri: listing.image_url }} style={s.cardImg} resizeMode="cover" />
-                  ) : null}
-
-                  <View style={s.cardBody}>
-                    {/* Top */}
-                    <View style={s.cardTop}>
-                      <View style={[s.avatar, { backgroundColor: planColor + '22' }]}>
-                        <Text style={[s.avatarTxt, { color: planColor }]}>{listing.initials}</Text>
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                          <Text style={[s.cardTitle, { color: C.cream }]} numberOfLines={1}>{listing.title}</Text>
-                          {listing.featured && (
-                            <View style={s.featuredBadge}>
-                              <Ionicons name="star" size={9} color="#9B72EF" />
-                            </View>
-                          )}
-                        </View>
-                        <Text style={[s.cardPrice, { color: planColor }]}>{listing.price}</Text>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 1 }}>
-                          <Ionicons name="location-outline" size={11} color={C.c35} />
-                          <Text style={[s.cardLocation, { color: C.c35 }]}>{listing.location}</Text>
-                        </View>
-                      </View>
-                      {own && (
-                        <TouchableOpacity onPress={() => handleDelete(listing)} style={s.deleteBtn} activeOpacity={0.7}>
-                          <Ionicons name="trash-outline" size={16} color={C.red || '#FF4444'} />
-                        </TouchableOpacity>
-                      )}
-                    </View>
-
-                    {/* Badges */}
-                    {(listing.countryFlag || listing.postedFrom) ? (
-                      <View style={s.badgeRow}>
-                        {listing.countryFlag ? (
-                          <View style={[s.badge, { backgroundColor: C.card2, borderColor: C.border }]}>
-                            <Text style={{ fontSize: 11 }}>{listing.countryFlag}</Text>
-                            <Text style={[s.badgeTxt, { color: C.c35 }]}>{listing.communities[0] || ''}</Text>
-                          </View>
-                        ) : null}
-                        {listing.postedFrom ? (
-                          <View style={[s.badge, { backgroundColor: C.card2, borderColor: C.border }]}>
-                            <Ionicons name="location-outline" size={10} color={C.c35} />
-                            <Text style={[s.badgeTxt, { color: C.c35 }]}>{listing.postedFrom}</Text>
-                          </View>
-                        ) : null}
-                      </View>
-                    ) : null}
-
-                    {/* Description */}
-                    <Text style={[s.cardDesc, { color: C.c35 }]} numberOfLines={2}>{listing.desc}</Text>
-
-                    {/* Footer */}
-                    <View style={[s.cardFooter, { borderTopColor: C.border }]}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                        <View style={[s.posterAv, { backgroundColor: planColor + '22' }]}>
-                          <Text style={{ fontSize: 10, fontWeight: '800', color: planColor }}>{listing.initials[0]}</Text>
-                        </View>
-                        <Text style={[s.posterName, { color: C.c35 }]}>{listing.poster} · {listing.time}</Text>
-                      </View>
-                      {!own && (
-                        <TouchableOpacity
-                          style={[s.contactBtn, { backgroundColor: planColor }]}
-                          onPress={() => listing.poster_id && navigation.navigate('AppMain', { screen: 'Chat', params: { userId: listing.poster_id } })}
-                          activeOpacity={0.85}
-                        >
-                          <Ionicons name="chatbubble-outline" size={13} color="white" />
-                          <Text style={s.contactTxt}>Contact</Text>
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                  </View>
-                </TouchableOpacity>
-              );
-            })
-          )}
-
-          {/* Post CTA */}
-          <TouchableOpacity
-            style={[s.postCta, { backgroundColor: GOLD_DIM, borderColor: GOLD + '33' }]}
-            onPress={() => navigation.navigate('PostHousing')}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="home" size={16} color={GOLD} />
-            <View style={{ flex: 1 }}>
-              <Text style={[s.postCtaTitle, { color: C.cream }]}>Have a room or apartment?</Text>
-              <Text style={[s.postCtaSub, { color: C.c35 }]}>Share it with your community</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color={GOLD} />
-          </TouchableOpacity>
-        </ScrollView>
+          }
+          ListFooterComponent={
+            <TouchableOpacity
+              style={[s.postCta, { backgroundColor: GOLD_DIM, borderColor: GOLD + '33' }]}
+              onPress={() => navigation.navigate('PostHousing')}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="home" size={16} color={GOLD} />
+              <View style={{ flex: 1 }}>
+                <Text style={[s.postCtaTitle, { color: C.cream }]}>Have a room or apartment?</Text>
+                <Text style={[s.postCtaSub, { color: C.c35 }]}>Share it with your community</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={GOLD} />
+            </TouchableOpacity>
+          }
+        />
       )}
     </SafeAreaView>
   );
@@ -286,36 +380,41 @@ export default function HousingScreen({ navigation }) {
 const getStyles = (C) => StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
 
-  header:  { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 10 },
-  backBtn: { width: 38, height: 38, borderRadius: 13, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  title:   { fontSize: 16, fontWeight: '800', color: C.cream, letterSpacing: -0.3 },
-  sub:     { fontSize: 11, color: C.c35, marginTop: 1 },
-  addBtn:  { width: 40, height: 40, backgroundColor: GOLD_DIM, borderRadius: 13, borderWidth: 1, borderColor: GOLD + '55', alignItems: 'center', justifyContent: 'center' },
+  header:   { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingTop: 10, paddingBottom: 10, backgroundColor: NAVY },
+  backBtn:  { width: 34, height: 34, borderRadius: 11, backgroundColor: 'rgba(255,255,255,0.12)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  title:    { fontSize: 15, fontWeight: '800', color: '#fff' },
+  cityRow:  { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 1 },
+  cityTxt:  { fontSize: 11, fontWeight: '600', flex: 1 },
+  mineBtn:  { width: 32, height: 32, backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' },
+  addBtn:   { width: 34, height: 34, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 11, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)', alignItems: 'center', justifyContent: 'center' },
 
-  scopeBar:         { flexDirection: 'row', borderBottomWidth: 1, marginBottom: 12 },
-  scopeTab:         { flex: 1, alignItems: 'center', paddingVertical: 10, position: 'relative' },
-  scopeTabActive:   {},
-  scopeTabTxt:      { fontSize: 13, fontWeight: '600' },
-  scopeTabTxtActive:{ fontWeight: '700' },
-  scopeUnderline:   { position: 'absolute', bottom: 0, left: '15%', right: '15%', height: 2, borderRadius: 2 },
+  scopeFlagEmoji: { fontSize: 15 },
 
-  searchWrap:  { paddingHorizontal: 16, marginBottom: 10 },
+  cityOverlay:  { position: 'absolute', top: 0, left: -1000, right: -1000, bottom: -2000, zIndex: 49 },
+  cityDropdown: { position: 'absolute', top: 62, left: 16, right: 16, zIndex: 50, borderWidth: 1, borderRadius: 18, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 12 },
+  cityItem:     { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 13 },
+  cityIcon:     { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  cityName:     { fontSize: 14, fontWeight: '700' },
+  citySub:      { fontSize: 11, marginTop: 1 },
+
+  searchWrap:  { paddingHorizontal: 16, marginBottom: 8 },
   searchBox:   { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 14, paddingHorizontal: 14, height: 42 },
   searchInput: { flex: 1, fontSize: 13, paddingVertical: 0 },
 
+  chipBar:        { maxHeight: 44, marginBottom: 8 },
+  chipBarContent: { paddingHorizontal: 16, gap: 8, alignItems: 'center' },
+  chip:           { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderColor: C.border, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: C.card },
+  chipTxt:        { fontSize: 12, fontWeight: '600', color: C.c35 },
+
+  mineBanner:    { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, marginBottom: 8, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 },
+  mineBannerTxt: { flex: 1, fontSize: 12, fontWeight: '600' },
 
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 60 },
 
-  list:       { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 30, gap: 12 },
-  countLabel: { fontSize: 10, fontWeight: '700', color: C.c35, letterSpacing: 1.5, marginBottom: 2 },
+  list:       { paddingHorizontal: H_PAD, paddingTop: 4, paddingBottom: 30 },
+  countLabel: { fontSize: 10, fontWeight: '700', color: C.c35, letterSpacing: 1.5, marginBottom: 10 },
 
-  tipsCard:    { borderWidth: 1, borderRadius: 16, padding: 14 },
-  tipsHeader:  { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
-  tipsTitleTxt:{ fontSize: 13, fontWeight: '700' },
-  tipRow:      { flexDirection: 'row', gap: 12, paddingVertical: 10, alignItems: 'flex-start' },
-  tipIcon:     { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  tipTitle:    { fontSize: 12, fontWeight: '700', marginBottom: 2 },
-  tipDesc:     { fontSize: 11, lineHeight: 17 },
+  gridItem: { flex: 1 },
 
   empty:        { alignItems: 'center', paddingVertical: 48, gap: 10 },
   emptyTxt:     { fontSize: 15, fontWeight: '700', textAlign: 'center' },
@@ -323,31 +422,20 @@ const getStyles = (C) => StyleSheet.create({
   switchBtn:    { marginTop: 4, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 50, borderWidth: 1 },
   switchBtnTxt: { fontSize: 13, fontWeight: '700' },
 
-  card:         { borderWidth: 1, borderRadius: 20, overflow: 'hidden' },
-  cardFeatured: { borderColor: '#9B72EF55' },
-  cardImg:      { width: '100%', height: 180 },
-  cardBody:     { padding: 14 },
-  cardTop:      { flexDirection: 'row', gap: 12, alignItems: 'flex-start', marginBottom: 10 },
-  avatar:       { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  avatarTxt:    { fontSize: 15, fontWeight: '900' },
-  cardTitle:    { fontSize: 14, fontWeight: '700', marginBottom: 2 },
-  cardPrice:    { fontSize: 15, fontWeight: '800', marginBottom: 2 },
-  cardLocation: { fontSize: 11 },
-  featuredBadge:{ width: 20, height: 20, borderRadius: 6, backgroundColor: '#9B72EF22', borderWidth: 1, borderColor: '#9B72EF55', alignItems: 'center', justifyContent: 'center' },
-  deleteBtn:    { padding: 6 },
+  card:               { borderWidth: 1, borderRadius: 14, overflow: 'hidden', marginBottom: CARD_GAP },
+  cardImg:            { width: '100%', height: CARD_W * 0.85 },
+  cardImgPlaceholder: { width: '100%', height: CARD_W * 0.75, alignItems: 'center', justifyContent: 'center' },
+  hotBadge:  { position: 'absolute', top: 8, right: 8, width: 22, height: 22, borderRadius: 7, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  distBadge: { position: 'absolute', bottom: 8, right: 8, flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 3 },
+  distTxt:   { fontSize: 9, fontWeight: '700' },
+  cardBody:  { padding: 10, gap: 3 },
+  cardTitle: { fontSize: 13, fontWeight: '700', lineHeight: 17 },
+  cardPrice: { fontSize: 13, fontWeight: '800' },
+  locRow:    { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  locTxt:    { fontSize: 10, flex: 1 },
+  timeTxt:   { fontSize: 10, marginTop: 1 },
 
-  badgeRow:  { flexDirection: 'row', gap: 6, marginBottom: 8, flexWrap: 'wrap' },
-  badge:     { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, borderWidth: 1 },
-  badgeTxt:  { fontSize: 10, fontWeight: '700' },
-
-  cardDesc:   { fontSize: 12, lineHeight: 18, marginBottom: 10 },
-  cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 10, borderTopWidth: 1 },
-  posterAv:   { width: 22, height: 22, borderRadius: 7, alignItems: 'center', justifyContent: 'center' },
-  posterName: { fontSize: 11 },
-  contactBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 50 },
-  contactTxt: { fontSize: 12, fontWeight: '700', color: 'white' },
-
-  postCta:      { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderRadius: 16, padding: 14 },
+  postCta:      { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderRadius: 16, padding: 14, marginTop: 4 },
   postCtaTitle: { fontSize: 13, fontWeight: '700', marginBottom: 2 },
   postCtaSub:   { fontSize: 11 },
 });

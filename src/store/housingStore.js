@@ -27,7 +27,10 @@ function normalize(l) {
     countryFlag: l.country_flag || '',
     featured:    l.is_featured,
     image_url:   l.image_url || null,
+    category:    l.category  || 'other',
     time:        timeAgo(l.created_at),
+    lat:         l.latitude  ?? null,
+    lng:         l.longitude ?? null,
   };
 }
 
@@ -36,7 +39,7 @@ export const useHousingStore = create((set, get) => ({
   loading:  false,
   error:    null,
 
-  fetchListings: async ({ scope = 'all', search = '', homeCountry = '' } = {}) => {
+  fetchListings: async ({ scope = 'all', search = '', homeCountry = '', lat = null, lng = null, category = '' } = {}) => {
     set({ loading: true, error: null });
     try {
       const api    = useAuthStore.getState().api;
@@ -45,11 +48,14 @@ export const useHousingStore = create((set, get) => ({
 
       if (scope === 'community' && homeCountry) {
         params.append('community', homeCountry);
-      } else if (scope === 'nearby') {
-        if (loc.latitude  != null) params.append('lat', loc.latitude);
-        if (loc.longitude != null) params.append('lng', loc.longitude);
       }
+      // City-selected lat/lng takes priority over GPS
+      const useLat = lat ?? loc.latitude;
+      const useLng = lng ?? loc.longitude;
+      if (useLat != null) params.append('lat', useLat);
+      if (useLng != null) params.append('lng', useLng);
       if (search.trim()) params.append('search', search.trim());
+      if (category && category !== 'all') params.append('category', category);
 
       const query = params.toString();
       const url   = `/housing/${query ? '?' + query : ''}`;
@@ -72,6 +78,7 @@ export const useHousingStore = create((set, get) => ({
     fd.append('home_country', listingData.homeCountry || '');
     fd.append('country_flag', listingData.countryFlag || '');
     fd.append('posted_from',  listingData.postedFrom  || '');
+    fd.append('category',     listingData.category    || 'other');
     if (listingData.latitude  != null) fd.append('latitude',  parseFloat(Number(listingData.latitude).toFixed(6)));
     if (listingData.longitude != null) fd.append('longitude', parseFloat(Number(listingData.longitude).toFixed(6)));
     if (listingData.image) {

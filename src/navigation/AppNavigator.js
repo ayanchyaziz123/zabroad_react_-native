@@ -4,9 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../theme/ThemeContext';
-import { G_PRIMARY, BRAND } from '../theme/colors';
 import { useAuthStore } from '../store/authStore';
 import { useChatStore } from '../store/chatStore';
 import { useLocationStore } from '../store/locationStore';
@@ -52,6 +50,9 @@ import JobDetailScreen         from '../screens/JobDetailScreen';
 import MarketplaceScreen        from '../screens/MarketplaceScreen';
 import MarketplaceDetailScreen  from '../screens/MarketplaceDetailScreen';
 import PostMarketplaceScreen    from '../screens/PostMarketplaceScreen';
+import EditMarketplaceScreen    from '../screens/EditMarketplaceScreen';
+import EditJobScreen            from '../screens/EditJobScreen';
+import EditHousingScreen        from '../screens/EditHousingScreen';
 import ChatScreen               from '../screens/ChatScreen';
 
 const Tab   = createBottomTabNavigator();
@@ -63,19 +64,17 @@ function CustomTabBar({ state, navigation }) {
   const s = useMemo(() => getStyles(C), [C]);
   const inConversation  = useChatStore(s => s.inConversation);
   const conversations   = useChatStore(s => s.conversations);
-  const notifUnread     = useNotificationStore(s => s.unreadCount);
 
   const totalUnread = conversations.reduce((sum, c) => sum + (c.unread_count || 0), 0);
 
   if (inConversation) return null;
 
-  // Order: Home · Notifications · [+] · Chat · Profile
+  // Order: Home · Messages · [+] · Profile
   const allTabs = [
-    { type: 'tab', name: 'Home',          icon: 'home-outline',          iconActive: 'home',          label: 'Home'                      },
-    { type: 'tab', name: 'Notifications', icon: 'notifications-outline', iconActive: 'notifications', label: 'Notifs', badge: notifUnread },
+    { type: 'tab', name: 'Home',    icon: 'home-outline',        iconActive: 'home',        label: 'Home'                    },
+    { type: 'tab', name: 'Chat',    icon: 'chatbubbles-outline', iconActive: 'chatbubbles', label: 'Messages', badge: totalUnread },
     { type: 'fab' },
-    { type: 'tab', name: 'Chat',          icon: 'chatbubble-outline',    iconActive: 'chatbubble',    label: 'Chat',   badge: totalUnread },
-    { type: 'tab', name: 'Profile',       icon: 'person-outline',        iconActive: 'person',        label: 'Profile'                   },
+    { type: 'tab', name: 'Profile', icon: 'person-outline',      iconActive: 'person',      label: 'Profile'                 },
   ];
 
   return (
@@ -83,13 +82,17 @@ function CustomTabBar({ state, navigation }) {
       {allTabs.map((item) => {
         if (item.type === 'fab') {
           return (
-            <View key="fab" style={s.fabShadow}>
-              <TouchableOpacity style={s.fabTap} onPress={() => navigation.navigate('CreatePost')} activeOpacity={0.85}>
-                <LinearGradient colors={G_PRIMARY} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.fabInner}>
-                  <Ionicons name="add" size={24} color="white" />
-                </LinearGradient>
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity
+              key="fab"
+              style={s.fabWrap}
+              onPress={() => navigation.navigate('CreatePost')}
+              activeOpacity={0.85}
+            >
+              <View style={s.fabCircle}>
+                <Ionicons name="add" size={20} color="white" />
+              </View>
+              <Text style={s.fabLabel}>Post</Text>
+            </TouchableOpacity>
           );
         }
         const routeIndex = state.routes.findIndex(r => r.name === item.name);
@@ -97,14 +100,14 @@ function CustomTabBar({ state, navigation }) {
         return (
           <TouchableOpacity
             key={item.name}
-            style={[s.tabItem, isActive && s.tabItemActive]}
+            style={s.tabItem}
             onPress={() => navigation.navigate(item.name)}
             activeOpacity={0.7}
           >
             <View style={s.iconWrap}>
               <Ionicons
                 name={isActive ? item.iconActive : item.icon}
-                size={19}
+                size={22}
                 color={isActive ? C.vivid : C.c35}
               />
               {item.badge > 0 && (
@@ -201,6 +204,9 @@ export default function AppNavigator() {
         <Stack.Screen name="Marketplace"         component={MarketplaceScreen} />
         <Stack.Screen name="MarketplaceDetail"   component={MarketplaceDetailScreen} />
         <Stack.Screen name="PostMarketplace"     component={PostMarketplaceScreen} />
+        <Stack.Screen name="EditMarketplace"     component={EditMarketplaceScreen} />
+        <Stack.Screen name="EditJob"             component={EditJobScreen} />
+        <Stack.Screen name="EditHousing"         component={EditHousingScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );
@@ -210,16 +216,15 @@ const getStyles = (C) => StyleSheet.create({
   tabBar: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around',
     backgroundColor: C.nav, borderTopWidth: 1, borderTopColor: C.border,
-    paddingBottom: 22, paddingTop: 8, paddingHorizontal: 4, height: 76,
+    paddingBottom: 20, paddingTop: 8, paddingHorizontal: 4, height: 70,
   },
-  tabItem: { alignItems: 'center', gap: 2, paddingHorizontal: 5, paddingVertical: 5, borderRadius: 12 },
-  tabItemActive: { backgroundColor: C.vividD },
-  tabLabel: { fontSize: 8, fontWeight: '700', letterSpacing: 0.4, textTransform: 'uppercase', color: C.c35 },
-  tabLabelActive: { color: C.vivid },
+  tabItem:       { alignItems: 'center', gap: 3, paddingHorizontal: 10, paddingVertical: 3 },
+  tabLabel:      { fontSize: 11, fontWeight: '600', color: C.c35 },
+  tabLabelActive:{ color: C.vivid, fontWeight: '700' },
   iconWrap: { position: 'relative' },
-  badge:    { position: 'absolute', top: -5, right: -7, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: '#FF3B30', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
+  badge:    { position: 'absolute', top: -4, right: -6, minWidth: 15, height: 15, borderRadius: 8, backgroundColor: '#FF3B30', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2 },
   badgeTxt: { fontSize: 9, fontWeight: '800', color: 'white', lineHeight: 11 },
-  fabShadow: { borderRadius: 15, marginBottom: 10, shadowColor: BRAND.orange, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.5, shadowRadius: 12, elevation: 8 },
-  fabTap:    { borderRadius: 15, overflow: 'hidden' },
-  fabInner:  { width: 46, height: 46, alignItems: 'center', justifyContent: 'center' },
+  fabWrap:   { alignItems: 'center', gap: 3, paddingHorizontal: 10, paddingVertical: 3 },
+  fabCircle: { width: 28, height: 28, borderRadius: 8, backgroundColor: C.vivid, alignItems: 'center', justifyContent: 'center' },
+  fabLabel:  { fontSize: 11, fontWeight: '700', color: C.c35 },
 });

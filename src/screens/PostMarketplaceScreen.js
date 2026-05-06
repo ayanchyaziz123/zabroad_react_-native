@@ -12,9 +12,12 @@ import { useTheme } from '../theme/ThemeContext';
 import { G_PRIMARY, G_SUCCESS } from '../theme/colors';
 import { useAuthStore } from '../store/authStore';
 import { useLocationStore } from '../store/locationStore';
+import { MARKET_CATEGORIES } from './MarketplaceScreen';
 
 const ACCENT     = '#00B4D8';
 const ACCENT_DIM = '#00B4D81A';
+
+const CATEGORY_OPTIONS = MARKET_CATEGORIES.filter(c => c.key !== 'all');
 
 const PLANS = [
   {
@@ -39,11 +42,14 @@ export default function PostMarketplaceScreen({ navigation }) {
   const locCity    = useLocationStore(st => st.city);
   const locLat     = useLocationStore(st => st.latitude);
   const locLng     = useLocationStore(st => st.longitude);
+  const locStatus  = useLocationStore(st => st.status);
+  const detect     = useLocationStore(st => st.detect);
 
   const [title,     setTitle]     = useState('');
   const [desc,      setDesc]      = useState('');
   const [price,     setPrice]     = useState('');
   const [location,  setLocation]  = useState('');
+  const [category,  setCategory]  = useState('other');
   const [image,     setImage]     = useState(null);
   const [plan,      setPlan]      = useState('free');
   const [posting,   setPosting]   = useState(false);
@@ -53,8 +59,12 @@ export default function PostMarketplaceScreen({ navigation }) {
   const successOpacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    if (locCity && !location) setLocation(locCity);
-  }, [locCity]);
+    if (locCity) {
+      if (!location) setLocation(locCity);
+    } else if (locStatus === 'idle') {
+      detect();
+    }
+  }, [locCity, locStatus]);
 
   const canPost = title.trim().length > 2 && desc.trim().length >= 10;
 
@@ -84,6 +94,7 @@ export default function PostMarketplaceScreen({ navigation }) {
       fd.append('description',  desc.trim());
       fd.append('price',        price.trim());
       fd.append('location',     location.trim());
+      fd.append('category',     category);
       fd.append('plan',         plan);
       fd.append('home_country', user?.profile?.home_country || '');
       fd.append('country_flag', user?.profile?.country_flag || '');
@@ -133,7 +144,7 @@ export default function PostMarketplaceScreen({ navigation }) {
                 <Text style={s.doneBtnTxt}>View Marketplace</Text>
               </LinearGradient>
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => { setSubmitted(false); setTitle(''); setDesc(''); setPrice(''); setImage(null); setPlan('free'); }} style={{ marginTop: 12 }}>
+            <TouchableOpacity onPress={() => { setSubmitted(false); setTitle(''); setDesc(''); setPrice(''); setImage(null); setCategory('other'); setPlan('free'); }} style={{ marginTop: 12 }}>
               <Text style={[s.postAnotherTxt, { color: C.c35 }]}>Post another listing</Text>
             </TouchableOpacity>
           </View>
@@ -208,19 +219,24 @@ export default function PostMarketplaceScreen({ navigation }) {
             </View>
           </View>
 
-          {/* Location */}
+          {/* Category */}
           <View style={s.fieldGroup}>
-            <Text style={s.fieldLabel}>LOCATION</Text>
-            <View style={[s.inputRow, { backgroundColor: C.card, borderColor: C.border }]}>
-              <Ionicons name="location-outline" size={16} color={C.c35} />
-              <TextInput
-                style={[s.input, { color: C.cream }]}
-                placeholder="City or neighbourhood"
-                placeholderTextColor={C.c35}
-                value={location}
-                onChangeText={setLocation}
-                maxLength={100}
-              />
+            <Text style={s.fieldLabel}>CATEGORY</Text>
+            <View style={s.catGrid}>
+              {CATEGORY_OPTIONS.map(cat => {
+                const active = category === cat.key;
+                return (
+                  <TouchableOpacity
+                    key={cat.key}
+                    style={[s.catOption, { backgroundColor: active ? ACCENT + '18' : C.card, borderColor: active ? ACCENT : C.border }]}
+                    onPress={() => setCategory(cat.key)}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name={cat.icon} size={16} color={active ? ACCENT : C.c35} />
+                    <Text style={[s.catOptionTxt, { color: active ? ACCENT : C.c35 }]}>{cat.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           </View>
 
@@ -334,6 +350,9 @@ const getStyles = (C) => StyleSheet.create({
   inputRow:   { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12 },
   input:      { flex: 1, fontSize: 14, fontWeight: '500' },
 
+  locationBadge:    { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 11 },
+  locationBadgeTxt: { flex: 1, fontSize: 14, fontWeight: '500' },
+
   textAreaRow: { borderWidth: 1, borderRadius: 14, padding: 14 },
   textArea:    { fontSize: 14, lineHeight: 22, minHeight: 100 },
   charCount:   { fontSize: 11, textAlign: 'right', marginTop: 6 },
@@ -379,4 +398,8 @@ const getStyles = (C) => StyleSheet.create({
   doneBtnInner:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 16 },
   doneBtnTxt:       { fontSize: 15, fontWeight: '800', color: 'white' },
   postAnotherTxt:   { fontSize: 13, fontWeight: '600' },
+
+  catGrid:     { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  catOption:   { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8 },
+  catOptionTxt:{ fontSize: 12, fontWeight: '600' },
 });
