@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // iOS simulator: localhost works directly (shares host network stack)
 // Android emulator: use 10.0.2.2 instead of localhost
 // Physical device: use your Mac's local IP (e.g. 192.168.x.x)
-export const BASE_URL = 'http://192.168.1.202:8000/api';
+export const BASE_URL = 'http://localhost:8000/api';
 
 // ── Token helpers ─────────────────────────────────────────────────────────────
 const KEYS = { access: '@zabroad_access', refresh: '@zabroad_refresh' };

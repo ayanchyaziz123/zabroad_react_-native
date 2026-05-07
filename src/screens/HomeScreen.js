@@ -12,6 +12,7 @@ import { useAuthStore } from '../store/authStore';
 import { useLocationStore } from '../store/locationStore';
 import { useJobsStore } from '../store/jobsStore';
 import { useHousingStore } from '../store/housingStore';
+import { useNotificationStore } from '../store/notificationStore';
 import UserAvatar from '../components/UserAvatar';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -80,16 +81,15 @@ function getAvatarBg(handle) {
 // ── Category definitions ──────────────────────────────────────────────────────
 
 const CATEGORIES = [
-  { key: 'Jobs',        label: 'Jobs',        emoji: '💼', bg: '#1B4FA8', badge: '#F4A227' },
-  { key: 'Housing',     label: 'Housing',     emoji: '🏠', bg: '#1B4FA8', badge: '#F4A227' },
-  { key: 'Marketplace', label: 'Marketplace', emoji: '🛒', bg: '#E8871E', badge: '#fff' },
-  { key: 'Services',    label: 'Services',    emoji: '🤝', bg: '#1B4FA8', badge: '#28D99E' },
+  { key: 'Jobs',          label: 'Jobs',          emoji: '💼', bg: '#1B4FA8', badge: '#F4A227' },
+  { key: 'Housing',       label: 'Housing',       emoji: '🏠', bg: '#1B4FA8', badge: '#F4A227' },
+  { key: 'Marketplace',   label: 'Shop Local',   emoji: '🛒', bg: '#E8871E', badge: '#fff' },
 ];
 
 const TYPE_META = {
   job:     { label: 'Job',      icon: 'briefcase-outline',  color: '#3B8BF7' },
   housing: { label: 'Housing',  icon: 'home-outline',       color: '#F4A227' },
-  market:  { label: 'For Sale', icon: 'storefront-outline', color: '#28D99E' },
+  market:  { label: 'Shop Local', icon: 'storefront-outline', color: '#28D99E' },
 };
 
 // ── City picker modal ─────────────────────────────────────────────────────────
@@ -389,10 +389,16 @@ export default function HomeScreen({ navigation }) {
   const [refreshing,    setRefreshing]    = useState(false);
   const [fetchError,    setFetchError]    = useState('');
   const [cityModal,     setCityModal]     = useState(false);
+  const [browseModal,   setBrowseModal]   = useState(false);
+
+  const unreadCount    = useNotificationStore(s => s.unreadCount);
 
   const homeCountry    = authUser?.profile?.home_country || '';
   const countryFlag    = authUser?.profile?.country_flag || authUser?.profile?.home_country_flag || '';
   const cityShort      = currentCity.split(',')[0] || 'Set location';
+  const firstName      = authUser?.profile?.full_name?.split(' ')[0] || authUser?.username || 'there';
+  const hour           = new Date().getHours();
+  const greeting       = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 
   const cityCoords = useMemo(() => {
     if (gpsLat != null && gpsLng != null) return { lat: gpsLat, lng: gpsLng };
@@ -457,28 +463,42 @@ export default function HomeScreen({ navigation }) {
   );
 
   useEffect(() => {
-    const lat = cityCoords?.lat ?? null;
-    const lng = cityCoords?.lng ?? null;
-    fetchJobs({ lat, lng });
-    fetchHousing({ lat, lng });
-    const q = lat != null ? `?lat=${lat}&lng=${lng}` : '';
-    api(`/marketplace/${q}`).then(data => {
+    const lat       = cityCoords?.lat ?? null;
+    const lng       = cityCoords?.lng ?? null;
+    const isCountry = activeScope === 'country';
+    const scope     = isCountry ? 'community' : 'all';
+    const country   = isCountry ? homeCountry : '';
+
+    fetchJobs({ lat, lng, scope, homeCountry: country });
+    fetchHousing({ lat, lng, scope, homeCountry: country });
+
+    const params = new URLSearchParams();
+    if (lat != null) { params.append('lat', lat); params.append('lng', lng); }
+    if (isCountry && homeCountry) params.append('community', homeCountry);
+    const q = params.toString();
+    api(`/marketplace/${q ? '?' + q : ''}`).then(data => {
       setMarketPreview(Array.isArray(data) ? data : (data.results || []));
     }).catch(() => {}).finally(() => setMarketLoading(false));
-  }, [cityCoords]);
+  }, [cityCoords, activeScope]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    const lat = cityCoords?.lat ?? null;
-    const lng = cityCoords?.lng ?? null;
-    const q   = lat != null ? `?lat=${lat}&lng=${lng}` : '';
+    const lat       = cityCoords?.lat ?? null;
+    const lng       = cityCoords?.lng ?? null;
+    const isCountry = activeScope === 'country';
+    const scope     = isCountry ? 'community' : 'all';
+    const country   = isCountry ? homeCountry : '';
+    const params    = new URLSearchParams();
+    if (lat != null) { params.append('lat', lat); params.append('lng', lng); }
+    if (isCountry && homeCountry) params.append('community', homeCountry);
+    const q = params.toString();
     Promise.all([
       fetchPosts(activeScope, true),
-      fetchJobs({ lat, lng }),
-      fetchHousing({ lat, lng }),
-      api(`/marketplace/${q}`).then(d => setMarketPreview(Array.isArray(d) ? d : (d.results || []))).catch(() => {}),
+      fetchJobs({ lat, lng, scope, homeCountry: country }),
+      fetchHousing({ lat, lng, scope, homeCountry: country }),
+      api(`/marketplace/${q ? '?' + q : ''}`).then(d => setMarketPreview(Array.isArray(d) ? d : (d.results || []))).catch(() => {}),
     ]).finally(() => setRefreshing(false));
-  }, [activeScope, fetchPosts, fetchJobs, fetchHousing, api, cityCoords]);
+  }, [activeScope, fetchPosts, fetchJobs, fetchHousing, api, cityCoords, homeCountry]);
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
@@ -492,6 +512,36 @@ export default function HomeScreen({ navigation }) {
         C={C}
       />
 
+      {/* ── BROWSE CATEGORY MODAL ───────────────────────────────── */}
+      <Modal visible={browseModal} transparent animationType="slide" onRequestClose={() => setBrowseModal(false)}>
+        <TouchableOpacity style={bm.overlay} activeOpacity={1} onPress={() => setBrowseModal(false)} />
+        <View style={[bm.sheet, { backgroundColor: C.nav }]}>
+          <View style={bm.handle} />
+          <Text style={[bm.title, { color: C.cream }]}>Browse Listings</Text>
+          {[
+            { label: 'Jobs',        sub: 'Find jobs near you',          emoji: '💼', color: '#3B8BF7', screen: 'Jobs'        },
+            { label: 'Housing',     sub: 'Rooms, apartments & homes',   emoji: '🏠', color: '#F4A227', screen: 'Housing'     },
+            { label: 'Marketplace', sub: 'Buy & sell in the community', emoji: '🛒', color: '#28D99E', screen: 'Marketplace' },
+          ].map((opt, i, arr) => (
+            <TouchableOpacity
+              key={opt.screen}
+              style={[bm.row, i < arr.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border }]}
+              activeOpacity={0.75}
+              onPress={() => { setBrowseModal(false); navigation.navigate(opt.screen); }}
+            >
+              <View style={[bm.iconBox, { backgroundColor: opt.color + '18' }]}>
+                <Text style={{ fontSize: 22 }}>{opt.emoji}</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[bm.rowLabel, { color: C.cream }]}>{opt.label}</Text>
+                <Text style={[bm.rowSub,   { color: C.c35  }]}>{opt.sub}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={opt.color} />
+            </TouchableOpacity>
+          ))}
+        </View>
+      </Modal>
+
       <ScrollView
         style={s.scroll}
         showsVerticalScrollIndicator={false}
@@ -501,38 +551,44 @@ export default function HomeScreen({ navigation }) {
 
         {/* ── HEADER ──────────────────────────────────────────────── */}
         <View style={s.headerWrap}>
-          {/* Single compact row */}
+
+          {/* ── Row 1: Location + Icons ── */}
           <View style={s.headerRow}>
-            <Text style={s.headerLogo}>Zabroad ✈</Text>
-
+            <TouchableOpacity style={s.locBar} onPress={() => setCityModal(true)} activeOpacity={0.8}>
+              <Ionicons name="location-sharp" size={15} color="#F4A227" />
+              <View style={{ flex: 1 }}>
+                <Text style={s.headerGreeting}>{greeting}, {firstName} 👋</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Text style={s.locBarTxt} numberOfLines={1}>
+                    {currentCity || 'Set your location'}
+                  </Text>
+                  <Ionicons name="chevron-down" size={12} color="rgba(255,255,255,0.5)" />
+                </View>
+              </View>
+            </TouchableOpacity>
             <View style={s.headerRight}>
-              {/* Globe — Everyone scope */}
+              {/* Search */}
               <TouchableOpacity
-                style={[s.scopeIconBtn, activeScope === 'all' && s.scopeIconBtnActive]}
-                onPress={() => setActiveScope('all')}
-                activeOpacity={0.75}
+                style={s.headerIconBtn}
+                onPress={() => navigation.navigate('Search')}
+                activeOpacity={0.8}
               >
-                <Ionicons name="globe-outline" size={19} color={activeScope === 'all' ? '#fff' : 'rgba(255,255,255,0.5)'} />
+                <Ionicons name="search-outline" size={19} color="#fff" />
               </TouchableOpacity>
 
-              {/* Country flag — country scope */}
-              {countryFlag ? (
-                <TouchableOpacity
-                  style={[s.scopeIconBtn, activeScope === 'country' && s.scopeIconBtnActive]}
-                  onPress={() => setActiveScope(sc => sc === 'country' ? 'all' : 'country')}
-                  activeOpacity={0.75}
-                >
-                  <Text style={{ fontSize: 16, lineHeight: 20 }}>{countryFlag}</Text>
-                </TouchableOpacity>
-              ) : null}
-
-              {/* Location */}
-              <TouchableOpacity style={s.locPill} onPress={() => setCityModal(true)} activeOpacity={0.8}>
-                <Ionicons name="location" size={11} color="#F4A227" />
-                <Text style={s.locPillTxt} numberOfLines={1}>{cityShort}</Text>
-                <Ionicons name="chevron-down" size={10} color="rgba(255,255,255,0.55)" />
+              {/* Notifications */}
+              <TouchableOpacity
+                style={s.headerIconBtn}
+                onPress={() => navigation.navigate('Notifications')}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="notifications-outline" size={19} color="#fff" />
+                {unreadCount > 0 && (
+                  <View style={s.notifDot}>
+                    <Text style={s.notifDotTxt}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+                  </View>
+                )}
               </TouchableOpacity>
-
               {/* Avatar */}
               <TouchableOpacity onPress={() => navigation.navigate('Profile')} activeOpacity={0.85}>
                 <View style={s.avatarBorder}>
@@ -548,19 +604,35 @@ export default function HomeScreen({ navigation }) {
             </View>
           </View>
 
-          {/* Search bar */}
-          <TouchableOpacity
-            style={s.searchBar}
-            onPress={() => navigation.navigate('Search')}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="search-outline" size={14} color="#aaa" />
-            <Text style={s.searchPlaceholder}>Search jobs, housing, services...</Text>
-            <View style={s.filtersBtn}>
-              <Text style={s.filtersBtnTxt}>Filters</Text>
-              <Ionicons name="chevron-forward" size={11} color="#fff" />
-            </View>
-          </TouchableOpacity>
+          {/* ── Row 2: Scope toggle + Location ── */}
+          <View style={s.scopeRow}>
+            {/* Everyone nearby */}
+            <TouchableOpacity
+              style={[s.scopeToggleBtn, activeScope === 'all' && s.scopeToggleBtnActive]}
+              onPress={() => setActiveScope('all')}
+              activeOpacity={0.75}
+            >
+              <Ionicons name="globe-outline" size={13} color={activeScope === 'all' ? '#fff' : 'rgba(255,255,255,0.5)'} />
+              <Text style={[s.scopeToggleTxt, activeScope === 'all' && s.scopeToggleTxtActive]}>
+                Everyone nearby
+              </Text>
+            </TouchableOpacity>
+
+            {/* Community nearby */}
+            {countryFlag ? (
+              <TouchableOpacity
+                style={[s.scopeToggleBtn, activeScope === 'country' && s.scopeToggleBtnActive]}
+                onPress={() => setActiveScope(sc => sc === 'country' ? 'all' : 'country')}
+                activeOpacity={0.75}
+              >
+                <Text style={{ fontSize: 12, lineHeight: 16 }}>{countryFlag}</Text>
+                <Text style={[s.scopeToggleTxt, activeScope === 'country' && s.scopeToggleTxtActive]}>
+                  {homeCountry} nearby
+                </Text>
+              </TouchableOpacity>
+            ) : null}
+
+          </View>
         </View>
 
         {/* ── CATEGORY ICONS ──────────────────────────────────────── */}
@@ -568,9 +640,10 @@ export default function HomeScreen({ navigation }) {
           {CATEGORIES.map(cat => (
             <TouchableOpacity
               key={cat.key}
-              style={s.catItem}
-              onPress={() => navigation.navigate(cat.key)}
-              activeOpacity={0.75}
+              style={[s.catItem, cat.disabled && { opacity: 0.4 }]}
+              onPress={() => !cat.disabled && navigation.navigate(cat.key)}
+              activeOpacity={cat.disabled ? 1 : 0.75}
+              disabled={cat.disabled}
             >
               <View style={[s.catIconBox, { backgroundColor: cat.bg }]}>
                 <Text style={s.catEmoji}>{cat.emoji}</Text>
@@ -589,7 +662,7 @@ export default function HomeScreen({ navigation }) {
             </Text>
             <TouchableOpacity
               style={s.seeAllBtn}
-              onPress={() => navigation.navigate('Marketplace')}
+              onPress={() => setBrowseModal(true)}
               activeOpacity={0.75}
             >
               <Text style={s.seeAllTxt}>See all</Text>
@@ -651,7 +724,7 @@ export default function HomeScreen({ navigation }) {
         </View>
 
         {/* ── COMMUNITY UPDATES ───────────────────────────────────── */}
-        <View style={[s.section, { marginTop: 28 }]}>
+        <View style={s.section}>
           <View style={s.sectionHdr}>
             <Text style={s.sectionTitle}>Community Updates</Text>
           </View>
@@ -718,49 +791,42 @@ const getStyles = (C) => StyleSheet.create({
   scroll: { flex: 1 },
 
   // ── Header ──────────────────────────────────────────────────────────────────
-  headerWrap: { backgroundColor: '#1B3266', paddingBottom: 10 },
+  headerWrap: { backgroundColor: '#1B3266', paddingBottom: 12 },
 
+  locBar:    { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 },
+  locBarTxt: { fontSize: 17, fontWeight: '900', color: '#fff', letterSpacing: -0.3 },
+
+  // Row 1
   headerRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 14, paddingTop: 9, paddingBottom: 7,
+    paddingHorizontal: 14, paddingTop: 10, paddingBottom: 10,
   },
-  headerLogo:  { fontSize: 20, fontWeight: '900', color: '#fff', letterSpacing: -0.4 },
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  avatarBorder:{ borderRadius: 17, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.35)', overflow: 'hidden' },
+  headerGreeting: { fontSize: 11, fontWeight: '500', color: 'rgba(255,255,255,0.55)', marginBottom: 1 },
+  headerRight:    { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  headerIconBtn:  { width: 34, height: 34, borderRadius: 11, backgroundColor: 'rgba(255,255,255,0.1)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center', position: 'relative' },
+  notifDot:       { position: 'absolute', top: -3, right: -3, minWidth: 15, height: 15, borderRadius: 8, backgroundColor: '#FF3B30', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2 },
+  notifDotTxt:    { fontSize: 8, fontWeight: '800', color: '#fff' },
+  avatarBorder:   { borderRadius: 17, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.35)', overflow: 'hidden' },
 
-  // Scope icon buttons (icon only, no text)
-  scopeIconBtn: {
-    width: 30, height: 30, borderRadius: 9, alignItems: 'center', justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.08)',
+  // Row 2 — scope toggle + location
+  scopeRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 14, paddingBottom: 4,
   },
-  scopeIconBtnActive: { backgroundColor: 'rgba(255,255,255,0.22)' },
+  scopeToggleBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.08)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.14)',
+  },
+  scopeToggleBtnActive: { backgroundColor: 'rgba(255,255,255,0.22)', borderColor: 'rgba(255,255,255,0.4)' },
+  scopeToggleTxt:       { fontSize: 11, fontWeight: '600', color: 'rgba(255,255,255,0.5)' },
+  scopeToggleTxtActive: { color: '#fff', fontWeight: '700' },
 
-  // Location pill (compact)
-  locPill: {
-    flexDirection: 'row', alignItems: 'center', gap: 3,
-    paddingHorizontal: 7, paddingVertical: 4, borderRadius: 8,
-    backgroundColor: 'rgba(244,162,39,0.15)', borderWidth: 1, borderColor: 'rgba(244,162,39,0.35)',
-    maxWidth: 110,
-  },
-  locPillTxt: { fontSize: 11, fontWeight: '700', color: '#F4A227', flex: 1 },
-
-  // Search bar
-  searchBar: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#fff', borderRadius: 10, marginHorizontal: 12, marginTop: 8,
-    paddingHorizontal: 10, paddingVertical: 8, gap: 7,
-  },
-  searchPlaceholder: { flex: 1, fontSize: 13, color: '#999' },
-  filtersBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 3,
-    backgroundColor: '#2B5FC7', paddingHorizontal: 9, paddingVertical: 5, borderRadius: 7,
-  },
-  filtersBtnTxt: { fontSize: 12, fontWeight: '700', color: '#fff' },
 
   // ── Category bar ─────────────────────────────────────────────────────────────
   catRow: {
     flexDirection: 'row', justifyContent: 'space-around',
-    paddingHorizontal: 8, paddingVertical: 12,
+    paddingHorizontal: H_PAD, paddingVertical: 12,
     backgroundColor: C.bg,
   },
   catItem:   { alignItems: 'center', gap: 5, flex: 1 },
@@ -786,7 +852,7 @@ const getStyles = (C) => StyleSheet.create({
   bannerEmoji: { fontSize: 34, marginLeft: 8 },
 
   // ── Section ───────────────────────────────────────────────────────────────────
-  section:      { marginTop: 22 },
+  section:      { marginTop: 24 },
   sectionHdr:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: H_PAD, marginBottom: 14 },
   sectionTitle: { fontSize: 17, fontWeight: '800', color: C.cream },
   seeAllBtn:    { flexDirection: 'row', alignItems: 'center', gap: 2 },
@@ -822,7 +888,7 @@ const getStyles = (C) => StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 50,
     paddingHorizontal: 5, paddingVertical: 2,
   },
-  gridBody:     { padding: 10 },
+  gridBody:     { padding: 10, gap: 4 },
   gridPrice:    { fontSize: 14, fontWeight: '800' },
   gridDistRow:  { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 3 },
   gridDistTxt:  { fontSize: 10, fontWeight: '600' },
@@ -861,4 +927,15 @@ const getStyles = (C) => StyleSheet.create({
   retryTxt:      { fontSize: 13, fontWeight: '700', color: 'white' },
 
   iconBtn: { width: 34, height: 34, borderRadius: 11, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, alignItems: 'center', justifyContent: 'center' },
+});
+
+const bm = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' },
+  sheet:   { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 10, paddingBottom: 36 },
+  handle:  { width: 38, height: 4, borderRadius: 2, backgroundColor: 'rgba(150,150,150,0.35)', alignSelf: 'center', marginBottom: 16 },
+  title:   { fontSize: 17, fontWeight: '800', paddingHorizontal: 20, marginBottom: 12 },
+  row:     { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 20, paddingVertical: 16 },
+  iconBox: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  rowLabel:{ fontSize: 15, fontWeight: '700' },
+  rowSub:  { fontSize: 12, marginTop: 2 },
 });

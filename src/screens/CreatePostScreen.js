@@ -2,17 +2,17 @@ import React, { useState, useMemo, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
   StyleSheet, TextInput, KeyboardAvoidingView,
-  Platform, Animated, Alert, ActivityIndicator,
+  Platform, Animated, Alert, ActivityIndicator, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../theme/ThemeContext';
 import { useAuthStore } from '../store/authStore';
-import { G_PRIMARY } from '../theme/colors';
 import UserAvatar from '../components/UserAvatar';
+
+const NAVY = '#1B3266';
 
 const TOPICS = [
   { label: '#OPT',        icon: 'card-outline' },
@@ -26,9 +26,9 @@ const TOPICS = [
 ];
 
 const SMART_ROUTES = [
-  { key: 'job',      icon: 'briefcase-outline',        label: 'Post a Job',       sub: 'Hiring with visa sponsorship', color: '#3EC878', route: 'PostJob'      },
-  { key: 'housing',  icon: 'home-outline',             label: 'List Housing',     sub: 'Room, apartment or sublet',    color: '#F5A623', route: 'Housing'      },
-  { key: 'doctor',   icon: 'medkit-outline',           label: 'List as Doctor',   sub: 'Add your practice',            color: '#5BCFEF', route: 'ListDoctor'   },
+  { key: 'job',      icon: 'briefcase-outline',        label: 'Post a Job',       sub: 'Hiring with visa sponsorship', color: '#3B8BF7', route: 'PostJob'      },
+  { key: 'housing',  icon: 'home-outline',             label: 'List Housing',     sub: 'Room, apartment or sublet',    color: '#F4A227', route: 'PostHousing'  },
+  { key: 'market',   icon: 'storefront-outline',       label: 'Marketplace',      sub: 'Sell something to community',  color: '#28D99E', route: 'PostMarketplace' },
   { key: 'attorney', icon: 'shield-checkmark-outline', label: 'List as Attorney', sub: 'Help immigrants legally',      color: '#9B72EF', route: 'ListAttorney' },
 ];
 
@@ -52,17 +52,16 @@ export default function CreatePostScreen({ navigation }) {
   const successScale   = useRef(new Animated.Value(0)).current;
   const successOpacity = useRef(new Animated.Value(0)).current;
 
-  const charCount  = text.length;
-  const charPct    = charCount / MAX_CHARS;
-  const charColor  = charPct > 0.9 ? C.vivid : charPct > 0.7 ? '#F5A623' : C.c35;
-  const canPost    = text.trim().length > 0 && !posting;
+  const charCount = text.length;
+  const charPct   = charCount / MAX_CHARS;
+  const charColor = charPct > 0.9 ? '#FF4444' : charPct > 0.7 ? '#F4A227' : C.c35;
+  const canPost   = text.trim().length > 0 && !posting;
 
   const toggleTopic = (label) =>
     setSelectedTopics(prev =>
       prev.includes(label) ? prev.filter(t => t !== label) : [...prev, label]
     );
 
-  // ── Image picking ─────────────────────────────────────────────────────────
   const pickImages = async () => {
     if (images.length >= MAX_IMAGES) {
       Alert.alert('Limit reached', `You can attach up to ${MAX_IMAGES} images.`);
@@ -86,7 +85,6 @@ export default function CreatePostScreen({ navigation }) {
 
   const removeImage = (index) => setImages(prev => prev.filter((_, i) => i !== index));
 
-  // ── Auto-detect GPS city + coords ─────────────────────────────────────────
   const getGpsData = async () => {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -105,7 +103,6 @@ export default function CreatePostScreen({ navigation }) {
     }
   };
 
-  // ── Submit ────────────────────────────────────────────────────────────────
   const handlePost = async () => {
     if (!canPost) return;
     setPosting(true);
@@ -125,21 +122,13 @@ export default function CreatePostScreen({ navigation }) {
         if (longitude != null) fd.append('longitude', String(longitude));
         selectedTopics.forEach(t => fd.append('topics', t.replace('#', '')));
         const img = images[0];
-        fd.append('image', {
-          uri:  img.uri,
-          name: img.fileName || `post_${Date.now()}.jpg`,
-          type: img.mimeType || 'image/jpeg',
-        });
+        fd.append('image', { uri: img.uri, name: img.fileName || `post_${Date.now()}.jpg`, type: img.mimeType || 'image/jpeg' });
         requestBody = fd;
       } else {
         requestBody = {
-          body:         text.trim(),
-          location:     city,
-          latitude,
-          longitude,
-          country,
-          is_anonymous: isAnonymous,
-          topics:       selectedTopics.map(t => t.replace('#', '')),
+          body: text.trim(), location: city, latitude, longitude,
+          country, is_anonymous: isAnonymous,
+          topics: selectedTopics.map(t => t.replace('#', '')),
         };
       }
 
@@ -168,128 +157,126 @@ export default function CreatePostScreen({ navigation }) {
   // ── Success screen ────────────────────────────────────────────────────────
   if (posted) {
     return (
-      <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
-        <Animated.View style={[s.successWrap, { opacity: successOpacity }]}>
-          <Animated.View style={{ transform: [{ scale: successScale }], alignItems: 'center', width: '100%' }}>
-            <View style={s.successIconWrap}>
-              <Ionicons name="checkmark-circle" size={72} color={C.vivid} />
-            </View>
-            <Text style={s.successTitle}>Posted!</Text>
-            <Text style={s.successSub}>
-              Your post is live{postedCity ? ` · 📍 ${postedCity}` : ''}
-            </Text>
-            <View style={s.successCard}>
-              <Text style={s.previewBody} numberOfLines={4}>{text}</Text>
-              {selectedTopics.length > 0 && (
-                <View style={s.previewFooter}>
-                  {selectedTopics.map(t => (
-                    <View key={t} style={[s.previewTag, { backgroundColor: C.vividD, borderColor: C.vivid + '44' }]}>
-                      <Text style={{ fontSize: 11, color: C.vivid, fontWeight: '700' }}>{t}</Text>
-                    </View>
-                  ))}
-                </View>
-              )}
-            </View>
-            <TouchableOpacity style={s.doneBtn} onPress={handleDone} activeOpacity={0.85}>
-              <Ionicons name="checkmark" size={18} color="white" />
-              <Text style={s.doneBtnTxt}>Done</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={s.anotherBtn} onPress={resetForm} activeOpacity={0.7}>
-              <Text style={s.anotherTxt}>Post another</Text>
-            </TouchableOpacity>
+      <SafeAreaView style={[s.safe, { backgroundColor: NAVY }]} edges={['top']}>
+        <View style={s.header}>
+          <TouchableOpacity style={s.headerBtn} onPress={handleDone} activeOpacity={0.8}>
+            <Ionicons name="close" size={18} color="#fff" />
+          </TouchableOpacity>
+          <Text style={s.headerTitle}>New Post</Text>
+          <View style={{ width: 34 }} />
+        </View>
+        <View style={[s.safe, { backgroundColor: C.bg }]}>
+          <Animated.View style={[s.successWrap, { opacity: successOpacity }]}>
+            <Animated.View style={[{ transform: [{ scale: successScale }], alignItems: 'center', width: '100%' }]}>
+              <View style={s.successCircle}>
+                <Ionicons name="checkmark" size={48} color="#fff" />
+              </View>
+              <Text style={[s.successTitle, { color: C.cream }]}>Posted!</Text>
+              <Text style={[s.successSub, { color: C.c35 }]}>
+                Your post is live{postedCity ? ` · 📍 ${postedCity}` : ''}
+              </Text>
+              <View style={[s.successCard, { backgroundColor: C.card, borderColor: C.border }]}>
+                <Text style={[s.previewBody, { color: C.cream }]} numberOfLines={4}>{text}</Text>
+                {selectedTopics.length > 0 && (
+                  <View style={s.previewFooter}>
+                    {selectedTopics.map(t => (
+                      <View key={t} style={[s.previewTag, { backgroundColor: '#3B8BF715', borderColor: '#3B8BF744' }]}>
+                        <Text style={{ fontSize: 11, color: '#3B8BF7', fontWeight: '700' }}>{t}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </View>
+              <TouchableOpacity style={s.doneBtn} onPress={handleDone} activeOpacity={0.85}>
+                <Ionicons name="checkmark" size={18} color="white" />
+                <Text style={s.doneBtnTxt}>Done</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={s.anotherBtn} onPress={resetForm} activeOpacity={0.7}>
+                <Text style={[s.anotherTxt, { color: C.c35 }]}>Post another</Text>
+              </TouchableOpacity>
+            </Animated.View>
           </Animated.View>
-        </Animated.View>
+        </View>
       </SafeAreaView>
     );
   }
 
   // ── Form ──────────────────────────────────────────────────────────────────
   return (
-    <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+    <SafeAreaView style={[s.safe, { backgroundColor: NAVY }]} edges={['top']}>
 
-        {/* ── Header ─────────────────────────────────────────── */}
-        <View style={s.header}>
-          <TouchableOpacity style={s.closeBtn} onPress={() => navigation.goBack()} activeOpacity={0.7}>
-            <Ionicons name="close" size={20} color={C.c35} />
-          </TouchableOpacity>
-          <Text style={s.title}>New Post</Text>
-          {canPost ? (
-            <TouchableOpacity style={s.publishBtnWrap} onPress={handlePost} disabled={posting} activeOpacity={0.85}>
-              <LinearGradient colors={G_PRIMARY} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.publishGrad}>
-                {posting
-                  ? <ActivityIndicator size="small" color="white" />
-                  : <>
-                      <Text style={s.publishTxt}>Publish</Text>
-                      <Ionicons name="arrow-up-circle" size={16} color="white" />
-                    </>
-                }
-              </LinearGradient>
-            </TouchableOpacity>
-          ) : (
-            <View style={s.publishBtnOff}>
-              <Text style={s.publishTxtOff}>Publish</Text>
-            </View>
-          )}
-        </View>
+      {/* ── Header ─────────────────────────────────────────────────── */}
+      <View style={s.header}>
+        <TouchableOpacity style={s.headerBtn} onPress={() => navigation.goBack()} activeOpacity={0.8}>
+          <Ionicons name="close" size={18} color="#fff" />
+        </TouchableOpacity>
+        <Text style={s.headerTitle}>New Post</Text>
+        <TouchableOpacity
+          style={[s.publishBtn, !canPost && s.publishBtnOff]}
+          onPress={handlePost}
+          disabled={!canPost}
+          activeOpacity={0.85}
+        >
+          {posting
+            ? <ActivityIndicator size="small" color="#fff" />
+            : <Text style={[s.publishTxt, !canPost && s.publishTxtOff]}>Publish</Text>
+          }
+        </TouchableOpacity>
+      </View>
 
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={[s.safe, { backgroundColor: C.bg }]}>
         <ScrollView
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ paddingBottom: 40 }}
         >
 
-          {/* ── Error ──────────────────────────────────────────── */}
+          {/* ── Error ───────────────────────────────────────────────── */}
           {postError ? (
-            <View style={s.errorBanner}>
-              <Ionicons name="warning-outline" size={16} color={C.vivid} />
-              <Text style={[s.errorTxt, { color: C.vivid }]}>{postError}</Text>
+            <View style={[s.errorBanner, { borderColor: '#FF444455', backgroundColor: '#FF44441A' }]}>
+              <Ionicons name="warning-outline" size={16} color="#FF4444" />
+              <Text style={[s.errorTxt, { color: '#FF4444' }]}>{postError}</Text>
             </View>
           ) : null}
 
-          {/* ── Author row ─────────────────────────────────────── */}
+          {/* ── Author row ──────────────────────────────────────────── */}
           <View style={s.authorRow}>
-            <View style={s.avatarRing}>
+            <View style={[s.avatarRing, { borderColor: '#3B8BF7' }]}>
               <UserAvatar
                 uri={isAnonymous ? null : user?.profile?.avatar_url}
                 emoji={isAnonymous ? '🕵️' : user?.profile?.avatar_emoji}
                 name={user?.name}
                 size={38}
-                bg={isAnonymous ? C.card2 : C.vividD}
+                bg={isAnonymous ? C.card : '#1A3266'}
               />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={s.authorName}>
+              <Text style={[s.authorName, { color: C.cream }]}>
                 {isAnonymous ? 'Anonymous' : (user?.name || 'You')}
               </Text>
-              <View style={s.locationPill}>
-                <Ionicons name="location-outline" size={11} color={C.c35} />
-                <Text style={s.locationPillTxt}>Auto-detected on publish</Text>
+              <View style={s.locRow}>
+                <Ionicons name="location-outline" size={10} color={C.c35} />
+                <Text style={[s.locTxt, { color: C.c35 }]}>Auto-detected on publish</Text>
               </View>
             </View>
             <TouchableOpacity
-              style={[s.anonToggle, isAnonymous && s.anonToggleActive]}
+              style={[s.anonBtn, isAnonymous && { backgroundColor: '#3B8BF722', borderColor: '#3B8BF766' }]}
               onPress={() => setIsAnonymous(p => !p)}
               activeOpacity={0.8}
             >
-              <Ionicons
-                name={isAnonymous ? 'eye-off-outline' : 'eye-outline'}
-                size={14}
-                color={isAnonymous ? C.cream : C.c35}
-              />
-              <Text style={[s.anonTxt, isAnonymous && { color: C.cream }]}>
+              <Ionicons name={isAnonymous ? 'eye-off-outline' : 'eye-outline'} size={13} color={isAnonymous ? '#3B8BF7' : C.c35} />
+              <Text style={[s.anonTxt, { color: isAnonymous ? '#3B8BF7' : C.c35 }]}>
                 {isAnonymous ? 'Anon' : 'Public'}
               </Text>
             </TouchableOpacity>
           </View>
 
-          {/* ── Divider ────────────────────────────────────────── */}
-          <View style={s.divider} />
+          <View style={[s.divider, { backgroundColor: C.border }]} />
 
-          {/* ── Text input ─────────────────────────────────────── */}
+          {/* ── Text input ──────────────────────────────────────────── */}
           <View style={s.textWrap}>
             <TextInput
-              style={s.textInput}
+              style={[s.textInput, { color: C.cream }]}
               placeholder="What's on your mind?"
               placeholderTextColor={C.c35}
               multiline
@@ -298,63 +285,62 @@ export default function CreatePostScreen({ navigation }) {
               textAlignVertical="top"
               autoFocus
             />
-            {/* Char counter arc */}
             <View style={s.charRow}>
-              <View style={[s.charBar, { backgroundColor: C.border }]}>
-                <View style={[s.charFill, { width: `${Math.min(charPct * 100, 100)}%`, backgroundColor: charColor }]} />
+              <View style={[s.charBarBg, { backgroundColor: C.border }]}>
+                <View style={[s.charBarFill, { width: `${Math.min(charPct * 100, 100)}%`, backgroundColor: charColor }]} />
               </View>
               <Text style={[s.charCount, { color: charColor }]}>{MAX_CHARS - charCount}</Text>
             </View>
           </View>
 
-          {/* ── Bottom toolbar ─────────────────────────────────── */}
-          <View style={s.toolbar}>
-            <TouchableOpacity style={s.toolBtn} onPress={pickImages} activeOpacity={0.7}>
-              <Ionicons name="image-outline" size={22} color={C.c35} />
+          {/* ── Toolbar ─────────────────────────────────────────────── */}
+          <View style={[s.toolbar, { borderTopColor: C.border }]}>
+            <TouchableOpacity style={[s.toolBtn, { backgroundColor: C.card, borderColor: C.border }]} onPress={pickImages} activeOpacity={0.75}>
+              <Ionicons name="image-outline" size={18} color={images.length > 0 ? '#3B8BF7' : C.c35} />
               {images.length > 0 && (
                 <View style={s.toolBadge}><Text style={s.toolBadgeTxt}>{images.length}</Text></View>
               )}
             </TouchableOpacity>
-            <TouchableOpacity style={s.toolBtn} activeOpacity={0.7}>
-              <Ionicons name="at-outline" size={22} color={C.c35} />
+            <TouchableOpacity style={[s.toolBtn, { backgroundColor: C.card, borderColor: C.border }]} activeOpacity={0.75}>
+              <Ionicons name="at-outline" size={18} color={C.c35} />
             </TouchableOpacity>
-            <TouchableOpacity style={s.toolBtn} activeOpacity={0.7}>
-              <Ionicons name="happy-outline" size={22} color={C.c35} />
+            <TouchableOpacity style={[s.toolBtn, { backgroundColor: C.card, borderColor: C.border }]} activeOpacity={0.75}>
+              <Ionicons name="happy-outline" size={18} color={C.c35} />
             </TouchableOpacity>
             <View style={{ flex: 1 }} />
-            <Text style={[s.charCountInline, { color: charColor }]}>{charCount}/{MAX_CHARS}</Text>
+            <Text style={[s.charInline, { color: charColor }]}>{charCount}/{MAX_CHARS}</Text>
           </View>
 
-          {/* ── Image previews ─────────────────────────────────── */}
+          {/* ── Image previews ──────────────────────────────────────── */}
           {images.length > 0 && (
             <View style={s.imgRow}>
-              {images.map((_img, index) => (
-                <View key={index} style={s.imgThumbWrap}>
-                  <View style={[s.imgThumb, { backgroundColor: C.card2 }]}>
-                    <Ionicons name="image" size={28} color={C.c35} />
-                  </View>
+              {images.map((img, index) => (
+                <View key={index} style={s.imgWrap}>
+                  <Image source={{ uri: img.uri }} style={[s.imgThumb, { backgroundColor: C.card }]} resizeMode="cover" />
                   <TouchableOpacity
-                    style={s.imgRemoveBtn}
+                    style={s.imgRemove}
                     onPress={() => removeImage(index)}
                     hitSlop={{ top: 6, right: 6, bottom: 6, left: 6 }}
                   >
-                    <Ionicons name="close" size={10} color={C.cream} />
+                    <Ionicons name="close" size={10} color="#fff" />
                   </TouchableOpacity>
                 </View>
               ))}
             </View>
           )}
 
-          <View style={s.divider} />
+          <View style={[s.divider, { backgroundColor: C.border }]} />
 
-          {/* ── Topics ─────────────────────────────────────────── */}
+          {/* ── Topics ──────────────────────────────────────────────── */}
           <View style={s.section}>
-            <View style={s.sectionHeader}>
-              <Ionicons name="pricetag-outline" size={14} color={C.c35} />
-              <Text style={s.sectionLabel}>Topics</Text>
+            <View style={s.sectionHdr}>
+              <View style={[s.sectionIconBox, { backgroundColor: '#3B8BF715' }]}>
+                <Ionicons name="pricetag-outline" size={14} color="#3B8BF7" />
+              </View>
+              <Text style={[s.sectionTitle, { color: C.cream }]}>Topics</Text>
               {selectedTopics.length > 0 && (
-                <View style={s.countBadge}>
-                  <Text style={s.countBadgeTxt}>{selectedTopics.length}</Text>
+                <View style={s.countDot}>
+                  <Text style={s.countDotTxt}>{selectedTopics.length}</Text>
                 </View>
               )}
             </View>
@@ -364,51 +350,53 @@ export default function CreatePostScreen({ navigation }) {
                 return (
                   <TouchableOpacity
                     key={label}
-                    style={[s.topicPill, sel && s.topicPillActive]}
+                    style={[s.topicPill, { backgroundColor: C.card, borderColor: C.border }, sel && s.topicPillActive]}
                     onPress={() => toggleTopic(label)}
                     activeOpacity={0.8}
                   >
-                    <Ionicons name={icon} size={12} color={sel ? C.vivid : C.c35} />
-                    <Text style={[s.topicTxt, sel && s.topicTxtActive]}>{label}</Text>
+                    <Ionicons name={icon} size={12} color={sel ? '#3B8BF7' : C.c35} />
+                    <Text style={[s.topicTxt, { color: sel ? '#3B8BF7' : C.c35 }, sel && { fontWeight: '700' }]}>{label}</Text>
                   </TouchableOpacity>
                 );
               })}
             </View>
           </View>
 
-          <View style={s.divider} />
+          <View style={[s.divider, { backgroundColor: C.border }]} />
 
-          {/* ── Smart routes ───────────────────────────────────── */}
+          {/* ── Quick Actions ────────────────────────────────────────── */}
           <View style={s.section}>
-            <View style={s.sectionHeader}>
-              <Ionicons name="flash-outline" size={14} color={C.c35} />
-              <Text style={s.sectionLabel}>Quick Actions</Text>
+            <View style={s.sectionHdr}>
+              <View style={[s.sectionIconBox, { backgroundColor: '#F4A22715' }]}>
+                <Ionicons name="flash-outline" size={14} color="#F4A227" />
+              </View>
+              <Text style={[s.sectionTitle, { color: C.cream }]}>Quick Actions</Text>
             </View>
             <View style={s.smartGrid}>
               {SMART_ROUTES.map(r => (
                 <TouchableOpacity
                   key={r.key}
-                  style={[s.smartCard, { borderColor: r.color + '33' }]}
+                  style={[s.smartCard, { backgroundColor: C.card, borderColor: r.color + '33' }]}
                   onPress={() => navigation.navigate(r.route)}
                   activeOpacity={0.85}
                 >
-                  <View style={[s.smartIcon, { backgroundColor: r.color + '15' }]}>
+                  <View style={[s.smartIconBox, { backgroundColor: r.color + '15' }]}>
                     <Ionicons name={r.icon} size={20} color={r.color} />
                   </View>
                   <Text style={[s.smartLabel, { color: r.color }]}>{r.label}</Text>
-                  <Text style={s.smartSub}>{r.sub}</Text>
+                  <Text style={[s.smartSub, { color: C.c35 }]}>{r.sub}</Text>
                 </TouchableOpacity>
               ))}
             </View>
           </View>
 
-          <View style={s.divider} />
+          <View style={[s.divider, { backgroundColor: C.border }]} />
 
-          {/* ── Guidelines ─────────────────────────────────────── */}
-          <View style={[s.section, { paddingBottom: 4 }]}>
-            <View style={s.guideCard}>
-              <Ionicons name="information-circle-outline" size={16} color={C.c35} />
-              <Text style={s.guideTxt}>
+          {/* ── Guidelines ──────────────────────────────────────────── */}
+          <View style={[s.section, { paddingBottom: 8 }]}>
+            <View style={[s.guideCard, { backgroundColor: C.card, borderColor: C.border }]}>
+              <Ionicons name="shield-checkmark-outline" size={15} color={C.c35} />
+              <Text style={[s.guideTxt, { color: C.c35 }]}>
                 Be respectful · No spam · Sensitive advice should note it's not professional
               </Text>
             </View>
@@ -421,91 +409,100 @@ export default function CreatePostScreen({ navigation }) {
 }
 
 const getStyles = (C) => StyleSheet.create({
-  safe:          { flex: 1, backgroundColor: C.bg },
+  safe: { flex: 1 },
 
-  // Header
-  header:        { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: C.border },
-  closeBtn:      { width: 36, height: 36, borderRadius: 12, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, alignItems: 'center', justifyContent: 'center' },
-  title:         { flex: 1, fontSize: 17, fontWeight: '800', color: C.cream, letterSpacing: -0.3 },
-  publishBtnWrap: { borderRadius: 50, overflow: 'hidden' },
-  publishGrad:    { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 9 },
-  publishBtnOff:  { borderRadius: 50, paddingHorizontal: 16, paddingVertical: 9, backgroundColor: C.card, borderWidth: 1, borderColor: C.border },
-  publishTxt:     { fontSize: 13, fontWeight: '700', color: 'white' },
-  publishTxtOff:  { fontSize: 13, fontWeight: '700', color: C.c35 },
+  // ── Header (navy) ──────────────────────────────────────────────────────────
+  header: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingHorizontal: 14, paddingTop: 10, paddingBottom: 12,
+    backgroundColor: NAVY,
+  },
+  headerBtn: {
+    width: 34, height: 34, borderRadius: 11,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  headerTitle: { flex: 1, fontSize: 16, fontWeight: '800', color: '#fff', paddingLeft: 2 },
+  publishBtn: {
+    paddingHorizontal: 18, paddingVertical: 8, borderRadius: 20,
+    backgroundColor: '#3B8BF7',
+  },
+  publishBtnOff: { backgroundColor: 'rgba(255,255,255,0.12)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)' },
+  publishTxt:    { fontSize: 13, fontWeight: '800', color: '#fff' },
+  publishTxtOff: { color: 'rgba(255,255,255,0.4)' },
 
-  // Error
-  errorBanner:   { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, marginTop: 12, borderRadius: 12, borderWidth: 1, borderColor: C.vivid + '55', backgroundColor: C.vividD, padding: 12 },
-  errorTxt:      { fontSize: 13, fontWeight: '600', flex: 1 },
+  // ── Error ──────────────────────────────────────────────────────────────────
+  errorBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, marginTop: 12, borderRadius: 12, borderWidth: 1, padding: 12 },
+  errorTxt:    { fontSize: 13, fontWeight: '600', flex: 1 },
 
-  // Author
-  authorRow:     { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 14 },
-  avatarRing:    { width: 46, height: 46, borderRadius: 23, borderWidth: 2, borderColor: C.vivid, alignItems: 'center', justifyContent: 'center' },
-  authorAv:      { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
-  authorName:    { fontSize: 14, fontWeight: '700', color: C.cream, marginBottom: 4 },
-  locationPill:  { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  locationPillTxt: { fontSize: 11, color: C.c35 },
-  anonToggle:    { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 50, borderWidth: 1, borderColor: C.border, backgroundColor: C.card },
-  anonToggleActive: { backgroundColor: C.card2, borderColor: C.border2 },
-  anonTxt:       { fontSize: 11, color: C.c35, fontWeight: '600' },
+  // ── Author row ─────────────────────────────────────────────────────────────
+  authorRow:  { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 14 },
+  avatarRing: { width: 46, height: 46, borderRadius: 23, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
+  authorName: { fontSize: 14, fontWeight: '700', marginBottom: 3 },
+  locRow:     { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  locTxt:     { fontSize: 11 },
+  anonBtn:    { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 20, borderWidth: 1, borderColor: C.border, backgroundColor: C.card },
+  anonTxt:    { fontSize: 11, fontWeight: '600' },
 
-  // Text input
-  divider:       { height: 1, backgroundColor: C.border, marginVertical: 0 },
-  textWrap:      { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 4 },
-  textInput:     { fontSize: 16, color: C.cream, lineHeight: 26, minHeight: 130, backgroundColor: 'transparent' },
-  charRow:       { flexDirection: 'row', alignItems: 'center', gap: 10, paddingTop: 8, paddingBottom: 4 },
-  charBar:       { flex: 1, height: 3, borderRadius: 2, overflow: 'hidden' },
-  charFill:      { height: '100%', borderRadius: 2 },
-  charCount:     { fontSize: 11, fontWeight: '600', minWidth: 32, textAlign: 'right' },
+  // ── Text input ─────────────────────────────────────────────────────────────
+  divider:    { height: StyleSheet.hairlineWidth },
+  textWrap:   { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 4 },
+  textInput:  { fontSize: 16, lineHeight: 26, minHeight: 130, backgroundColor: 'transparent' },
+  charRow:    { flexDirection: 'row', alignItems: 'center', gap: 10, paddingTop: 8 },
+  charBarBg:  { flex: 1, height: 3, borderRadius: 2, overflow: 'hidden' },
+  charBarFill:{ height: '100%', borderRadius: 2 },
+  charCount:  { fontSize: 11, fontWeight: '600', minWidth: 32, textAlign: 'right' },
 
-  // Toolbar
-  toolbar:       { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 10, borderTopWidth: 1, borderTopColor: C.border },
-  toolBtn:       { width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center', position: 'relative' },
-  toolBadge:     { position: 'absolute', top: 4, right: 4, width: 14, height: 14, borderRadius: 7, backgroundColor: C.vivid, alignItems: 'center', justifyContent: 'center' },
-  toolBadgeTxt:  { fontSize: 8, fontWeight: '800', color: 'white' },
-  charCountInline: { fontSize: 12, fontWeight: '600', paddingRight: 6 },
+  // ── Toolbar ────────────────────────────────────────────────────────────────
+  toolbar:    { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth },
+  toolBtn:    { width: 36, height: 36, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center', position: 'relative' },
+  toolBadge:  { position: 'absolute', top: 3, right: 3, width: 13, height: 13, borderRadius: 7, backgroundColor: '#3B8BF7', alignItems: 'center', justifyContent: 'center' },
+  toolBadgeTxt: { fontSize: 7, fontWeight: '800', color: '#fff' },
+  charInline: { fontSize: 12, fontWeight: '600' },
 
-  // Images
-  imgRow:        { flexDirection: 'row', gap: 10, paddingHorizontal: 16, paddingVertical: 12 },
-  imgThumbWrap:  { position: 'relative' },
-  imgThumb:      { width: 76, height: 76, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  imgRemoveBtn:  { position: 'absolute', top: -5, right: -5, width: 20, height: 20, borderRadius: 10, backgroundColor: C.vivid, alignItems: 'center', justifyContent: 'center' },
+  // ── Images ─────────────────────────────────────────────────────────────────
+  imgRow:  { flexDirection: 'row', gap: 10, paddingHorizontal: 16, paddingVertical: 12 },
+  imgWrap: { position: 'relative' },
+  imgThumb:{ width: 76, height: 76, borderRadius: 14 },
+  imgRemove: { position: 'absolute', top: -5, right: -5, width: 20, height: 20, borderRadius: 10, backgroundColor: '#FF4444', alignItems: 'center', justifyContent: 'center' },
 
-  // Sections
-  section:       { paddingHorizontal: 16, paddingVertical: 16 },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
-  sectionLabel:  { fontSize: 12, fontWeight: '700', color: C.c35, letterSpacing: 0.8, textTransform: 'uppercase', flex: 1 },
-  countBadge:    { width: 18, height: 18, borderRadius: 9, backgroundColor: C.vivid, alignItems: 'center', justifyContent: 'center' },
-  countBadgeTxt: { fontSize: 10, fontWeight: '800', color: 'white' },
+  // ── Sections ───────────────────────────────────────────────────────────────
+  section:       { paddingHorizontal: 16, paddingVertical: 18 },
+  sectionHdr:    { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 },
+  sectionIconBox:{ width: 28, height: 28, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  sectionTitle:  { fontSize: 15, fontWeight: '800', flex: 1 },
+  countDot:      { width: 18, height: 18, borderRadius: 9, backgroundColor: '#3B8BF7', alignItems: 'center', justifyContent: 'center' },
+  countDotTxt:   { fontSize: 10, fontWeight: '800', color: '#fff' },
 
-  // Topics
+  // ── Topics ─────────────────────────────────────────────────────────────────
   topicsWrap:    { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  topicPill:     { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 50, borderWidth: 1, borderColor: C.border, backgroundColor: C.card },
-  topicPillActive: { backgroundColor: C.vividD, borderColor: C.vivid + '66' },
-  topicTxt:      { fontSize: 12, color: C.c35, fontWeight: '600' },
-  topicTxtActive: { color: C.vivid, fontWeight: '700' },
+  topicPill:     { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
+  topicPillActive: { backgroundColor: '#3B8BF715', borderColor: '#3B8BF755' },
+  topicTxt:      { fontSize: 12, fontWeight: '600' },
 
-  // Smart routes
-  smartGrid:     { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  smartCard:     { width: '47%', borderWidth: 1, borderRadius: 16, padding: 14, gap: 8, backgroundColor: C.card },
-  smartIcon:     { width: 38, height: 38, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
-  smartLabel:    { fontSize: 13, fontWeight: '800' },
-  smartSub:      { fontSize: 11, color: C.c35, lineHeight: 15 },
+  // ── Quick actions ──────────────────────────────────────────────────────────
+  smartGrid:    { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  smartCard:    { width: '47%', borderWidth: 1, borderRadius: 16, padding: 14, gap: 8 },
+  smartIconBox: { width: 38, height: 38, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  smartLabel:   { fontSize: 13, fontWeight: '800' },
+  smartSub:     { fontSize: 11, lineHeight: 16 },
 
-  // Guidelines
-  guideCard:     { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: C.card, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: C.border },
-  guideTxt:      { fontSize: 12, color: C.c35, lineHeight: 18, flex: 1 },
+  // ── Guidelines ─────────────────────────────────────────────────────────────
+  guideCard: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, borderRadius: 14, padding: 14, borderWidth: 1 },
+  guideTxt:  { fontSize: 12, lineHeight: 18, flex: 1 },
 
-  // Success
+  // ── Success ────────────────────────────────────────────────────────────────
   successWrap:   { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 },
-  successIconWrap: { marginBottom: 16 },
-  successTitle:  { fontSize: 34, fontWeight: '900', color: C.cream, letterSpacing: -1, marginBottom: 6 },
-  successSub:    { fontSize: 14, color: C.c35, textAlign: 'center', lineHeight: 20, marginBottom: 24 },
-  successCard:   { alignSelf: 'stretch', backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 18, padding: 16, marginBottom: 24 },
-  previewBody:   { fontSize: 14, color: C.c60, lineHeight: 22, marginBottom: 10 },
+  successCircle: { width: 90, height: 90, borderRadius: 45, backgroundColor: '#3B8BF7', alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
+  successTitle:  { fontSize: 32, fontWeight: '900', letterSpacing: -1, marginBottom: 6 },
+  successSub:    { fontSize: 14, textAlign: 'center', lineHeight: 20, marginBottom: 28 },
+  successCard:   { alignSelf: 'stretch', borderWidth: 1, borderRadius: 18, padding: 16, marginBottom: 24 },
+  previewBody:   { fontSize: 14, lineHeight: 22, marginBottom: 10 },
   previewFooter: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
-  previewTag:    { borderWidth: 1, borderRadius: 50, paddingHorizontal: 10, paddingVertical: 4 },
-  doneBtn:       { flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'stretch', borderRadius: 16, paddingVertical: 15, justifyContent: 'center', marginBottom: 12, backgroundColor: C.vivid },
-  doneBtnTxt:    { fontSize: 16, fontWeight: '800', color: 'white' },
+  previewTag:    { borderWidth: 1, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 },
+  doneBtn:       { flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'stretch', borderRadius: 16, paddingVertical: 15, justifyContent: 'center', marginBottom: 12, backgroundColor: '#3B8BF7' },
+  doneBtnTxt:    { fontSize: 16, fontWeight: '800', color: '#fff' },
   anotherBtn:    { paddingVertical: 12 },
-  anotherTxt:    { fontSize: 14, color: C.c35, fontWeight: '600', textAlign: 'center' },
+  anotherTxt:    { fontSize: 14, fontWeight: '600', textAlign: 'center' },
 });

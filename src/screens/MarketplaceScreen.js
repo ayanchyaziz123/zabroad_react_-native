@@ -432,7 +432,7 @@ const getStyles = (C) => StyleSheet.create({
   cityName:     { fontSize: 14, fontWeight: '700' },
   citySub:      { fontSize: 11, marginTop: 1 },
 
-  searchWrap:  { paddingHorizontal: H_PAD, marginBottom: 8 },
+  searchWrap:  { paddingHorizontal: H_PAD, paddingTop: 10, marginBottom: 8 },
   searchBox:   { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 14, paddingHorizontal: 14, height: 42 },
   searchInput: { flex: 1, fontSize: 13, paddingVertical: 0 },
 

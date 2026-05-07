@@ -54,6 +54,7 @@ import EditMarketplaceScreen    from '../screens/EditMarketplaceScreen';
 import EditJobScreen            from '../screens/EditJobScreen';
 import EditHousingScreen        from '../screens/EditHousingScreen';
 import ChatScreen               from '../screens/ChatScreen';
+import AllListingsScreen        from '../screens/AllListingsScreen';
 
 const Tab   = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -140,6 +141,7 @@ function MainTabs() {
       <Tab.Screen name="Home"          component={HomeScreen} />
       <Tab.Screen name="Chat"          component={ChatScreen} />
       <Tab.Screen name="Notifications" component={NotificationsScreen} />
+      <Tab.Screen name="AIAssistant"   component={AIAssistantScreen} />
       <Tab.Screen name="Profile"       component={ProfileScreen} />
     </Tab.Navigator>
   );
@@ -207,6 +209,7 @@ export default function AppNavigator() {
         <Stack.Screen name="EditMarketplace"     component={EditMarketplaceScreen} />
         <Stack.Screen name="EditJob"             component={EditJobScreen} />
         <Stack.Screen name="EditHousing"         component={EditHousingScreen} />
+        <Stack.Screen name="AllListings"         component={AllListingsScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

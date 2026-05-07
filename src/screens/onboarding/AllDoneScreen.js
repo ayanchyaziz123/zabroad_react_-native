@@ -78,7 +78,6 @@ export default function AllDoneScreen({ navigation, route }) {
         homeCountry: fc.name,
         countryFlag: fc.flag,
         livesIn,
-        visaStatus:  userData.visaStatus || 'OPT',
       });
 
       updateUser({ homeCountry: fc, livesIn, name: userData.name || 'User' });

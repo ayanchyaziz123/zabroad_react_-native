@@ -19,6 +19,7 @@ Built with Expo + React Native. Targets iOS and Android.
 | Maps | react-native-maps |
 | Icons | @expo/vector-icons (Ionicons) |
 | Theme | Custom ThemeContext (dark / light mode) |
+| AI | Claude AI via Zabroad backend (`/api/ai/chat/`) |
 
 ---
 
@@ -42,6 +43,7 @@ Zabroad/
 │   │   │   ├── InterestsScreen.js
 │   │   │   └── AllDoneScreen.js
 │   │   ├── HomeScreen.js           # Feed + listings dashboard
+│   │   ├── AIAssistantScreen.js    # Claude AI immigration assistant (tab)
 │   │   ├── JobsScreen.js           # Job board
 │   │   ├── JobDetailScreen.js
 │   │   ├── PostJobScreen.js
@@ -68,14 +70,13 @@ Zabroad/
 │   │   ├── ChatScreen.js           # Direct messaging
 │   │   ├── NotificationsScreen.js
 │   │   ├── ProfileScreen.js        # Own profile + posts
-│   │   ├── UserProfileScreen.js    # Other user's profile
+│   │   ├── UserProfileScreen.js    # Other user's public profile
 │   │   ├── SettingsScreen.js
 │   │   ├── SearchScreen.js
 │   │   ├── ExploreScreen.js
-│   │   ├── AIAssistantScreen.js
 │   │   └── VisaScreen.js
 │   ├── store/
-│   │   ├── authStore.js            # Auth, tokens, session restore
+│   │   ├── authStore.js            # Auth, tokens, session restore, api() helper
 │   │   ├── jobsStore.js
 │   │   ├── housingStore.js
 │   │   ├── attorneyStore.js
@@ -116,7 +117,8 @@ Zabroad/
 
 | Screen | Purpose |
 |--------|---------|
-| `HomeScreen` | Personalized dashboard: local feed, job/housing/marketplace previews, horizontal scroll cards |
+| `HomeScreen` | Personalized dashboard: local feed, job/housing/marketplace previews, 2-row horizontal scroll cards |
+| `AIAssistantScreen` | Claude AI immigration assistant — visa, jobs, housing, healthcare, legal help |
 | `JobsScreen` | Browse & search jobs; filter by category, country, proximity |
 | `HousingScreen` | Browse & search housing listings |
 | `MarketplaceScreen` | Buy/sell items in the community |
@@ -130,7 +132,6 @@ Zabroad/
 | `UserProfileScreen` | Any user's public profile + posts |
 | `SearchScreen` | Global search across posts and listings |
 | `VisaScreen` | Visa status guide |
-| `AIAssistantScreen` | AI immigration assistant |
 
 ---
 
@@ -142,14 +143,42 @@ Stack.Navigator
 ├── FromCountry / LivesIn / Interests / AllDone        (registration steps)
 └── AppMain (Bottom Tabs — authenticated)
     ├── Home tab
-    ├── Chat tab  (with unread badge)
-    ├── [+] FAB  → CreatePost
+    ├── Chat tab       (with unread badge)
+    ├── [+] FAB       → CreatePost
+    ├── AI tab        → AIAssistantScreen (tab bar hidden on this screen)
     └── Profile tab
-    
+
     (All detail/create/edit screens are Stack screens pushed on top of tabs)
 ```
 
 The navigator reads `isAuthenticated` from `authStore` and shows the correct initial route. A loading screen with a spinner is shown while the session is being restored from secure storage.
+
+Tab bar is automatically hidden:
+- Inside a chat conversation (`inConversation` flag in `chatStore`)
+- On the AI Assistant screen (full-screen chat experience)
+
+---
+
+## AI Assistant
+
+`AIAssistantScreen` is a full-screen chat UI powered by **Claude AI** via the backend.
+
+### How it works
+1. User sends a message — it's added to the local conversation history
+2. The full history is sent to `POST /api/ai/chat/` as `{ messages: [{role, content}] }`
+3. The backend injects a system prompt with Zabroad AI's persona + the user's visa status, home country, and city
+4. Claude Haiku returns a personalized reply which is displayed as an AI message bubble
+
+### Features
+- Real Claude AI responses (not keyword matching)
+- Full conversation context — Claude remembers everything said earlier in the chat
+- Personalized — responses are tailored to the user's visa status and location
+- 8 quick question chips shown before first message
+- Animated message entrance + timestamps on every bubble
+- Long-press any message to copy it to clipboard
+- Refresh button (top right) to clear and start a new conversation
+- Typing animation while waiting for Claude's response
+- Graceful error handling (network issues, rate limits)
 
 ---
 
@@ -217,13 +246,16 @@ const { colors: C, isDark, toggleTheme } = useTheme();
 Set in `src/store/authStore.js`:
 ```js
 // iOS simulator
-http://localhost:8000/api
+const BASE_URL = 'http://localhost:8000/api';
 
 // Android emulator
-http://10.0.2.2:8000/api
+const BASE_URL = 'http://10.0.2.2:8000/api';
 
 // Physical device — use your Mac's local IP
-http://192.168.x.x:8000/api
+const BASE_URL = 'http://192.168.x.x:8000/api';
+
+// Production
+const BASE_URL = 'https://zabroad-backend-production-0861.up.railway.app/api';
 ```
 
 Or configure via `app.json` `extra.apiUrl` for builds.
@@ -243,6 +275,9 @@ auth.login({ email, password })
 auth.register(body)
 auth.me()
 auth.updateMe(body)
+
+// AI — called directly via authStore.api() in AIAssistantScreen
+POST /api/ai/chat/  { messages: [{role, content}] }
 
 // Posts
 posts.list({ scope, country, near_city, lat, lng, topic, search })
@@ -300,7 +335,7 @@ Then press:
 
 ### Point to local backend
 
-Edit `src/store/authStore.js` and set `BASE_URL` to match your setup:
+Edit `src/store/authStore.js` and set `BASE_URL`:
 
 ```js
 // iOS Simulator
@@ -309,7 +344,7 @@ const BASE_URL = 'http://localhost:8000/api';
 // Android Emulator
 const BASE_URL = 'http://10.0.2.2:8000/api';
 
-// Physical device (replace with your machine's IP)
+// Physical device
 const BASE_URL = 'http://192.168.1.x:8000/api';
 ```
 
@@ -327,20 +362,20 @@ eas login
 # Configure the project (first time)
 eas build:configure
 
-# Build for Android
-eas build --platform android
+# Build APK for Android
+eas build --platform android --profile preview
 
 # Build for iOS
 eas build --platform ios
 ```
 
-Set `extra.apiUrl` in `app.json` to your production Railway API URL before building:
+Set `extra.apiUrl` in `app.json` to your Railway API URL before building:
 
 ```json
 {
   "expo": {
     "extra": {
-      "apiUrl": "https://your-app.railway.app/api"
+      "apiUrl": "https://zabroad-backend-production-0861.up.railway.app/api"
     }
   }
 }

@@ -4,7 +4,7 @@ import Constants from 'expo-constants';
 
 const BASE_URL =
   Constants.expoConfig?.extra?.apiUrl ||
-  'http://192.168.1.202:8000/api';
+  'http://localhost:8000/api';
 
 const TIMEOUT_MS = 15_000; // 15 s request timeout
 
@@ -71,7 +71,7 @@ function extractError(data) {
 
 // ── Auth Store ────────────────────────────────────────────────────────────────
 export const useAuthStore = create((set, get) => ({
-  user:            null,   // { id, name, email, profile: { handle, avatar_emoji, home_country, country_flag, lives_in, visa_status, bio } }
+  user:            null,   // { id, name, email, profile: { handle, avatar_emoji, home_country, country_flag, lives_in, bio } }
   accessToken:     null,
   isAuthenticated: false,
   isLoading:       true,   // true while restoring session on app launch
@@ -154,7 +154,7 @@ export const useAuthStore = create((set, get) => ({
   },
 
   // ── Register ───────────────────────────────────────────────────────────────
-  register: async ({ firstName, lastName, email, password, handle, homeCountry, countryFlag, livesIn, visaStatus }) => {
+  register: async ({ firstName, lastName, email, password, handle, homeCountry, countryFlag, livesIn }) => {
     set({ error: null });
     try {
       const { ok, data } = await fetchJSON('/auth/register/', {
@@ -168,7 +168,6 @@ export const useAuthStore = create((set, get) => ({
           home_country: homeCountry,
           country_flag: countryFlag,
           lives_in:     livesIn,
-          visa_status:  visaStatus,
         },
       });
       if (!ok) throw new Error(extractError(data));
