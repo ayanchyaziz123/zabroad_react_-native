@@ -81,9 +81,9 @@ function getAvatarBg(handle) {
 // ── Category definitions ──────────────────────────────────────────────────────
 
 const CATEGORIES = [
+  { key: 'Marketplace',label: 'Shop Local', emoji: '🛒', bg: '#E8871E', badge: '#fff'    },
   { key: 'Jobs',       label: 'Jobs',       emoji: '💼', bg: '#1B4FA8', badge: '#F4A227' },
   { key: 'Housing',    label: 'Housing',    emoji: '🏠', bg: '#1B4FA8', badge: '#F4A227' },
-  { key: 'Marketplace',label: 'Shop Local', emoji: '🛒', bg: '#E8871E', badge: '#fff'    },
   { key: 'Events',     label: 'Events',     emoji: '🎉', bg: '#7B2FBE', badge: '#F4A227' },
 ];
 
