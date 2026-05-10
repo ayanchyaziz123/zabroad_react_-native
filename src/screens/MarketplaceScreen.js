@@ -126,7 +126,7 @@ export default function MarketplaceScreen({ navigation }) {
   const [refreshing,     setRefreshing]     = useState(false);
   const [search,         setSearch]         = useState('');
   const [activeCategory, setActiveCategory] = useState('all');
-  const [scope,          setScope]          = useState('all');
+  const [scope,          setScope]          = useState(homeCountry ? 'community' : 'all');
   const [showMine,       setShowMine]       = useState(false);
 
   const fetchListings = useCallback(async (
@@ -229,20 +229,6 @@ export default function MarketplaceScreen({ navigation }) {
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[s.iconBtn, scope === 'all' && { backgroundColor: ACCENT_DIM, borderColor: ACCENT + '66' }]}
-          onPress={() => handleScope('all')}
-          activeOpacity={0.75}
-        >
-          <Ionicons name="globe-outline" size={16} color={scope === 'all' ? ACCENT : 'rgba(255,255,255,0.6)'} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[s.iconBtn, scope === 'community' && { backgroundColor: ACCENT + '33', borderColor: ACCENT + '66' }]}
-          onPress={() => handleScope(scope === 'community' ? 'all' : 'community')}
-          activeOpacity={0.75}
-        >
-          <Text style={s.flagEmoji}>{countryFlag}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
           style={[s.iconBtn, showMine && { backgroundColor: ACCENT + '33', borderColor: ACCENT + '55' }]}
           onPress={() => setShowMine(v => !v)}
           activeOpacity={0.8}
@@ -252,6 +238,30 @@ export default function MarketplaceScreen({ navigation }) {
         <TouchableOpacity style={s.addBtn} onPress={() => navigation.navigate('PostMarketplace')} activeOpacity={0.85}>
           <Ionicons name="add" size={18} color="#fff" />
         </TouchableOpacity>
+      </View>
+
+      {/* Scope pills */}
+      <View style={s.scopeRow}>
+        <TouchableOpacity
+          style={[s.scopePill, scope === 'all' && s.scopePillActive]}
+          onPress={() => handleScope('all')}
+          activeOpacity={0.75}
+        >
+          <Ionicons name="globe-outline" size={13} color={scope === 'all' ? '#fff' : 'rgba(255,255,255,0.5)'} />
+          <Text style={[s.scopePillTxt, scope === 'all' && s.scopePillTxtActive]}>Everyone nearby</Text>
+        </TouchableOpacity>
+        {homeCountry ? (
+          <TouchableOpacity
+            style={[s.scopePill, scope === 'community' && s.scopePillActive]}
+            onPress={() => handleScope('community')}
+            activeOpacity={0.75}
+          >
+            <Text style={{ fontSize: 12, lineHeight: 16 }}>{countryFlag}</Text>
+            <Text style={[s.scopePillTxt, scope === 'community' && s.scopePillTxtActive]}>
+              {homeCountry} nearby
+            </Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
 
       {/* City dropdown */}
@@ -431,6 +441,12 @@ const getStyles = (C) => StyleSheet.create({
   cityIcon:     { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   cityName:     { fontSize: 14, fontWeight: '700' },
   citySub:      { fontSize: 11, marginTop: 1 },
+
+  scopeRow:         { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingBottom: 10, backgroundColor: NAVY },
+  scopePill:        { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.08)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.14)' },
+  scopePillActive:  { backgroundColor: 'rgba(255,255,255,0.22)', borderColor: 'rgba(255,255,255,0.4)' },
+  scopePillTxt:     { fontSize: 11, fontWeight: '600', color: 'rgba(255,255,255,0.5)' },
+  scopePillTxtActive: { color: '#fff', fontWeight: '700' },
 
   searchWrap:  { paddingHorizontal: H_PAD, paddingTop: 10, marginBottom: 8 },
   searchBox:   { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 14, paddingHorizontal: 14, height: 42 },

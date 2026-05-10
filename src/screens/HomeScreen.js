@@ -4,9 +4,10 @@ import {
   StyleSheet, Animated, Dimensions,
   ActivityIndicator, RefreshControl, Image, Modal,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import MapView, { Marker } from 'react-native-maps';
 import { useTheme } from '../theme/ThemeContext';
 import { useAuthStore } from '../store/authStore';
 import { useLocationStore } from '../store/locationStore';
@@ -14,11 +15,13 @@ import { useJobsStore } from '../store/jobsStore';
 import { useHousingStore } from '../store/housingStore';
 import { useNotificationStore } from '../store/notificationStore';
 import UserAvatar from '../components/UserAvatar';
+import { barsHidden, showBars, hideBars } from '../utils/scrollAnim';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const CARD_GAP  = 12;
 const H_PAD     = 16;
 const H_CARD_W  = Math.round((SCREEN_W - H_PAD * 2) * 0.43);
+const HEADER_H  = 112;
 
 // ── City list (mirrors AppTopBar) ─────────────────────────────────────────────
 const CITIES = [
@@ -81,10 +84,10 @@ function getAvatarBg(handle) {
 // ── Category definitions ──────────────────────────────────────────────────────
 
 const CATEGORIES = [
-  { key: 'Marketplace',label: 'Shop Local', emoji: '🛒', bg: '#E8871E', badge: '#fff'    },
-  { key: 'Jobs',       label: 'Jobs',       emoji: '💼', bg: '#1B4FA8', badge: '#F4A227' },
-  { key: 'Housing',    label: 'Housing',    emoji: '🏠', bg: '#1B4FA8', badge: '#F4A227' },
-  { key: 'Events',     label: 'Events',     emoji: '🎉', bg: '#7B2FBE', badge: '#F4A227' },
+  { key: 'Jobs',        label: 'Jobs',       emoji: '💼', bg: '#1B4FA8', badge: '#F4A227' },
+  { key: 'Housing',     label: 'Housing',    emoji: '🏠', bg: '#1B4FA8', badge: '#F4A227' },
+  { key: 'Marketplace', label: 'Market',     emoji: '🛒', bg: '#E8871E', badge: '#fff'    },
+  { key: 'Events',      label: 'Events',     emoji: '🎉', bg: '#7B2FBE', badge: '#F4A227' },
 ];
 
 const TYPE_META = {
@@ -189,44 +192,53 @@ const cpStyles = StyleSheet.create({
 
 // ── Listing grid card ─────────────────────────────────────────────────────────
 
-function ListingGridCard({ item, onPress, C, s }) {
+
+function ListingGridCard({ item, onPress, isCommunity, s }) {
   const meta = TYPE_META[item._type] || TYPE_META.market;
+
   return (
     <TouchableOpacity style={s.gridCard} onPress={onPress} activeOpacity={0.88}>
-      <View style={s.gridImgWrap}>
-        {item.image_url ? (
-          <Image source={{ uri: item.image_url }} style={s.gridImg} resizeMode="cover" />
-        ) : (
-          <View style={[s.gridImgEmpty, { backgroundColor: meta.color + '18' }]}>
-            <Ionicons name={meta.icon} size={32} color={meta.color + 'AA'} />
+      {/* Full-bleed image or colored placeholder */}
+      {item.image_url ? (
+        <Image source={{ uri: item.image_url }} style={s.gridImg} resizeMode="cover" />
+      ) : (
+        <View style={[s.gridImgEmpty, { backgroundColor: meta.color + '22' }]}>
+          <View style={[s.gridIconCircle, { backgroundColor: meta.color + '30' }]}>
+            <Ionicons name={meta.icon} size={30} color={meta.color} />
           </View>
-        )}
-        {/* Dark overlay at image bottom */}
-        <View style={s.gridOverlay}>
-          <Text style={s.gridOverlayTitle} numberOfLines={2}>{item.title}</Text>
-          {item.location ? (
-            <View style={s.gridLocRow}>
-              <Ionicons name="location-outline" size={10} color="rgba(255,255,255,0.75)" />
-              <Text style={s.gridOverlayLoc} numberOfLines={1}>{item.location}</Text>
-            </View>
-          ) : null}
         </View>
-        {/* Type badge */}
-        <View style={[s.gridTypeBadge, { backgroundColor: meta.color }]}>
-          <Text style={s.gridTypeTxt}>{meta.label}</Text>
-        </View>
-        {item.hot ? (
-          <View style={s.gridHotBadge}><Text style={{ fontSize: 10 }}>🔥</Text></View>
+      )}
+
+      {/* Dark gradient overlay — bottom half */}
+      <View style={s.gridOverlay} pointerEvents="none">
+        {/* Price pill */}
+        {item.sub ? (
+          <Text style={[s.gridOverlayPrice, { color: meta.color }]} numberOfLines={1}>
+            {item.sub}
+          </Text>
+        ) : null}
+        {/* Title */}
+        <Text style={s.gridOverlayTitle} numberOfLines={2}>{item.title}</Text>
+        {/* Distance */}
+        {item.distanceMi != null ? (
+          <View style={s.gridLocRow}>
+            <Ionicons name="location-outline" size={9} color="rgba(255,255,255,0.6)" />
+            <Text style={s.gridOverlayLoc}>{formatDist(item.distanceMi)}</Text>
+          </View>
         ) : null}
       </View>
-      <View style={s.gridBody}>
-        <Text style={[s.gridPrice, { color: meta.color }]} numberOfLines={1}>
-          {item.sub || '—'}
-        </Text>
-        {item.distanceMi != null ? (
-          <View style={s.gridDistRow}>
-            <Ionicons name="navigate-outline" size={9} color={C.c35} />
-            <Text style={[s.gridDistTxt, { color: C.c35 }]}>{formatDist(item.distanceMi)}</Text>
+
+      {/* Type badge — top left */}
+      <View style={[s.gridTypeBadge, { backgroundColor: meta.color }]}>
+        <Text style={s.gridTypeTxt}>{meta.label}</Text>
+      </View>
+
+      {/* Hot + community badges — top right */}
+      <View style={s.gridTopRight}>
+        {item.hot ? <Text style={s.gridHotEmoji}>🔥</Text> : null}
+        {isCommunity ? (
+          <View style={s.gridVerifiedBadge}>
+            <Ionicons name="checkmark-circle" size={9} color="#28D99E" />
           </View>
         ) : null}
       </View>
@@ -370,6 +382,7 @@ function FeedCard({ post, navigation, C, s, api, cityCoords }) {
 export default function HomeScreen({ navigation }) {
   const { colors: C } = useTheme();
   const { api, user: authUser } = useAuthStore();
+  const insets = useSafeAreaInsets();
   const currentCity   = useLocationStore(s => s.city);
   const gpsLat        = useLocationStore(s => s.latitude);
   const gpsLng        = useLocationStore(s => s.longitude);
@@ -384,22 +397,35 @@ export default function HomeScreen({ navigation }) {
 
   const [marketPreview, setMarketPreview] = useState([]);
   const [marketLoading, setMarketLoading] = useState(true);
-  const [activeScope,   setActiveScope]   = useState('all');
+  const [nextEvent,     setNextEvent]     = useState(null);
+  const [activeScope,   setActiveScope]   = useState('country');
   const [posts,         setPosts]         = useState([]);
   const [loading,       setLoading]       = useState(true);
   const [refreshing,    setRefreshing]    = useState(false);
   const [fetchError,    setFetchError]    = useState('');
-  const [cityModal,     setCityModal]     = useState(false);
-  const [browseModal,   setBrowseModal]   = useState(false);
+  const [cityModal,      setCityModal]     = useState(false);
+  const [browseModal,    setBrowseModal]   = useState(false);
 
   const unreadCount    = useNotificationStore(s => s.unreadCount);
+
+  const lastScrollY  = useRef(0);
+  const barsTarget   = useRef(0); // 0=visible 1=hidden — prevents redundant calls
+  const handleScroll = useCallback((e) => {
+    const y  = e.nativeEvent.contentOffset.y;
+    const dy = y - lastScrollY.current;
+    lastScrollY.current = y;
+    if (dy > 3 && barsTarget.current !== 1) {
+      barsTarget.current = 1;
+      hideBars();
+    } else if (dy < -3 && barsTarget.current !== 0) {
+      barsTarget.current = 0;
+      showBars();
+    }
+  }, []);
 
   const homeCountry    = authUser?.profile?.home_country || '';
   const countryFlag    = authUser?.profile?.country_flag || authUser?.profile?.home_country_flag || '';
   const cityShort      = currentCity.split(',')[0] || 'Set location';
-  const firstName      = authUser?.profile?.full_name?.split(' ')[0] || authUser?.username || 'there';
-  const hour           = new Date().getHours();
-  const greeting       = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 
   const cityCoords = useMemo(() => {
     if (gpsLat != null && gpsLng != null) return { lat: gpsLat, lng: gpsLng };
@@ -460,6 +486,7 @@ export default function HomeScreen({ navigation }) {
   useFocusEffect(
     useCallback(() => {
       fetchPosts(activeScope);
+      return () => { barsTarget.current = 0; showBars(); };
     }, [activeScope, fetchPosts])
   );
 
@@ -480,6 +507,11 @@ export default function HomeScreen({ navigation }) {
     api(`/marketplace/${q ? '?' + q : ''}`).then(data => {
       setMarketPreview(Array.isArray(data) ? data : (data.results || []));
     }).catch(() => {}).finally(() => setMarketLoading(false));
+
+    api('/events/?upcoming=true').then(data => {
+      const list = Array.isArray(data) ? data : (data.results || []);
+      setNextEvent(list[0] || null);
+    }).catch(() => {});
   }, [cityCoords, activeScope]);
 
   const onRefresh = useCallback(() => {
@@ -498,6 +530,7 @@ export default function HomeScreen({ navigation }) {
       fetchJobs({ lat, lng, scope, homeCountry: country }),
       fetchHousing({ lat, lng, scope, homeCountry: country }),
       api(`/marketplace/${q ? '?' + q : ''}`).then(d => setMarketPreview(Array.isArray(d) ? d : (d.results || []))).catch(() => {}),
+      api('/events/?upcoming=true').then(d => { const l = Array.isArray(d) ? d : (d.results || []); setNextEvent(l[0] || null); }).catch(() => {}),
     ]).finally(() => setRefreshing(false));
   }, [activeScope, fetchPosts, fetchJobs, fetchHousing, api, cityCoords, homeCountry]);
 
@@ -543,108 +576,77 @@ export default function HomeScreen({ navigation }) {
         </View>
       </Modal>
 
+      {/* ── FIXED HEADER (absolute, animates up on scroll-down) ── */}
+      <Animated.View style={[s.headerWrap, {
+        position: 'absolute', zIndex: 10, top: 0, left: 0, right: 0,
+        paddingTop: insets.top,
+        transform: [{ translateY: barsHidden.interpolate({ inputRange: [0, 1], outputRange: [0, -(HEADER_H + insets.top)] }) }],
+      }]}>
+        {/* Row 1: Location + Icons + AI Bot */}
+        <View style={s.headerRow}>
+          <TouchableOpacity style={s.locBar} onPress={() => setCityModal(true)} activeOpacity={0.8}>
+            <Ionicons name="location-sharp" size={13} color="#F4A227" />
+            <Text style={s.locBarTxt} numberOfLines={1}>{currentCity || 'Set location'}</Text>
+            <Ionicons name="chevron-down" size={11} color="rgba(255,255,255,0.45)" />
+          </TouchableOpacity>
+          <View style={s.headerRight}>
+            <TouchableOpacity style={s.headerIconBtn} onPress={() => navigation.navigate('Search')} activeOpacity={0.8}>
+              <Ionicons name="search-outline" size={18} color="#fff" />
+            </TouchableOpacity>
+            <TouchableOpacity style={s.headerIconBtn} onPress={() => navigation.navigate('Notifications')} activeOpacity={0.8}>
+              <Ionicons name="notifications-outline" size={18} color="#fff" />
+              {unreadCount > 0 && (
+                <View style={s.notifDot}>
+                  <Text style={s.notifDotTxt}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity style={s.headerIconBtn} onPress={() => navigation.navigate('AIAssistant')} activeOpacity={0.85}>
+              <Ionicons name="hardware-chip-outline" size={18} color="#fff" />
+            </TouchableOpacity>
+          </View>
+        </View>
+        {/* Row 2: Scope toggle */}
+        <View style={s.segmentWrap}>
+          <TouchableOpacity
+            style={[s.segmentBtn, activeScope === 'country' && s.segmentBtnActive]}
+            onPress={() => setActiveScope('country')}
+            activeOpacity={0.8}
+          >
+            <Text style={[s.segmentTxt, activeScope === 'country' && s.segmentTxtActive]}>
+              {countryFlag ? `${countryFlag} ` : ''}{homeCountry || 'My Roots'}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[s.segmentBtn, activeScope === 'all' && s.segmentBtnActive]}
+            onPress={() => setActiveScope('all')}
+            activeOpacity={0.8}
+          >
+            <Text style={[s.segmentTxt, activeScope === 'all' && s.segmentTxtActive]}>
+              🌍 Everyone
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </Animated.View>
+
+      {/* ── SCROLLABLE CONTENT ───────────────────────────────────── */}
       <ScrollView
         style={s.scroll}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 32 }}
+        contentContainerStyle={{ paddingTop: HEADER_H, paddingBottom: 32 }}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#3B8BF7" />}
       >
 
-        {/* ── HEADER ──────────────────────────────────────────────── */}
-        <View style={s.headerWrap}>
-
-          {/* ── Row 1: Location + Icons ── */}
-          <View style={s.headerRow}>
-            <TouchableOpacity style={s.locBar} onPress={() => setCityModal(true)} activeOpacity={0.8}>
-              <Ionicons name="location-sharp" size={15} color="#F4A227" />
-              <View style={{ flex: 1 }}>
-                <Text style={s.headerGreeting}>{greeting}, {firstName} 👋</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <Text style={s.locBarTxt} numberOfLines={1}>
-                    {currentCity || 'Set your location'}
-                  </Text>
-                  <Ionicons name="chevron-down" size={12} color="rgba(255,255,255,0.5)" />
-                </View>
-              </View>
-            </TouchableOpacity>
-            <View style={s.headerRight}>
-              {/* Search */}
-              <TouchableOpacity
-                style={s.headerIconBtn}
-                onPress={() => navigation.navigate('Search')}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="search-outline" size={19} color="#fff" />
-              </TouchableOpacity>
-
-              {/* Notifications */}
-              <TouchableOpacity
-                style={s.headerIconBtn}
-                onPress={() => navigation.navigate('Notifications')}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="notifications-outline" size={19} color="#fff" />
-                {unreadCount > 0 && (
-                  <View style={s.notifDot}>
-                    <Text style={s.notifDotTxt}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-              {/* Avatar */}
-              <TouchableOpacity onPress={() => navigation.navigate('Profile')} activeOpacity={0.85}>
-                <View style={s.avatarBorder}>
-                  <UserAvatar
-                    uri={authUser?.profile?.avatar_url}
-                    emoji={authUser?.profile?.avatar}
-                    name={authUser?.profile?.full_name || authUser?.username}
-                    size={32}
-                    bg="#1A3266"
-                  />
-                </View>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* ── Row 2: Scope toggle + Location ── */}
-          <View style={s.scopeRow}>
-            {/* Everyone nearby */}
-            <TouchableOpacity
-              style={[s.scopeToggleBtn, activeScope === 'all' && s.scopeToggleBtnActive]}
-              onPress={() => setActiveScope('all')}
-              activeOpacity={0.75}
-            >
-              <Ionicons name="globe-outline" size={13} color={activeScope === 'all' ? '#fff' : 'rgba(255,255,255,0.5)'} />
-              <Text style={[s.scopeToggleTxt, activeScope === 'all' && s.scopeToggleTxtActive]}>
-                Everyone nearby
-              </Text>
-            </TouchableOpacity>
-
-            {/* Community nearby */}
-            {countryFlag ? (
-              <TouchableOpacity
-                style={[s.scopeToggleBtn, activeScope === 'country' && s.scopeToggleBtnActive]}
-                onPress={() => setActiveScope(sc => sc === 'country' ? 'all' : 'country')}
-                activeOpacity={0.75}
-              >
-                <Text style={{ fontSize: 12, lineHeight: 16 }}>{countryFlag}</Text>
-                <Text style={[s.scopeToggleTxt, activeScope === 'country' && s.scopeToggleTxtActive]}>
-                  {homeCountry} nearby
-                </Text>
-              </TouchableOpacity>
-            ) : null}
-
-          </View>
-        </View>
-
-        {/* ── CATEGORY ICONS ──────────────────────────────────────── */}
+        {/* ── CATEGORY ICONS ──────────────────────────────────── */}
         <View style={s.catRow}>
           {CATEGORIES.map(cat => (
             <TouchableOpacity
               key={cat.key}
-              style={[s.catItem, cat.disabled && { opacity: 0.4 }]}
-              onPress={() => !cat.disabled && navigation.navigate(cat.key)}
-              activeOpacity={cat.disabled ? 1 : 0.75}
-              disabled={cat.disabled}
+              style={s.catItem}
+              onPress={() => navigation.navigate(cat.key)}
+              activeOpacity={0.75}
             >
               <View style={[s.catIconBox, { backgroundColor: cat.bg }]}>
                 <Text style={s.catEmoji}>{cat.emoji}</Text>
@@ -654,133 +656,214 @@ export default function HomeScreen({ navigation }) {
           ))}
         </View>
 
+          {/* ── UPCOMING EVENT ────────────────────────────────── */}
+          {nextEvent && (() => {
+            const evtDate = new Date(nextEvent.date);
+            const dateStr = evtDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+            const timeStr = evtDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+            const catColors = { legal: '#3B8BF7', jobs: '#F4A227', community: '#28D99E', health: '#28D99E', cultural: '#A855F7', networking: '#3B8BF7' };
+            const catEmojis = { legal: '⚖️', jobs: '💼', community: '🤝', health: '🧠', cultural: '🎉', networking: '🌐' };
+            const color  = catColors[nextEvent.category] || '#3B8BF7';
+            const emoji  = catEmojis[nextEvent.category] || '🗓';
+            return (
+              <View style={[s.section, { marginTop: 16 }]}>
+                <View style={s.sectionHdr}>
+                  <Text style={s.sectionTitle}>🗓 Upcoming Event</Text>
+                  <TouchableOpacity style={s.seeAllBtn} onPress={() => navigation.navigate('Events')} activeOpacity={0.75}>
+                    <Text style={s.seeAllTxt}>See all</Text>
+                    <Ionicons name="chevron-forward" size={13} color="#3B8BF7" />
+                  </TouchableOpacity>
+                </View>
+                <TouchableOpacity
+                  style={[s.eventCard, { borderColor: color + '44' }]}
+                  onPress={() => navigation.navigate('EventDetail', { event: nextEvent })}
+                  activeOpacity={0.88}
+                >
+                  {/* ── Horizontal split: left column | right map ── */}
+                  <View style={s.eventBody}>
 
-        {/* ── POPULAR LISTINGS ────────────────────────────────────── */}
-        <View style={s.section}>
-          <View style={s.sectionHdr}>
-            <Text style={s.sectionTitle}>
-              {cityShort && cityShort !== 'Set location' ? `Popular in ${cityShort}` : 'Popular Listings'}
-            </Text>
-            <TouchableOpacity
-              style={s.seeAllBtn}
-              onPress={() => setBrowseModal(true)}
-              activeOpacity={0.75}
-            >
-              <Text style={s.seeAllTxt}>See all</Text>
-              <Ionicons name="chevron-forward" size={13} color="#3B8BF7" />
-            </TouchableOpacity>
-          </View>
+                    {/* LEFT: image on top, info below */}
+                    <View style={s.eventBodyLeft}>
+                      {/* Image */}
+                      <View style={s.eventImgWrap}>
+                        {nextEvent.image_url ? (
+                          <Image source={{ uri: nextEvent.image_url }} style={s.eventImg} resizeMode="cover" />
+                        ) : (
+                          <View style={[s.eventImgPlaceholder, { backgroundColor: color + '22' }]}>
+                            <Text style={{ fontSize: 24 }}>{emoji}</Text>
+                          </View>
+                        )}
+                        {/* badges */}
+                        <View style={s.eventImgOverlay}>
+                          <View style={[s.eventCatChip, { backgroundColor: color }]}>
+                            <Text style={[s.eventCatTxt, { color: '#fff' }]}>{nextEvent.category?.toUpperCase()}</Text>
+                          </View>
+                          <View style={[s.freePill, { backgroundColor: nextEvent.is_free ? '#28D99E' : '#F4A227' }]}>
+                            <Text style={{ fontSize: 8, fontWeight: '800', color: '#fff' }}>
+                              {nextEvent.is_free ? 'FREE' : (nextEvent.price || 'PAID')}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
 
-          {(jobsLoading && housingLoading && marketLoading && combinedListings.length === 0) ? (
-            <View style={s.centerState}>
-              <ActivityIndicator size="small" color="#3B8BF7" />
-            </View>
-          ) : combinedListings.length === 0 ? (
-            <View style={s.centerState}>
-              <Text style={s.emptySubtitle}>No listings yet — be the first to post!</Text>
-            </View>
-          ) : (
-            <View>
-              {/* Row 1 — even-indexed items */}
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={s.hGridContent}
-              >
-                {combinedListings.filter((_, i) => i % 2 === 0).map(item => (
-                  <ListingGridCard
-                    key={`${item._type}-${item.id}`}
-                    item={item}
-                    C={C} s={s}
-                    onPress={() => {
-                      if (item._type === 'job')     navigation.navigate('JobDetail',         { job: item });
-                      if (item._type === 'housing') navigation.navigate('HousingDetail',     { listing: item });
-                      if (item._type === 'market')  navigation.navigate('MarketplaceDetail', { item });
-                    }}
-                  />
-                ))}
-              </ScrollView>
+                      {/* Info */}
+                      <View style={s.eventInfo}>
+                        <Text style={[s.eventImgTitle, { color: C.cream }]} numberOfLines={2}>
+                          {nextEvent.title}
+                        </Text>
+                        <View style={s.eventChipRow}>
+                          <View style={[s.eventInfoChip, { backgroundColor: C.card2 }]}>
+                            <Ionicons name="calendar-outline" size={9} color={color} />
+                            <Text style={[s.eventInfoTxt, { color: C.c60 }]}>{dateStr}</Text>
+                          </View>
+                          <View style={[s.eventInfoChip, { backgroundColor: C.card2 }]}>
+                            <Ionicons name="time-outline" size={9} color={color} />
+                            <Text style={[s.eventInfoTxt, { color: C.c60 }]}>{timeStr}</Text>
+                          </View>
+                        </View>
+                        <View style={s.eventRsvpRow}>
+                          <Text style={[s.eventAttendees, { color: C.c35 }]}>{nextEvent.rsvp_count} going</Text>
+                          <TouchableOpacity
+                            style={[s.rsvpPill, { backgroundColor: color }]}
+                            onPress={() => navigation.navigate('EventDetail', { event: nextEvent })}
+                            activeOpacity={0.85}
+                          >
+                            <Text style={s.rsvpPillTxt}>RSVP →</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    </View>
 
-              {/* Row 2 — odd-indexed items */}
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={[s.hGridContent, { marginTop: CARD_GAP }]}
-              >
-                {combinedListings.filter((_, i) => i % 2 !== 0).map(item => (
-                  <ListingGridCard
-                    key={`${item._type}-${item.id}`}
-                    item={item}
-                    C={C} s={s}
-                    onPress={() => {
-                      if (item._type === 'job')     navigation.navigate('JobDetail',         { job: item });
-                      if (item._type === 'housing') navigation.navigate('HousingDetail',     { listing: item });
-                      if (item._type === 'market')  navigation.navigate('MarketplaceDetail', { item });
-                    }}
-                  />
-                ))}
-              </ScrollView>
-            </View>
-          )}
-        </View>
+                    {/* RIGHT: full-height map */}
+                    <View style={s.eventMapWrap}>
+                      {nextEvent.latitude != null && nextEvent.longitude != null ? (
+                        <MapView
+                          style={s.eventMap}
+                          region={{
+                            latitude:      Number(nextEvent.latitude),
+                            longitude:     Number(nextEvent.longitude),
+                            latitudeDelta:  0.01,
+                            longitudeDelta: 0.01,
+                          }}
+                          scrollEnabled={false}
+                          zoomEnabled={false}
+                          pitchEnabled={false}
+                          rotateEnabled={false}
+                          pointerEvents="none"
+                        >
+                          <Marker coordinate={{ latitude: Number(nextEvent.latitude), longitude: Number(nextEvent.longitude) }} />
+                        </MapView>
+                      ) : (
+                        <View style={[s.eventMapPlaceholder, { backgroundColor: color + '15' }]}>
+                          <Ionicons name="location" size={20} color={color} />
+                          <Text style={[s.eventMapLocTxt, { color: C.c35 }]} numberOfLines={4}>
+                            {nextEvent.location}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
 
-        {/* ── COMMUNITY UPDATES ───────────────────────────────────── */}
-        <View style={s.section}>
-          <View style={s.sectionHdr}>
-            <Text style={s.sectionTitle}>Community Updates</Text>
-          </View>
+                  </View>
+                </TouchableOpacity>
+              </View>
+            );
+          })()}
 
-          {/* Loading */}
-          {loading && (
-            <View style={s.centerState}>
-              <ActivityIndicator size="large" color="#3B8BF7" />
-              <Text style={[s.emptySubtitle, { marginTop: 10 }]}>Loading posts…</Text>
-            </View>
-          )}
-
-          {/* Error */}
-          {!loading && fetchError ? (
-            <View style={s.centerState}>
-              <Text style={{ fontSize: 30 }}>⚠️</Text>
-              <Text style={s.emptyTitle}>{fetchError}</Text>
-              <TouchableOpacity onPress={() => fetchPosts(activeScope)} style={s.retryBtn}>
-                <Text style={s.retryTxt}>Retry</Text>
-              </TouchableOpacity>
-            </View>
-          ) : null}
-
-          {/* Empty */}
-          {!loading && !fetchError && posts.length === 0 && (
-            <View style={s.centerState}>
-              <Text style={{ fontSize: 36 }}>📭</Text>
-              <Text style={s.emptyTitle}>No posts yet</Text>
-              <Text style={s.emptySubtitle}>
+          {/* ── POPULAR LISTINGS ──────────────────────────────── */}
+          <View style={s.section}>
+            <View style={s.sectionHdr}>
+              <Text style={s.sectionTitle}>
                 {activeScope === 'country'
-                  ? `No posts from ${homeCountry} community yet.`
-                  : cityShort && cityShort !== 'Set location'
-                    ? `No posts near ${cityShort} yet. Be the first!`
-                    : 'No posts yet. Be the first!'}
+                  ? `${homeCountry || 'Community'} Marketplace`
+                  : cityShort && cityShort !== 'Set location' ? `Near ${cityShort}` : 'Popular Listings'}
               </Text>
-              <TouchableOpacity onPress={() => navigation.navigate('CreatePost')} style={s.retryBtn}>
-                <Text style={s.retryTxt}>Create a post</Text>
+              <TouchableOpacity style={s.seeAllBtn} onPress={() => setBrowseModal(true)} activeOpacity={0.75}>
+                <Text style={s.seeAllTxt}>See all</Text>
+                <Ionicons name="chevron-forward" size={13} color="#3B8BF7" />
               </TouchableOpacity>
             </View>
-          )}
 
-          {/* Feed */}
-          {!loading && posts.map(post => (
-            <FeedCard
-              key={post.id}
-              post={post}
-              navigation={navigation}
-              C={C} s={s}
-              api={api}
-              cityCoords={cityCoords}
-            />
-          ))}
-        </View>
+            {(jobsLoading && housingLoading && marketLoading && combinedListings.length === 0) ? (
+              <View style={s.centerState}><ActivityIndicator size="small" color="#3B8BF7" /></View>
+            ) : combinedListings.length === 0 ? (
+              <View style={s.centerState}>
+                <Text style={s.emptySubtitle}>No listings yet — be the first to post!</Text>
+              </View>
+            ) : (
+              <View>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.hGridContent}>
+                  {combinedListings.filter((_, i) => i % 2 === 0).map(item => (
+                    <ListingGridCard
+                      key={`${item._type}-${item.id}`}
+                      item={item} isCommunity={activeScope === 'country'} s={s}
+                      onPress={() => {
+                        if (item._type === 'job')     navigation.navigate('JobDetail',         { job: item });
+                        if (item._type === 'housing') navigation.navigate('HousingDetail',     { listing: item });
+                        if (item._type === 'market')  navigation.navigate('MarketplaceDetail', { item });
+                      }}
+                    />
+                  ))}
+                </ScrollView>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[s.hGridContent, { marginTop: CARD_GAP }]}>
+                  {combinedListings.filter((_, i) => i % 2 !== 0).map(item => (
+                    <ListingGridCard
+                      key={`${item._type}-${item.id}`}
+                      item={item} isCommunity={activeScope === 'country'} s={s}
+                      onPress={() => {
+                        if (item._type === 'job')     navigation.navigate('JobDetail',         { job: item });
+                        if (item._type === 'housing') navigation.navigate('HousingDetail',     { listing: item });
+                        if (item._type === 'market')  navigation.navigate('MarketplaceDetail', { item });
+                      }}
+                    />
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+          </View>
 
-      </ScrollView>
+          {/* ── COMMUNITY UPDATES ─────────────────────────────── */}
+          <View style={s.section}>
+            <View style={s.sectionHdr}>
+              <Text style={s.sectionTitle}>Community Updates</Text>
+            </View>
+            {loading && (
+              <View style={s.centerState}>
+                <ActivityIndicator size="large" color="#3B8BF7" />
+                <Text style={[s.emptySubtitle, { marginTop: 10 }]}>Loading posts…</Text>
+              </View>
+            )}
+            {!loading && fetchError ? (
+              <View style={s.centerState}>
+                <Text style={{ fontSize: 30 }}>⚠️</Text>
+                <Text style={s.emptyTitle}>{fetchError}</Text>
+                <TouchableOpacity onPress={() => fetchPosts(activeScope)} style={s.retryBtn}>
+                  <Text style={s.retryTxt}>Retry</Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
+            {!loading && !fetchError && posts.length === 0 && (
+              <View style={s.centerState}>
+                <Text style={{ fontSize: 36 }}>📭</Text>
+                <Text style={s.emptyTitle}>No posts yet</Text>
+                <Text style={s.emptySubtitle}>
+                  {activeScope === 'country'
+                    ? `No posts from ${homeCountry} community yet.`
+                    : cityShort && cityShort !== 'Set location'
+                      ? `No posts near ${cityShort} yet. Be the first!`
+                      : 'No posts yet. Be the first!'}
+                </Text>
+                <TouchableOpacity onPress={() => navigation.navigate('CreatePost')} style={s.retryBtn}>
+                  <Text style={s.retryTxt}>Create a post</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+            {!loading && posts.map(post => (
+              <FeedCard key={post.id} post={post} navigation={navigation} C={C} s={s} api={api} cityCoords={cityCoords} />
+            ))}
+          </View>
+
+        </ScrollView>
+
     </SafeAreaView>
   );
 }
@@ -795,34 +878,24 @@ const getStyles = (C) => StyleSheet.create({
   headerWrap: { backgroundColor: '#1B3266', paddingBottom: 12 },
 
   locBar:    { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 },
-  locBarTxt: { fontSize: 17, fontWeight: '900', color: '#fff', letterSpacing: -0.3 },
+  locBarTxt: { fontSize: 13, fontWeight: '700', color: '#fff', letterSpacing: -0.1 },
 
   // Row 1
   headerRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 14, paddingTop: 10, paddingBottom: 10,
+    paddingHorizontal: 14, paddingTop: 10, paddingBottom: 8,
   },
-  headerGreeting: { fontSize: 11, fontWeight: '500', color: 'rgba(255,255,255,0.55)', marginBottom: 1 },
   headerRight:    { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  headerIconBtn:  { width: 34, height: 34, borderRadius: 11, backgroundColor: 'rgba(255,255,255,0.1)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center', position: 'relative' },
+  headerIconBtn:  { width: 34, height: 34, borderRadius: 11, backgroundColor: 'rgba(255,255,255,0.12)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
   notifDot:       { position: 'absolute', top: -3, right: -3, minWidth: 15, height: 15, borderRadius: 8, backgroundColor: '#FF3B30', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2 },
   notifDotTxt:    { fontSize: 8, fontWeight: '800', color: '#fff' },
   avatarBorder:   { borderRadius: 17, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.35)', overflow: 'hidden' },
-
-  // Row 2 — scope toggle + location
-  scopeRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingHorizontal: 14, paddingBottom: 4,
-  },
-  scopeToggleBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.08)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.14)',
-  },
-  scopeToggleBtnActive: { backgroundColor: 'rgba(255,255,255,0.22)', borderColor: 'rgba(255,255,255,0.4)' },
-  scopeToggleTxt:       { fontSize: 11, fontWeight: '600', color: 'rgba(255,255,255,0.5)' },
-  scopeToggleTxtActive: { color: '#fff', fontWeight: '700' },
-
+  // Segmented scope control
+  segmentWrap:      { flexDirection: 'row', marginHorizontal: 14, marginBottom: 10, backgroundColor: 'rgba(0,0,0,0.2)', borderRadius: 14, padding: 3 },
+  segmentBtn:       { flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: 11 },
+  segmentBtnActive: { backgroundColor: '#fff' },
+  segmentTxt:       { fontSize: 13, fontWeight: '700', color: 'rgba(255,255,255,0.55)' },
+  segmentTxtActive: { color: '#1B3266' },
 
   // ── Category bar ─────────────────────────────────────────────────────────────
   catRow: {
@@ -862,37 +935,32 @@ const getStyles = (C) => StyleSheet.create({
   // ── Listing grid (2-row horizontal scroll) ────────────────────────────────────
   hGridContent: { paddingHorizontal: H_PAD, gap: CARD_GAP, flexDirection: 'row', alignItems: 'flex-start' },
   gridCard: {
-    width: H_CARD_W, backgroundColor: C.card,
-    borderRadius: 14, overflow: 'hidden',
-    borderWidth: 1, borderColor: C.border,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 6,
-    elevation: 2,
+    width: H_CARD_W, height: 175,
+    borderRadius: 16, overflow: 'hidden',
+    position: 'relative',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.22, shadowRadius: 10,
+    elevation: 5,
   },
-  gridImgWrap:   { position: 'relative', width: '100%', height: 110 },
-  gridImg:       { width: '100%', height: '100%' },
-  gridImgEmpty:  { width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' },
+  gridImg:      { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
+  gridImgEmpty: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
+  gridIconCircle: { width: 56, height: 56, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   gridOverlay: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
-    paddingHorizontal: 9, paddingTop: 30, paddingBottom: 9,
-    backgroundColor: 'rgba(0,0,0,0.52)',
+    paddingHorizontal: 10, paddingTop: 28, paddingBottom: 10,
+    backgroundColor: 'rgba(0,0,0,0.62)',
   },
-  gridOverlayTitle: { fontSize: 13, fontWeight: '800', color: '#fff', lineHeight: 18 },
-  gridLocRow:       { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 },
-  gridOverlayLoc:   { fontSize: 10, color: 'rgba(255,255,255,0.78)', flex: 1 },
+  gridOverlayPrice: { fontSize: 11, fontWeight: '800', letterSpacing: 0.2, marginBottom: 2 },
+  gridOverlayTitle: { fontSize: 12, fontWeight: '800', color: '#fff', lineHeight: 17 },
+  gridLocRow:       { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 4 },
+  gridOverlayLoc:   { fontSize: 9, color: 'rgba(255,255,255,0.6)' },
   gridTypeBadge: {
-    position: 'absolute', top: 8, left: 8,
-    borderRadius: 6, paddingHorizontal: 7, paddingVertical: 3,
+    position: 'absolute', top: 9, left: 9,
+    borderRadius: 7, paddingHorizontal: 8, paddingVertical: 4,
   },
-  gridTypeTxt:  { fontSize: 9, fontWeight: '800', color: '#fff', letterSpacing: 0.3 },
-  gridHotBadge: {
-    position: 'absolute', top: 8, right: 8,
-    backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 50,
-    paddingHorizontal: 5, paddingVertical: 2,
-  },
-  gridBody:     { padding: 10, gap: 4 },
-  gridPrice:    { fontSize: 14, fontWeight: '800' },
-  gridDistRow:  { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 3 },
-  gridDistTxt:  { fontSize: 10, fontWeight: '600' },
+  gridTypeTxt:  { fontSize: 9, fontWeight: '800', color: '#fff', letterSpacing: 0.4 },
+  gridTopRight: { position: 'absolute', top: 9, right: 9, flexDirection: 'row', alignItems: 'center', gap: 4 },
+  gridHotEmoji: { fontSize: 13 },
+  gridVerifiedBadge: { width: 18, height: 18, borderRadius: 9, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center' },
 
   // ── Feed cards ────────────────────────────────────────────────────────────────
   feedCard: {
@@ -920,6 +988,37 @@ const getStyles = (C) => StyleSheet.create({
   feedFooterDot:  { fontSize: 10, color: C.c35 },
   feedTimeTxt:    { fontSize: 11, color: C.c35 },
 
+  // ── Upcoming event card ───────────────────────────────────────────────────────
+  eventCard:           { marginHorizontal: H_PAD, borderRadius: 14, borderWidth: 1, overflow: 'hidden', backgroundColor: C.card, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 6, elevation: 2 },
+  eventImgWrap:        { width: '100%', height: 72, position: 'relative' },
+  eventImg:            { width: '100%', height: '100%' },
+  eventImgPlaceholder: { width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' },
+  eventImgOverlay:     { position: 'absolute', top: 6, left: 6, right: 6, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  eventImgTitle:       { fontSize: 12, fontWeight: '800', lineHeight: 17 },
+  eventImgOrganizer:   { fontSize: 10, marginTop: 1 },
+  eventCatChip:        { alignSelf: 'flex-start', borderRadius: 5, paddingHorizontal: 6, paddingVertical: 2 },
+  eventCatTxt:         { fontSize: 8, fontWeight: '800', letterSpacing: 0.4 },
+  freePill:            { borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, alignSelf: 'flex-start', flexShrink: 0 },
+
+  // left col + right map split
+  eventBody:           { flexDirection: 'row', height: 170 },
+  eventBodyLeft:       { flex: 1, flexDirection: 'column' },
+  eventImgWrap:        { flex: 1, position: 'relative' },
+  eventInfo:           { paddingHorizontal: 10, paddingVertical: 8, gap: 5, justifyContent: 'space-between' },
+  eventChipRow:        { flexDirection: 'row', gap: 5, flexWrap: 'wrap' },
+  eventInfoChip:       { flexDirection: 'row', alignItems: 'center', gap: 3, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 3, borderWidth: 1, borderColor: C.border },
+  eventInfoTxt:        { fontSize: 9 },
+  eventRsvpRow:        { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  eventAttendees:      { fontSize: 10, color: C.c35 },
+  rsvpPill:            { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 50 },
+  rsvpPillTxt:         { fontSize: 11, fontWeight: '800', color: '#fff' },
+
+  // map panel (right half)
+  eventMapWrap:        { width: '45%', borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: C.border, overflow: 'hidden' },
+  eventMap:            { width: '100%', height: '100%' },
+  eventMapPlaceholder: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4, padding: 8 },
+  eventMapLocTxt:      { fontSize: 9, textAlign: 'center', lineHeight: 13 },
+
   // ── States ────────────────────────────────────────────────────────────────────
   centerState:   { alignItems: 'center', paddingVertical: 40, gap: 8, paddingHorizontal: 20 },
   emptyTitle:    { fontSize: 15, fontWeight: '700', color: C.cream, textAlign: 'center' },
@@ -928,6 +1027,7 @@ const getStyles = (C) => StyleSheet.create({
   retryTxt:      { fontSize: 13, fontWeight: '700', color: 'white' },
 
   iconBtn: { width: 34, height: 34, borderRadius: 11, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, alignItems: 'center', justifyContent: 'center' },
+
 });
 
 const bm = StyleSheet.create({

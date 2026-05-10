@@ -16,11 +16,7 @@
       "bundleIdentifier": "com.zabroad.app",
       "infoPlist": {
         "NSAppTransportSecurity": {
-          "NSExceptionDomains": {
-            "localhost": {
-              "NSExceptionAllowsInsecureHTTPLoads": true
-            }
-          }
+          "NSAllowsArbitraryLoads": true
         }
       }
     },
@@ -36,9 +32,11 @@
     },
     "plugins": [
       "expo-asset",
-      "expo-secure-store"
+      "expo-secure-store",
+      "@react-native-community/datetimepicker"
     ],
     "extra": {
+      "apiUrl": "http://192.168.1.202:8000/api",
       "eas": {
         "projectId": "cf4b5929-e034-4a70-b20b-fa119e7941cf"
       }

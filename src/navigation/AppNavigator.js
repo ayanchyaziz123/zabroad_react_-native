@@ -1,5 +1,5 @@
 import React, { useMemo, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Animated, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -9,6 +9,7 @@ import { useAuthStore } from '../store/authStore';
 import { useChatStore } from '../store/chatStore';
 import { useLocationStore } from '../store/locationStore';
 import { useNotificationStore } from '../store/notificationStore';
+import { barsHidden } from '../utils/scrollAnim';
 
 // Onboarding
 import WelcomeScreen    from '../screens/onboarding/WelcomeScreen';
@@ -46,6 +47,9 @@ import HousingDetailScreen     from '../screens/HousingDetailScreen';
 import PostAttorneyScreen      from '../screens/PostAttorneyScreen';
 import ListDoctorScreen        from '../screens/ListDoctorScreen';
 import EventsScreen            from '../screens/EventsScreen';
+import EventDetailScreen       from '../screens/EventDetailScreen';
+import CreateEventScreen       from '../screens/CreateEventScreen';
+import EditEventScreen         from '../screens/EditEventScreen';
 import JobDetailScreen         from '../screens/JobDetailScreen';
 import MarketplaceScreen        from '../screens/MarketplaceScreen';
 import MarketplaceDetailScreen  from '../screens/MarketplaceDetailScreen';
@@ -63,65 +67,93 @@ const Stack = createNativeStackNavigator();
 function CustomTabBar({ state, navigation }) {
   const { colors: C } = useTheme();
   const s = useMemo(() => getStyles(C), [C]);
-  const inConversation  = useChatStore(s => s.inConversation);
-  const conversations   = useChatStore(s => s.conversations);
+  const inConversation = useChatStore(st => st.inConversation);
+  const conversations  = useChatStore(st => st.conversations);
+  const authUser       = useAuthStore(st => st.user);
 
   const totalUnread = conversations.reduce((sum, c) => sum + (c.unread_count || 0), 0);
 
   if (inConversation) return null;
 
-  // Order: Home · Messages · [+] · Profile
+  const tabTranslate = barsHidden.interpolate({ inputRange: [0, 1], outputRange: [0, 90] });
+
+  const avatarUrl   = authUser?.profile?.avatar_url;
+  const avatarEmoji = authUser?.profile?.avatar;
+  const avatarName  = authUser?.profile?.full_name || authUser?.username || '';
+
   const allTabs = [
-    { type: 'tab', name: 'Home',    icon: 'home-outline',        iconActive: 'home',        label: 'Home'                    },
+    { type: 'tab', name: 'Home',    icon: 'home-outline',        iconActive: 'home',        label: 'Home'                     },
     { type: 'tab', name: 'Chat',    icon: 'chatbubbles-outline', iconActive: 'chatbubbles', label: 'Messages', badge: totalUnread },
     { type: 'fab' },
-    { type: 'tab', name: 'Profile', icon: 'person-outline',      iconActive: 'person',      label: 'Profile'                 },
+    { type: 'tab', name: 'Profile', icon: 'person-outline',      iconActive: 'person',      label: 'Profile'                  },
   ];
 
   return (
-    <View style={s.tabBar}>
-      {allTabs.map((item) => {
-        if (item.type === 'fab') {
+    <Animated.View style={{ transform: [{ translateY: tabTranslate }] }}>
+      <View style={s.tabBar}>
+        {allTabs.map((item) => {
+          if (item.type === 'fab') {
+            return (
+              <TouchableOpacity
+                key="fab"
+                style={s.fabWrap}
+                onPress={() => navigation.navigate('CreatePost')}
+                activeOpacity={0.85}
+              >
+                <View style={s.fabCircle}>
+                  <Ionicons name="add" size={20} color="white" />
+                </View>
+                <Text style={s.fabLabel}>Post</Text>
+              </TouchableOpacity>
+            );
+          }
+          const routeIndex = state.routes.findIndex(r => r.name === item.name);
+          const isActive   = state.index === routeIndex;
+          const isProfile  = item.name === 'Profile';
           return (
             <TouchableOpacity
-              key="fab"
-              style={s.fabWrap}
-              onPress={() => navigation.navigate('CreatePost')}
-              activeOpacity={0.85}
+              key={item.name}
+              style={s.tabItem}
+              onPress={() => navigation.navigate(item.name)}
+              activeOpacity={0.7}
             >
-              <View style={s.fabCircle}>
-                <Ionicons name="add" size={20} color="white" />
+              <View style={s.iconWrap}>
+                {isProfile ? (
+                  avatarUrl ? (
+                    <Image
+                      source={{ uri: avatarUrl }}
+                      style={[s.tabAvatar, isActive && s.tabAvatarActive]}
+                    />
+                  ) : avatarEmoji ? (
+                    <View style={[s.tabAvatarEmoji, isActive && s.tabAvatarActive]}>
+                      <Text style={{ fontSize: 16 }}>{avatarEmoji}</Text>
+                    </View>
+                  ) : (
+                    <View style={[s.tabAvatarEmoji, isActive && s.tabAvatarActive]}>
+                      <Text style={{ fontSize: 14, color: isActive ? C.vivid : C.c35 }}>
+                        {avatarName.charAt(0).toUpperCase() || '?'}
+                      </Text>
+                    </View>
+                  )
+                ) : (
+                  <Ionicons
+                    name={isActive ? item.iconActive : item.icon}
+                    size={22}
+                    color={isActive ? C.vivid : C.c35}
+                  />
+                )}
+                {item.badge > 0 && (
+                  <View style={s.badge}>
+                    <Text style={s.badgeTxt}>{item.badge > 99 ? '99+' : item.badge}</Text>
+                  </View>
+                )}
               </View>
-              <Text style={s.fabLabel}>Post</Text>
+              <Text style={[s.tabLabel, isActive && s.tabLabelActive]}>{item.label}</Text>
             </TouchableOpacity>
           );
-        }
-        const routeIndex = state.routes.findIndex(r => r.name === item.name);
-        const isActive   = state.index === routeIndex;
-        return (
-          <TouchableOpacity
-            key={item.name}
-            style={s.tabItem}
-            onPress={() => navigation.navigate(item.name)}
-            activeOpacity={0.7}
-          >
-            <View style={s.iconWrap}>
-              <Ionicons
-                name={isActive ? item.iconActive : item.icon}
-                size={22}
-                color={isActive ? C.vivid : C.c35}
-              />
-              {item.badge > 0 && (
-                <View style={s.badge}>
-                  <Text style={s.badgeTxt}>{item.badge > 99 ? '99+' : item.badge}</Text>
-                </View>
-              )}
-            </View>
-            <Text style={[s.tabLabel, isActive && s.tabLabelActive]}>{item.label}</Text>
-          </TouchableOpacity>
-        );
-      })}
-    </View>
+        })}
+      </View>
+    </Animated.View>
   );
 }
 
@@ -201,7 +233,10 @@ export default function AppNavigator() {
         <Stack.Screen name="PostAttorney"     component={PostAttorneyScreen} />
         <Stack.Screen name="ListDoctor"       component={ListDoctorScreen} />
         <Stack.Screen name="CreatePost"       component={CreatePostScreen} />
-        <Stack.Screen name="Events"            component={EventsScreen} />
+        <Stack.Screen name="Events"       component={EventsScreen} />
+        <Stack.Screen name="EventDetail"  component={EventDetailScreen} />
+        <Stack.Screen name="CreateEvent"  component={CreateEventScreen} />
+        <Stack.Screen name="EditEvent"    component={EditEventScreen} />
         <Stack.Screen name="JobDetail"         component={JobDetailScreen} />
         <Stack.Screen name="Marketplace"         component={MarketplaceScreen} />
         <Stack.Screen name="MarketplaceDetail"   component={MarketplaceDetailScreen} />
@@ -224,7 +259,10 @@ const getStyles = (C) => StyleSheet.create({
   tabItem:       { alignItems: 'center', gap: 3, paddingHorizontal: 10, paddingVertical: 3 },
   tabLabel:      { fontSize: 11, fontWeight: '600', color: C.c35 },
   tabLabelActive:{ color: C.vivid, fontWeight: '700' },
-  iconWrap: { position: 'relative' },
+  iconWrap:         { position: 'relative' },
+  tabAvatar:        { width: 24, height: 24, borderRadius: 12 },
+  tabAvatarEmoji:   { width: 24, height: 24, borderRadius: 12, backgroundColor: 'rgba(100,100,100,0.2)', alignItems: 'center', justifyContent: 'center' },
+  tabAvatarActive:  { borderWidth: 2, borderColor: '#3B8BF7' },
   badge:    { position: 'absolute', top: -4, right: -6, minWidth: 15, height: 15, borderRadius: 8, backgroundColor: '#FF3B30', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2 },
   badgeTxt: { fontSize: 9, fontWeight: '800', color: 'white', lineHeight: 11 },
   fabWrap:   { alignItems: 'center', gap: 3, paddingHorizontal: 10, paddingVertical: 3 },
