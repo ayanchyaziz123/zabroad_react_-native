@@ -13,6 +13,8 @@ import { G_PRIMARY, G_SUCCESS } from '../theme/colors';
 import { useAuthStore } from '../store/authStore';
 import { useLocationStore } from '../store/locationStore';
 import { MARKET_CATEGORIES } from './MarketplaceScreen';
+import { sanitizePrice } from '../utils/formatPrice';
+import LocationSearchInput from '../components/LocationSearchInput';
 
 const ACCENT     = '#00B4D8';
 const ACCENT_DIM = '#00B4D81A';
@@ -48,8 +50,10 @@ export default function PostMarketplaceScreen({ navigation }) {
   const [title,     setTitle]     = useState('');
   const [desc,      setDesc]      = useState('');
   const [price,     setPrice]     = useState('');
-  const [location,  setLocation]  = useState('');
-  const [category,  setCategory]  = useState('other');
+  const [location,    setLocation]    = useState('');
+  const [selectedLat, setSelectedLat] = useState(null);
+  const [selectedLng, setSelectedLng] = useState(null);
+  const [category,    setCategory]    = useState('other');
   const [image,     setImage]     = useState(null);
   const [plan,      setPlan]      = useState('free');
   const [posting,   setPosting]   = useState(false);
@@ -98,8 +102,10 @@ export default function PostMarketplaceScreen({ navigation }) {
       fd.append('plan',         plan);
       fd.append('home_country', user?.profile?.home_country || '');
       fd.append('country_flag', user?.profile?.country_flag || '');
-      if (locLat != null) fd.append('latitude',  parseFloat(locLat.toFixed(6)));
-      if (locLng != null) fd.append('longitude', parseFloat(locLng.toFixed(6)));
+      const useLat = selectedLat ?? locLat;
+      const useLng = selectedLng ?? locLng;
+      if (useLat != null) fd.append('latitude',  parseFloat(Number(useLat).toFixed(6)));
+      if (useLng != null) fd.append('longitude', parseFloat(Number(useLng).toFixed(6)));
       if (image) {
         const ext  = image.uri.split('.').pop();
         const mime = ext === 'png' ? 'image/png' : 'image/jpeg';
@@ -192,13 +198,26 @@ export default function PostMarketplaceScreen({ navigation }) {
               <Ionicons name="pricetag-outline" size={16} color={C.c35} />
               <TextInput
                 style={[s.input, { color: C.cream }]}
-                placeholder='e.g. "$50", "Free", "Negotiable"'
+                placeholder="e.g. 50 (leave blank if free)"
                 placeholderTextColor={C.c35}
                 value={price}
-                onChangeText={setPrice}
-                maxLength={50}
+                onChangeText={v => setPrice(sanitizePrice(v))}
+                keyboardType="decimal-pad"
+                maxLength={12}
               />
             </View>
+          </View>
+
+          {/* Location */}
+          <View style={s.fieldGroup}>
+            <Text style={s.fieldLabel}>LOCATION</Text>
+            <LocationSearchInput
+              value={location}
+              onChange={setLocation}
+              onSelect={(sel) => { setSelectedLat(sel?.lat ?? null); setSelectedLng(sel?.lng ?? null); }}
+              C={C}
+              placeholder="Search city, neighbourhood, address…"
+            />
           </View>
 
           {/* Description */}

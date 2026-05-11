@@ -13,7 +13,6 @@ import { useHousingStore } from '../store/housingStore';
 import { useLocationStore } from '../store/locationStore';
 import { SUGGESTED_CITIES } from '../components/AppTopBar';
 
-const NAVY     = '#1B3266';
 const GOLD     = '#F5A623';
 const GOLD_DIM = '#F5A62318';
 
@@ -176,7 +175,7 @@ export default function HousingScreen({ navigation }) {
       {/* Header */}
       <View style={s.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={s.backBtn} activeOpacity={0.8}>
-          <Ionicons name="chevron-back" size={20} color="#fff" />
+          <Ionicons name="chevron-back" size={20} color={C.cream} />
         </TouchableOpacity>
 
         <TouchableOpacity style={{ flex: 1 }} onPress={() => setCityOpen(v => !v)} activeOpacity={0.75}>
@@ -195,7 +194,7 @@ export default function HousingScreen({ navigation }) {
           onPress={() => { setScope('all'); doFetch('all', activeCat, search); }}
           activeOpacity={0.75}
         >
-          <Ionicons name="globe-outline" size={16} color={scope === 'all' ? GOLD : 'rgba(255,255,255,0.6)'} />
+          <Ionicons name="globe-outline" size={16} color={scope === 'all' ? GOLD : C.c35} />
         </TouchableOpacity>
         <TouchableOpacity
           style={[s.mineBtn, scope === 'community' && { backgroundColor: GOLD + '33', borderColor: GOLD + '66' }]}
@@ -209,10 +208,10 @@ export default function HousingScreen({ navigation }) {
           onPress={() => setShowMine(v => !v)}
           activeOpacity={0.8}
         >
-          <Ionicons name="person" size={15} color={showMine ? GOLD : 'rgba(255,255,255,0.6)'} />
+          <Ionicons name="person" size={15} color={showMine ? GOLD : C.c35} />
         </TouchableOpacity>
         <TouchableOpacity style={s.addBtn} onPress={() => navigation.navigate('PostHousing')} activeOpacity={0.85}>
-          <Ionicons name="add" size={18} color="#fff" />
+          <Ionicons name="add" size={18} color={C.cream} />
         </TouchableOpacity>
       </View>
 
@@ -272,15 +271,17 @@ export default function HousingScreen({ navigation }) {
         <View style={[s.searchBox, { backgroundColor: C.card, borderColor: C.border }]}>
           <Ionicons name="search-outline" size={16} color={C.c35} />
           <TextInput
-            style={[s.searchInput, { color: C.cream }]}
+            style={s.searchInput}
             placeholder="Search area, title…"
             placeholderTextColor={C.c35}
             value={search}
             onChangeText={handleSearch}
             returnKeyType="search"
+            autoCorrect={false}
+            autoCapitalize="none"
           />
           {search.length > 0 && (
-            <TouchableOpacity onPress={() => handleSearch('')} activeOpacity={0.7}>
+            <TouchableOpacity onPress={() => handleSearch('')} activeOpacity={0.7} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
               <Ionicons name="close-circle" size={16} color={C.c35} />
             </TouchableOpacity>
           )}
@@ -380,13 +381,13 @@ export default function HousingScreen({ navigation }) {
 const getStyles = (C) => StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
 
-  header:   { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingTop: 10, paddingBottom: 10, backgroundColor: NAVY },
-  backBtn:  { width: 34, height: 34, borderRadius: 11, backgroundColor: 'rgba(255,255,255,0.12)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  title:    { fontSize: 15, fontWeight: '800', color: '#fff' },
+  header:   { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingTop: 10, paddingBottom: 10, backgroundColor: C.bg, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border },
+  backBtn:  { width: 34, height: 34, borderRadius: 11, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  title:    { fontSize: 15, fontWeight: '800', color: C.cream },
   cityRow:  { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 1 },
   cityTxt:  { fontSize: 11, fontWeight: '600', flex: 1 },
-  mineBtn:  { width: 32, height: 32, backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' },
-  addBtn:   { width: 34, height: 34, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 11, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)', alignItems: 'center', justifyContent: 'center' },
+  mineBtn:  { width: 32, height: 32, backgroundColor: C.card, borderRadius: 10, borderWidth: 1, borderColor: C.border, alignItems: 'center', justifyContent: 'center' },
+  addBtn:   { width: 34, height: 34, backgroundColor: C.card, borderRadius: 11, borderWidth: 1, borderColor: C.border, alignItems: 'center', justifyContent: 'center' },
 
   scopeFlagEmoji: { fontSize: 15 },
 
@@ -397,9 +398,9 @@ const getStyles = (C) => StyleSheet.create({
   cityName:     { fontSize: 14, fontWeight: '700' },
   citySub:      { fontSize: 11, marginTop: 1 },
 
-  searchWrap:  { paddingHorizontal: 16, paddingTop: 10, marginBottom: 8 },
-  searchBox:   { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 14, paddingHorizontal: 14, height: 42 },
-  searchInput: { flex: 1, fontSize: 13, paddingVertical: 0 },
+  searchWrap:  { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 2, marginBottom: 6 },
+  searchBox:   { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 10 },
+  searchInput: { flex: 1, fontSize: 13, color: C.cream, marginHorizontal: 8, paddingVertical: 0, minWidth: 0 },
 
   chipBar:        { maxHeight: 44, marginBottom: 8 },
   chipBarContent: { paddingHorizontal: 16, gap: 8, alignItems: 'center' },

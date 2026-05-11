@@ -14,6 +14,7 @@ import { useJobsStore } from '../store/jobsStore';
 import { useAuthStore } from '../store/authStore';
 import { useLocationStore } from '../store/locationStore';
 import { JOB_CATEGORIES } from './JobsScreen';
+import LocationSearchInput from '../components/LocationSearchInput';
 
 const CATEGORY_OPTIONS = JOB_CATEGORIES.filter(c => c.key !== 'all');
 
@@ -76,10 +77,12 @@ export default function PostJobScreen({ navigation }) {
   const [cvv,         setCvv]         = useState('');
   const [cardName,    setCardName]    = useState('');
 
-  const [title,    setTitle]    = useState('');
-  const [company,  setCompany]  = useState('');
-  const [location, setLocation] = useState('');
-  const [desc,     setDesc]     = useState('');
+  const [title,       setTitle]       = useState('');
+  const [company,     setCompany]     = useState('');
+  const [location,    setLocation]    = useState('');
+  const [selectedLat, setSelectedLat] = useState(null);
+  const [selectedLng, setSelectedLng] = useState(null);
+  const [desc,        setDesc]        = useState('');
   const [category, setCategory] = useState('other');
   const [plan,     setPlan]     = useState('free');
 
@@ -114,8 +117,8 @@ export default function PostJobScreen({ navigation }) {
       title,
       company,
       location,
-      latitude:    locLat,
-      longitude:   locLng,
+      latitude:    selectedLat ?? locLat,
+      longitude:   selectedLng ?? locLng,
       desc,
       plan,
       image,
@@ -246,6 +249,18 @@ export default function PostJobScreen({ navigation }) {
                 onChangeText={setCompany}
               />
             </View>
+          </View>
+
+          {/* Location */}
+          <View style={s.fieldGroup}>
+            <Text style={s.fieldLabel}>LOCATION</Text>
+            <LocationSearchInput
+              value={location}
+              onChange={setLocation}
+              onSelect={(sel) => { setSelectedLat(sel?.lat ?? null); setSelectedLng(sel?.lng ?? null); }}
+              C={C}
+              placeholder="Search city, neighbourhood, address…"
+            />
           </View>
 
           {/* Category */}

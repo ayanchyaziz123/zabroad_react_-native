@@ -13,7 +13,9 @@ import { G_PRIMARY, G_SUCCESS, BRAND } from '../theme/colors';
 import { useLocationStore } from '../store/locationStore';
 import { useHousingStore } from '../store/housingStore';
 import { useAuthStore } from '../store/authStore';
+import { sanitizePrice } from '../utils/formatPrice';
 import { HOUSING_CATEGORIES } from './HousingScreen';
+import LocationSearchInput from '../components/LocationSearchInput';
 
 const CATEGORY_OPTIONS = HOUSING_CATEGORIES.filter(c => c.key !== 'all');
 
@@ -47,10 +49,12 @@ const PLANS = [
     label: 'Premium',
     price: '$9.99',
     color: '#9B72EF',
+    badge: 'Best Value',
     features: [
       'Active for 60 days',
       'Featured at top of feed',
       'Featured badge on card',
+      'Notify nearby community members',
       'One-time payment',
     ],
   },
@@ -68,17 +72,20 @@ export default function PostHousingScreen({ navigation }) {
   const locStatus          = useLocationStore(s => s.status);
   const detect             = useLocationStore(s => s.detect);
 
-  const [title,    setTitle]    = useState('');
-  const [price,    setPrice]    = useState('');
-  const [location, setLocation] = useState('');
-  const [desc,     setDesc]     = useState('');
+  const [title,       setTitle]       = useState('');
+  const [price,       setPrice]       = useState('');
+  const [location,    setLocation]    = useState('');
+  const [selectedLat, setSelectedLat] = useState(null);
+  const [selectedLng, setSelectedLng] = useState(null);
+  const [desc,        setDesc]        = useState('');
   const [category, setCategory] = useState('other');
   const [plan,     setPlan]     = useState('free');
 
   const [image,       setImage]       = useState(null);
-  const [submitted,   setSubmitted]   = useState(false);
-  const [paying,      setPaying]      = useState(false);
-  const [showPayment, setShowPayment] = useState(false);
+  const [submitted,      setSubmitted]      = useState(false);
+  const [paying,         setPaying]         = useState(false);
+  const [showPayment,    setShowPayment]    = useState(false);
+  const [notifiedCount,  setNotifiedCount]  = useState(0);
   const [cardNumber,  setCardNumber]  = useState('');
   const [expiry,      setExpiry]      = useState('');
   const [cvv,         setCvv]         = useState('');
@@ -107,15 +114,15 @@ export default function PostHousingScreen({ navigation }) {
     if (!result.canceled) setImage(result.assets[0]);
   }
 
-  const canPost = title.trim().length > 2 && price.trim().length > 0 && desc.trim().length >= 20;
+  const canPost = title.trim().length > 2 && parseFloat(price) > 0 && desc.trim().length >= 20;
 
   async function postListing() {
-    await addListing({
+    const data = await addListing({
       title,
       price,
       location,
-      latitude:    locLat,
-      longitude:   locLng,
+      latitude:    selectedLat ?? locLat,
+      longitude:   selectedLng ?? locLng,
       desc,
       plan,
       image,
@@ -124,6 +131,10 @@ export default function PostHousingScreen({ navigation }) {
       countryFlag: authUser?.profile?.country_flag || '🌍',
       postedFrom:  authUser?.profile?.lives_in     || '',
     });
+    return data;
+  }
+
+  function showSuccess() {
     setSubmitted(true);
     Animated.parallel([
       Animated.spring(successScale,   { toValue: 1, useNativeDriver: true, bounciness: 14, speed: 8 }),
@@ -133,7 +144,9 @@ export default function PostHousingScreen({ navigation }) {
 
   function handlePost() {
     if (plan === 'free') {
-      postListing().catch(() => alert('Failed to post listing. Please try again.'));
+      postListing()
+        .then(() => showSuccess())
+        .catch(() => alert('Failed to post listing. Please try again.'));
     } else {
       setCardName(authUser ? `${authUser.first_name} ${authUser.last_name}`.trim() : '');
       setShowPayment(true);
@@ -148,9 +161,27 @@ export default function PostHousingScreen({ navigation }) {
     }
     setPaying(true);
     try {
-      await api('/housing/payment-intent/', { method: 'POST', body: { plan } });
+      // 1. Create the listing first to get its id
+      const listing = await postListing();
+      const listingId = listing?.id;
+
+      // 2. Create Stripe payment intent (records payment intent against this listing)
+      await api('/housing/payment-intent/', { method: 'POST', body: { plan, listing_id: listingId } });
+
+      // 3. Premium: notify nearby community members
+      let notified = 0;
+      if (plan === 'premium' && listingId) {
+        try {
+          const res = await api('/housing/notify-nearby/', { method: 'POST', body: { listing_id: listingId } });
+          notified = res?.notified_count ?? 0;
+        } catch {
+          // notifications are best-effort — don't block the success screen
+        }
+      }
+
+      setNotifiedCount(notified);
       setShowPayment(false);
-      await postListing();
+      showSuccess();
     } catch (e) {
       alert(e.message || 'Payment failed. Please try again.');
     } finally {
@@ -171,6 +202,7 @@ export default function PostHousingScreen({ navigation }) {
     setSubmitted(false); setTitle(''); setPrice(''); setLocation('');
     setDesc(''); setCategory('other'); setPlan('free'); setImage(null);
     setCardNumber(''); setExpiry(''); setCvv(''); setCardName('');
+    setNotifiedCount(0);
     successScale.setValue(0); successOpacity.setValue(0);
   }
 
@@ -191,6 +223,16 @@ export default function PostHousingScreen({ navigation }) {
               <Ionicons name="checkmark-circle" size={13} color={activePlan.color || C.gold} />
               <Text style={[s.successPlanTxt, { color: activePlan.color || C.gold }]}>{activePlan.label} Plan · {activePlan.price}</Text>
             </View>
+            {plan === 'premium' && (
+              <View style={[s.notifyBanner, { backgroundColor: '#9B72EF18', borderColor: '#9B72EF44' }]}>
+                <Ionicons name="notifications" size={15} color="#9B72EF" />
+                <Text style={s.notifyBannerTxt}>
+                  {notifiedCount > 0
+                    ? `${notifiedCount} nearby user${notifiedCount !== 1 ? 's' : ''} notified`
+                    : 'Community members will be notified'}
+                </Text>
+              </View>
+            )}
             <Text style={s.successNote}>Your listing is now visible to your community.</Text>
             <TouchableOpacity style={s.doneBtnWrap} onPress={() => navigation.navigate('Housing')} activeOpacity={0.85}>
               <LinearGradient colors={G_SUCCESS} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.doneBtnInner}>
@@ -245,12 +287,25 @@ export default function PostHousingScreen({ navigation }) {
               <Ionicons name="cash-outline" size={16} color={C.c35} />
               <TextInput
                 style={s.input}
-                placeholder="e.g. $1,200/mo"
+                placeholder="e.g. 1200"
                 placeholderTextColor={C.c35}
                 value={price}
-                onChangeText={setPrice}
+                onChangeText={v => setPrice(sanitizePrice(v))}
+                keyboardType="decimal-pad"
               />
             </View>
+          </View>
+
+          {/* Location */}
+          <View style={s.fieldGroup}>
+            <Text style={s.fieldLabel}>LOCATION</Text>
+            <LocationSearchInput
+              value={location}
+              onChange={setLocation}
+              onSelect={(sel) => { setSelectedLat(sel?.lat ?? null); setSelectedLng(sel?.lng ?? null); }}
+              C={C}
+              placeholder="Search neighbourhood, city, address…"
+            />
           </View>
 
           {/* Category */}
@@ -341,12 +396,19 @@ export default function PostHousingScreen({ navigation }) {
                       <Text style={[s.planPrice, active && { color: accent }]}>{p.price}</Text>
                     </View>
                     <View style={s.featuresCol}>
-                      {p.features.map(f => (
-                        <View key={f} style={s.featureRow}>
-                          <Ionicons name="checkmark-circle" size={13} color={active ? accent : C.c35} />
-                          <Text style={[s.featureTxt, active && { color: C.cream }]}>{f}</Text>
+                      {p.features.map(f => {
+                        const isNotify = f.toLowerCase().includes('notify');
+                        return (
+                        <View key={f} style={[s.featureRow, isNotify && active && s.featureRowHighlight]}>
+                          <Ionicons
+                            name={isNotify ? 'notifications' : 'checkmark-circle'}
+                            size={13}
+                            color={isNotify && active ? accent : active ? accent : C.c35}
+                          />
+                          <Text style={[s.featureTxt, active && { color: C.cream }, isNotify && active && { fontWeight: '700' }]}>{f}</Text>
                         </View>
-                      ))}
+                        );
+                      })}
                     </View>
                   </TouchableOpacity>
                 );
@@ -487,8 +549,9 @@ const getStyles = (C) => StyleSheet.create({
   planBadgeTxt:  { fontSize: 9, fontWeight: '800', letterSpacing: 0.5 },
   planPrice:     { fontSize: 16, fontWeight: '900', color: C.cream },
   featuresCol:   { gap: 6 },
-  featureRow:    { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  featureTxt:    { fontSize: 12, color: C.c35, fontWeight: '500' },
+  featureRow:          { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  featureRowHighlight: { backgroundColor: '#9B72EF15', borderRadius: 8, paddingHorizontal: 6, paddingVertical: 3, marginHorizontal: -6 },
+  featureTxt:          { fontSize: 12, color: C.c35, fontWeight: '500' },
 
   footer:     { paddingHorizontal: 20, paddingBottom: 28, paddingTop: 12, borderTopWidth: 1, borderTopColor: C.border, backgroundColor: C.bg },
   postBtnShadow: { borderRadius: 16, shadowColor: BRAND.orange, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 6 },
@@ -535,6 +598,8 @@ const getStyles = (C) => StyleSheet.create({
   successPlanBadge:  { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderRadius: 50, paddingHorizontal: 12, paddingVertical: 5, marginTop: 4 },
   successPlanTxt:    { fontSize: 12, fontWeight: '700' },
   successNote:       { fontSize: 13, color: C.c35, textAlign: 'center', lineHeight: 19, marginTop: 4 },
+  notifyBanner:      { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderRadius: 50, paddingHorizontal: 14, paddingVertical: 7, marginTop: 2 },
+  notifyBannerTxt:   { fontSize: 12, fontWeight: '700', color: '#9B72EF' },
   doneBtnWrap:  { borderRadius: 50, overflow: 'hidden', marginTop: 12 },
   doneBtnInner: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 28, paddingVertical: 13 },
   doneBtnTxt:   { fontSize: 15, fontWeight: '800', color: 'white' },

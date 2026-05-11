@@ -1,7 +1,7 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  StyleSheet, Image, Linking, Alert, RefreshControl,
+  StyleSheet, Image, Linking, Alert, Share, Animated,
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -9,16 +9,15 @@ import { Ionicons } from '@expo/vector-icons';
 import MapView, { Marker } from 'react-native-maps';
 import { useTheme } from '../theme/ThemeContext';
 import { useAuthStore } from '../store/authStore';
-
-const NAVY = '#1B3266';
+import { formatPrice } from '../utils/formatPrice';
 
 const CATEGORY_META = {
-  legal:      { emoji: '⚖️', label: 'Legal',      color: null },
-  jobs:       { emoji: '💼', label: 'Jobs',        color: null },
-  community:  { emoji: '🤝', label: 'Community',   color: null },
-  health:     { emoji: '🧠', label: 'Health',      color: null },
-  cultural:   { emoji: '🎉', label: 'Cultural',    color: null },
-  networking: { emoji: '🌐', label: 'Networking',  color: null },
+  legal:      { emoji: '⚖️', label: 'Legal' },
+  jobs:       { emoji: '💼', label: 'Jobs' },
+  community:  { emoji: '🤝', label: 'Community' },
+  health:     { emoji: '🧠', label: 'Health' },
+  cultural:   { emoji: '🎉', label: 'Cultural' },
+  networking: { emoji: '🌐', label: 'Networking' },
 };
 
 function getCatMeta(category, C) {
@@ -53,11 +52,13 @@ export default function EventDetailScreen({ route, navigation }) {
 
   const { api, user } = useAuthStore();
 
-  const [event,      setEvent]      = useState(route.params.event);
-  const [rsvped,     setRsvped]     = useState(!!event.is_rsvped);
-  const [rsvpCount,  setRsvpCount]  = useState(event.rsvp_count ?? 0);
+  const [event,       setEvent]       = useState(route.params.event);
+  const [rsvped,      setRsvped]      = useState(!!event.is_rsvped);
+  const [rsvpCount,   setRsvpCount]   = useState(event.rsvp_count ?? 0);
   const [rsvpLoading, setRsvpLoading] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
+  const [saved,       setSaved]       = useState(false);
+  const [messaged,    setMessaged]    = useState(false);
+  const saveScale = useRef(new Animated.Value(1)).current;
 
   const cat   = getCatMeta(event.category, C);
   const isOwn = user?.id && event.posted_by_id && String(user.id) === String(event.posted_by_id);
@@ -65,27 +66,38 @@ export default function EventDetailScreen({ route, navigation }) {
   const hasCoords = event.latitude != null && event.longitude != null
     && !isNaN(Number(event.latitude)) && !isNaN(Number(event.longitude));
 
-  // ── Refresh ───────────────────────────────────────────────────────────────
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    try {
-      const fresh = await api(`/events/${event.id}/`);
-      setEvent(fresh);
-      setRsvped(!!fresh.is_rsvped);
-      setRsvpCount(fresh.rsvp_count ?? 0);
-    } catch (e) {
-      Alert.alert('Error', e.message || 'Could not refresh event.');
-    } finally {
-      setRefreshing(false);
+  const organizerInitial = (event.posted_by_name || '?')[0].toUpperCase();
+
+  // ── Save / Bookmark ───────────────────────────────────────────────────────
+  function onSave() {
+    setSaved(v => !v);
+    Animated.sequence([
+      Animated.spring(saveScale, { toValue: 1.35, useNativeDriver: true, speed: 60, bounciness: 20 }),
+      Animated.spring(saveScale, { toValue: 1,    useNativeDriver: true, speed: 30 }),
+    ]).start();
+  }
+
+  // ── Share ─────────────────────────────────────────────────────────────────
+  async function onShare() {
+    const parts = [event.title];
+    if (event.date) parts.push(formatDate(event.date));
+    if (event.location) parts.push(event.location);
+    await Share.share({ message: parts.join(' · ') + ' — shared via Zabroad' });
+  }
+
+  // ── Message Organizer ─────────────────────────────────────────────────────
+  function onMessage() {
+    setMessaged(true);
+    if (event.posted_by_id) {
+      navigation.navigate('AppMain', { screen: 'Chat', params: { userId: event.posted_by_id } });
     }
-  }, [event.id]);
+  }
 
   // ── RSVP ──────────────────────────────────────────────────────────────────
   async function toggleRsvp() {
     if (rsvpLoading) return;
     setRsvpLoading(true);
     const wasGoing = rsvped;
-    // Optimistic update
     setRsvped(!wasGoing);
     setRsvpCount(c => wasGoing ? Math.max(0, c - 1) : c + 1);
     try {
@@ -93,7 +105,6 @@ export default function EventDetailScreen({ route, navigation }) {
       if (res?.is_rsvped !== undefined) setRsvped(res.is_rsvped);
       if (res?.rsvp_count !== undefined) setRsvpCount(res.rsvp_count);
     } catch (e) {
-      // Revert on error
       setRsvped(wasGoing);
       setRsvpCount(c => wasGoing ? c + 1 : Math.max(0, c - 1));
       Alert.alert('Error', e.message || 'Could not update RSVP.');
@@ -114,7 +125,7 @@ export default function EventDetailScreen({ route, navigation }) {
           onPress: async () => {
             try {
               await api(`/events/${event.id}/`, { method: 'DELETE' });
-              navigation.goBack();
+              navigation.navigate('Events');
             } catch (e) {
               Alert.alert('Error', e.message || 'Could not delete event.');
             }
@@ -150,25 +161,28 @@ export default function EventDetailScreen({ route, navigation }) {
       {/* ── Header ── */}
       <View style={s.header}>
         <TouchableOpacity style={s.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.8}>
-          <Ionicons name="chevron-back" size={22} color="#fff" />
+          <Ionicons name="chevron-back" size={22} color={C.cream} />
         </TouchableOpacity>
         <Text style={s.headerTitle} numberOfLines={1}>{event.title}</Text>
-        <View style={[s.catBadge, { backgroundColor: cat.color + '33', borderColor: cat.color + '66' }]}>
-          <Text style={[s.catBadgeTxt, { color: cat.color }]}>{cat.emoji} {cat.label}</Text>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <TouchableOpacity style={s.iconBtn} onPress={onShare} activeOpacity={0.8}>
+            <Ionicons name="share-outline" size={19} color={C.cream} />
+          </TouchableOpacity>
+          <TouchableOpacity style={s.iconBtn} onPress={onSave} activeOpacity={0.8}>
+            <Animated.View style={{ transform: [{ scale: saveScale }] }}>
+              <Ionicons
+                name={saved ? 'bookmark' : 'bookmark-outline'}
+                size={19}
+                color={saved ? C.gold : C.cream}
+              />
+            </Animated.View>
+          </TouchableOpacity>
         </View>
       </View>
 
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 120 }}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={C.vivid}
-            colors={[C.vivid]}
-          />
-        }
       >
 
         {/* ── Image / Placeholder ── */}
@@ -181,41 +195,48 @@ export default function EventDetailScreen({ route, navigation }) {
         )}
 
         {/* ── Main card ── */}
-        <View style={s.mainCard}>
+        <View style={[s.mainCard, { backgroundColor: C.card, borderColor: C.border }]}>
 
-          {/* Title + organizer + free/paid */}
-          <View style={s.titleRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={s.eventTitle}>{event.title}</Text>
-              <Text style={s.organizer}>By {event.posted_by_name || 'Community Member'}</Text>
+          {/* Category + free/paid badges */}
+          <View style={s.badgeRow}>
+            <View style={[s.catBadge, { backgroundColor: cat.color + '22', borderColor: cat.color + '55' }]}>
+              <Text style={[s.catBadgeTxt, { color: cat.color }]}>{cat.emoji} {cat.label}</Text>
             </View>
             {event.is_free ? (
-              <View style={s.freeBadge}>
-                <Text style={s.freeBadgeTxt}>FREE</Text>
+              <View style={[s.freeBadge, { backgroundColor: C.green + '18', borderColor: C.green + '44' }]}>
+                <Text style={[s.freeBadgeTxt, { color: C.green }]}>FREE</Text>
               </View>
             ) : (
-              <View style={s.paidBadge}>
-                <Text style={s.paidBadgeTxt}>
-                  {event.price ? `$${event.price}` : 'PAID'}
+              <View style={[s.paidBadge, { backgroundColor: C.gold + '18', borderColor: C.gold + '44' }]}>
+                <Text style={[s.paidBadgeTxt, { color: C.gold }]}>
+                  {formatPrice(event.price, event.currency) || 'PAID'}
                 </Text>
               </View>
             )}
           </View>
 
-          {/* Date */}
+          <Text style={s.eventTitle}>{event.title}</Text>
+
+          {/* RSVP count */}
+          <View style={s.rsvpCountRow}>
+            <Ionicons name="people-outline" size={14} color={C.c35} />
+            <Text style={[s.rsvpCountTxt, { color: C.c35 }]}>{rsvpCount} going</Text>
+          </View>
+
+          {/* Date chip */}
           <View style={s.infoRow}>
-            <View style={s.infoChip}>
+            <View style={[s.infoChip, { backgroundColor: C.card2, borderColor: C.border }]}>
               <Ionicons name="calendar-outline" size={15} color={C.vivid} />
-              <Text style={s.infoChipTxt}>{formatDate(event.date)}</Text>
+              <Text style={[s.infoChipTxt, { color: C.c60 }]}>{formatDate(event.date)}</Text>
             </View>
           </View>
 
-          {/* Location */}
+          {/* Location chip */}
           {event.location ? (
             <View style={s.infoRow}>
-              <View style={s.infoChip}>
+              <View style={[s.infoChip, { backgroundColor: C.card2, borderColor: C.border }]}>
                 <Ionicons name="location-outline" size={15} color={C.gold} />
-                <Text style={s.infoChipTxt}>{event.location}</Text>
+                <Text style={[s.infoChipTxt, { color: C.c60 }]}>{event.location}</Text>
               </View>
             </View>
           ) : null}
@@ -223,16 +244,20 @@ export default function EventDetailScreen({ route, navigation }) {
           {/* Description */}
           {event.description ? (
             <View style={s.section}>
-              <Text style={s.sectionLabel}>ABOUT THIS EVENT</Text>
-              <Text style={s.descTxt}>{event.description}</Text>
+              <Text style={[s.sectionLabel, { color: C.c35 }]}>ABOUT THIS EVENT</Text>
+              <Text style={[s.descTxt, { color: C.c60 }]}>{event.description}</Text>
             </View>
           ) : null}
 
           {/* Link chip */}
           {event.link ? (
-            <TouchableOpacity style={s.linkChip} onPress={openLink} activeOpacity={0.8}>
+            <TouchableOpacity
+              style={[s.linkChip, { backgroundColor: C.teal + '15', borderColor: C.teal + '44' }]}
+              onPress={openLink}
+              activeOpacity={0.8}
+            >
               <Ionicons name="link-outline" size={16} color={C.teal} />
-              <Text style={s.linkChipTxt} numberOfLines={1}>{event.link}</Text>
+              <Text style={[s.linkChipTxt, { color: C.teal }]} numberOfLines={1}>{event.link}</Text>
               <Ionicons name="open-outline" size={14} color={C.teal} />
             </TouchableOpacity>
           ) : null}
@@ -242,73 +267,118 @@ export default function EventDetailScreen({ route, navigation }) {
         {/* ── Map ── */}
         {hasCoords ? (
           <View style={s.mapSection}>
-            <Text style={s.sectionLabel2}>LOCATION</Text>
-            <View style={s.mapCard}>
-              <MapView style={s.map} region={mapRegion} scrollEnabled={false} zoomEnabled={false}>
-                <Marker
-                  coordinate={{ latitude: Number(event.latitude), longitude: Number(event.longitude) }}
-                  title={event.title}
-                  description={event.location}
-                />
-              </MapView>
-            </View>
+            <Text style={[s.sectionLabel2, { color: C.c35 }]}>LOCATION</Text>
+            <MapView
+              style={s.map}
+              region={mapRegion}
+              scrollEnabled={false}
+              zoomEnabled={false}
+              pitchEnabled={false}
+              rotateEnabled={false}
+            >
+              <Marker
+                coordinate={{ latitude: Number(event.latitude), longitude: Number(event.longitude) }}
+                title={event.title}
+                description={event.location}
+              />
+            </MapView>
+            {event.location ? (
+              <View style={s.mapLocRow}>
+                <Ionicons name="location-outline" size={13} color={C.c35} />
+                <Text style={[s.mapLocTxt, { color: C.c35 }]} numberOfLines={2}>{event.location}</Text>
+              </View>
+            ) : null}
           </View>
         ) : null}
 
-        {/* ── Owner actions ── */}
-        {isOwn && (
-          <View style={s.ownerSection}>
-            <Text style={s.sectionLabel2}>MANAGE YOUR EVENT</Text>
-            <View style={s.ownerRow}>
-              <TouchableOpacity
-                style={[s.ownerBtn, { backgroundColor: C.greenD, borderColor: C.green + '55', flex: 1 }]}
-                onPress={() => navigation.navigate('EditEvent', { event })}
-                activeOpacity={0.85}
-              >
-                <Ionicons name="pencil-outline" size={18} color={C.green} />
-                <Text style={[s.ownerBtnTxt, { color: C.green }]}>Edit Event</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[s.ownerBtn, { backgroundColor: C.redD, borderColor: C.red + '55', flex: 1 }]}
-                onPress={onDelete}
-                activeOpacity={0.85}
-              >
-                <Ionicons name="trash-outline" size={18} color={C.red} />
-                <Text style={[s.ownerBtnTxt, { color: C.red }]}>Delete</Text>
-              </TouchableOpacity>
+        {/* ── Organizer card ── */}
+        <View style={s.organizerSection}>
+          <Text style={[s.sectionLabel2, { color: C.c35 }]}>ORGANIZER</Text>
+          <View style={[s.organizerCard, { backgroundColor: C.card, borderColor: C.border }]}>
+            <View style={[s.organizerAv, { backgroundColor: cat.color + '22' }]}>
+              <Text style={[s.organizerInitial, { color: cat.color }]}>{organizerInitial}</Text>
             </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[s.organizerName, { color: C.cream }]}>
+                {event.posted_by_name || 'Community Member'}
+              </Text>
+              <Text style={[s.organizerSub, { color: C.c35 }]}>Event organizer</Text>
+            </View>
+            {!isOwn && (
+              <TouchableOpacity
+                style={[s.msgSmallBtn, { borderColor: C.vivid + '55', backgroundColor: C.vividD }]}
+                onPress={onMessage}
+                activeOpacity={0.8}
+              >
+                <Text style={[s.msgSmallTxt, { color: C.vivid }]}>Message</Text>
+              </TouchableOpacity>
+            )}
           </View>
-        )}
+        </View>
 
-        <View style={{ height: 16 }} />
+        <View style={{ height: 8 }} />
       </ScrollView>
 
-      {/* ── RSVP Footer ── */}
-      <View style={s.footer}>
-        <Text style={s.rsvpCount}>
-          <Ionicons name="people-outline" size={15} color={C.c35} /> {rsvpCount} going
-        </Text>
-        <TouchableOpacity
-          style={[s.rsvpBtn, rsvped && s.rsvpBtnGoing]}
-          onPress={toggleRsvp}
-          activeOpacity={0.85}
-          disabled={rsvpLoading}
-        >
-          {rsvpLoading ? (
-            <ActivityIndicator size="small" color={rsvped ? C.green : '#fff'} />
-          ) : (
-            <>
+      {/* ── Footer ── */}
+      <View style={[s.footer, { backgroundColor: C.bg, borderTopColor: C.border }]}>
+        {isOwn ? (
+          <>
+            <TouchableOpacity
+              style={[s.editBtn, { backgroundColor: C.greenD, borderColor: C.green + '55' }]}
+              onPress={() => navigation.navigate('EditEvent', { event })}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="pencil-outline" size={18} color={C.green} />
+              <Text style={[s.editBtnTxt, { color: C.green }]}>Edit Event</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[s.deleteBtn, { backgroundColor: '#FF4D4D18', borderColor: '#FF4D4D44' }]}
+              onPress={onDelete}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="trash-outline" size={18} color="#FF4D4D" />
+              <Text style={[s.deleteBtnTxt, { color: '#FF4D4D' }]}>Delete</Text>
+            </TouchableOpacity>
+          </>
+        ) : (
+          <>
+            <TouchableOpacity
+              style={[s.msgIconBtn, { borderColor: C.border, backgroundColor: C.card }]}
+              onPress={onMessage}
+              activeOpacity={0.85}
+            >
               <Ionicons
-                name={rsvped ? 'checkmark-circle' : 'calendar-outline'}
-                size={18}
-                color={rsvped ? C.green : '#fff'}
+                name={messaged ? 'checkmark-circle-outline' : 'chatbubble-ellipses-outline'}
+                size={20}
+                color={messaged ? C.green : C.cream}
               />
-              <Text style={[s.rsvpBtnTxt, rsvped && { color: C.green }]}>
-                {rsvped ? 'Going' : 'RSVP'}
-              </Text>
-            </>
-          )}
-        </TouchableOpacity>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[s.rsvpBtn, rsvped
+                ? { backgroundColor: C.green + '20', borderColor: C.green + '55' }
+                : { backgroundColor: C.vivid, borderColor: 'transparent' }
+              ]}
+              onPress={toggleRsvp}
+              activeOpacity={0.85}
+              disabled={rsvpLoading}
+            >
+              {rsvpLoading ? (
+                <ActivityIndicator size="small" color={rsvped ? C.green : '#fff'} />
+              ) : (
+                <>
+                  <Ionicons
+                    name={rsvped ? 'checkmark-circle' : 'calendar-outline'}
+                    size={18}
+                    color={rsvped ? C.green : '#fff'}
+                  />
+                  <Text style={[s.rsvpBtnTxt, { color: rsvped ? C.green : '#fff' }]}>
+                    {rsvped ? 'Going' : 'RSVP'}
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </>
+        )}
       </View>
 
     </SafeAreaView>
@@ -318,104 +388,65 @@ export default function EventDetailScreen({ route, navigation }) {
 const getStyles = (C) => StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
 
-  /* Header */
-  header: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    paddingHorizontal: 16, paddingTop: 10, paddingBottom: 12,
-    backgroundColor: NAVY,
-  },
-  backBtn: {
-    width: 38, height: 38, borderRadius: 13,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  headerTitle: { flex: 1, fontSize: 15, fontWeight: '700', color: '#fff' },
-  catBadge: {
-    borderWidth: 1, borderRadius: 50,
-    paddingHorizontal: 10, paddingVertical: 4,
-  },
+  header:      { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: C.border },
+  backBtn:     { width: 38, height: 38, borderRadius: 13, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  headerTitle: { flex: 1, fontSize: 15, fontWeight: '700', color: C.cream },
+  iconBtn:     { width: 38, height: 38, borderRadius: 13, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, alignItems: 'center', justifyContent: 'center' },
+
+  heroImage:       { width: '100%', height: 240, backgroundColor: C.card2 },
+  heroPlaceholder: { width: '100%', height: 180, alignItems: 'center', justifyContent: 'center' },
+  heroEmoji:       { fontSize: 72 },
+
+  mainCard: { margin: 16, borderRadius: 20, borderWidth: 1, padding: 16, gap: 12 },
+
+  badgeRow:    { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+  catBadge:    { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, borderRadius: 50, paddingHorizontal: 10, paddingVertical: 4 },
   catBadgeTxt: { fontSize: 11, fontWeight: '700' },
+  freeBadge:   { borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 },
+  freeBadgeTxt:{ fontSize: 11, fontWeight: '800' },
+  paidBadge:   { borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 },
+  paidBadgeTxt:{ fontSize: 11, fontWeight: '800' },
 
-  /* Hero */
-  heroImage:       { width: '100%', height: 220 },
-  heroPlaceholder: {
-    width: '100%', height: 180,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  heroEmoji: { fontSize: 72 },
+  eventTitle:  { fontSize: 20, fontWeight: '800', color: C.cream, letterSpacing: -0.4 },
 
-  /* Main card */
-  mainCard: {
-    margin: 16, backgroundColor: C.card,
-    borderWidth: 1, borderColor: C.border,
-    borderRadius: 20, padding: 16, gap: 12,
-  },
+  rsvpCountRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  rsvpCountTxt: { fontSize: 13, fontWeight: '500' },
 
-  titleRow:   { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
-  eventTitle: { fontSize: 20, fontWeight: '800', color: C.cream, letterSpacing: -0.4, marginBottom: 4 },
-  organizer:  { fontSize: 13, color: C.c35 },
-
-  freeBadge:    { backgroundColor: C.green + '18', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, borderColor: C.green + '44', alignSelf: 'flex-start' },
-  freeBadgeTxt: { fontSize: 11, fontWeight: '800', color: C.green },
-  paidBadge:    { backgroundColor: C.gold + '18', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, borderColor: C.gold + '44', alignSelf: 'flex-start' },
-  paidBadgeTxt: { fontSize: 11, fontWeight: '800', color: C.gold },
-
-  infoRow: { flexDirection: 'row' },
-  infoChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 7,
-    backgroundColor: C.card2, borderWidth: 1, borderColor: C.border,
-    borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8,
-    flexShrink: 1,
-  },
-  infoChipTxt: { fontSize: 13, color: C.c60, fontWeight: '500', flex: 1 },
+  infoRow:    { flexDirection: 'row' },
+  infoChip:   { flexDirection: 'row', alignItems: 'center', gap: 7, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, flexShrink: 1 },
+  infoChipTxt:{ fontSize: 13, fontWeight: '500', flex: 1 },
 
   section:      { gap: 8 },
-  sectionLabel: { fontSize: 10, fontWeight: '800', color: C.c35, letterSpacing: 1.5, textTransform: 'uppercase' },
-  descTxt:      { fontSize: 14, color: C.c60, lineHeight: 22 },
+  sectionLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 1.5, textTransform: 'uppercase' },
+  descTxt:      { fontSize: 14, lineHeight: 22 },
 
-  linkChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: C.teal + '15', borderWidth: 1, borderColor: C.teal + '44',
-    borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10,
-  },
-  linkChipTxt: { flex: 1, fontSize: 13, color: C.teal, fontWeight: '600' },
+  linkChip:    { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 },
+  linkChipTxt: { flex: 1, fontSize: 13, fontWeight: '600' },
 
-  /* Map section */
-  mapSection:    { paddingHorizontal: 16, marginBottom: 8 },
-  sectionLabel2: { fontSize: 10, fontWeight: '800', color: C.c35, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 10 },
-  mapCard:       { borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: C.border },
-  map:           { width: '100%', height: 180 },
+  mapSection:   { paddingHorizontal: 16, marginBottom: 16 },
+  sectionLabel2:{ fontSize: 10, fontWeight: '800', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 10 },
+  map:          { width: '100%', height: 180, borderRadius: 14, overflow: 'hidden', marginBottom: 8 },
+  mapLocRow:    { flexDirection: 'row', alignItems: 'flex-start', gap: 5 },
+  mapLocTxt:    { fontSize: 12, flex: 1, lineHeight: 17 },
 
-  /* Owner actions */
-  ownerSection: { paddingHorizontal: 16, marginTop: 4, marginBottom: 8 },
-  ownerRow:     { flexDirection: 'row', gap: 10 },
-  ownerBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 8, borderRadius: 16, paddingVertical: 14,
-    borderWidth: 1,
-  },
-  ownerBtnTxt: { fontSize: 14, fontWeight: '800' },
+  organizerSection: { paddingHorizontal: 16, marginBottom: 8 },
+  organizerCard:    { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderRadius: 16, padding: 14 },
+  organizerAv:      { width: 46, height: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  organizerInitial: { fontSize: 18, fontWeight: '800' },
+  organizerName:    { fontSize: 14, fontWeight: '700', marginBottom: 2 },
+  organizerSub:     { fontSize: 11 },
+  msgSmallBtn:      { borderWidth: 1, borderRadius: 50, paddingHorizontal: 12, paddingVertical: 6 },
+  msgSmallTxt:      { fontSize: 12, fontWeight: '700' },
 
-  /* Footer RSVP bar */
-  footer: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingBottom: 32, paddingTop: 14,
-    backgroundColor: C.bg, borderTopWidth: 1, borderTopColor: C.border,
-  },
-  rsvpCount: { fontSize: 14, color: C.c35, fontWeight: '500' },
-  rsvpBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: C.vivid, borderRadius: 50,
-    paddingHorizontal: 24, paddingVertical: 13,
-    borderWidth: 1, borderColor: 'transparent',
-    shadowColor: C.vivid, shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35, shadowRadius: 8,
-  },
-  rsvpBtnGoing: {
-    backgroundColor: C.green + '20',
-    borderColor: C.green + '55',
-    shadowColor: C.green,
-  },
-  rsvpBtnTxt: { fontSize: 15, fontWeight: '800', color: '#fff' },
+  footer:     { position: 'absolute', bottom: 0, left: 0, right: 0, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingBottom: 32, paddingTop: 12, borderTopWidth: 1 },
+
+  msgIconBtn: { width: 50, height: 50, borderRadius: 14, borderWidth: 1, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+
+  rsvpBtn:    { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 50, borderRadius: 14, borderWidth: 1 },
+  rsvpBtnTxt: { fontSize: 15, fontWeight: '800' },
+
+  editBtn:     { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 50, borderRadius: 14, borderWidth: 1 },
+  editBtnTxt:  { fontSize: 15, fontWeight: '800' },
+  deleteBtn:   { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 50, borderRadius: 14, borderWidth: 1 },
+  deleteBtnTxt:{ fontSize: 15, fontWeight: '800' },
 });

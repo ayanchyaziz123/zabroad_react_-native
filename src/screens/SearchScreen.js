@@ -27,9 +27,10 @@ const RESOURCES = [
 const TRENDING = ['H-1B lottery 2025', 'no credit check apartment', 'OPT extension', 'immigration attorney Queens', 'green card EB-2'];
 
 const CATEGORIES = [
-  { icon: 'briefcase-outline',        label: 'Jobs',      route: 'Jobs',     color: '#3EC878' },
-  { icon: 'home-outline',             label: 'Housing',   route: 'Housing',  color: '#F5A623' },
-  { icon: 'shield-checkmark-outline', label: 'Attorneys', route: 'Attorney', color: '#9B72EF' },
+  { icon: 'briefcase-outline',        label: 'Jobs',       route: 'Jobs',      color: '#3EC878' },
+  { icon: 'home-outline',             label: 'Housing',    route: 'Housing',   color: '#F5A623' },
+  { icon: 'shield-checkmark-outline', label: 'Attorneys',  route: 'Attorney',  color: '#9B72EF' },
+  { icon: 'calendar-outline',         label: 'Events',     route: 'Events',    color: '#E84393' },
 ];
 
 const TYPE_FILTERS = ['All', 'Post', 'Job', 'Housing', 'Attorney'];
@@ -364,9 +365,9 @@ const getStyles = (C) => StyleSheet.create({
 
   // Categories
   catGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  catCard: { flex: 1, aspectRatio: 1, borderRadius: 18, backgroundColor: C.card, borderWidth: 1, alignItems: 'center', justifyContent: 'center', gap: 8 },
-  catIcon: { width: 48, height: 48, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
-  catLabel:{ fontSize: 12, fontWeight: '700', color: C.cream },
+  catCard: { width: '47.5%', aspectRatio: 1.6, borderRadius: 18, backgroundColor: C.card, borderWidth: 1, alignItems: 'center', justifyContent: 'center', gap: 8 },
+  catIcon: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  catLabel:{ fontSize: 13, fontWeight: '700', color: C.cream },
 
   // Loading
   loadingRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8 },

@@ -13,7 +13,6 @@ import { useJobsStore } from '../store/jobsStore';
 import { useLocationStore } from '../store/locationStore';
 import { SUGGESTED_CITIES } from '../components/AppTopBar';
 
-const NAVY     = '#1B3266';
 const CARD_GAP = 10;
 const H_PAD    = 16;
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -175,7 +174,7 @@ export default function JobsScreen({ navigation }) {
       {/* Header */}
       <View style={s.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={s.backBtn} activeOpacity={0.8}>
-          <Ionicons name="chevron-back" size={20} color="#fff" />
+          <Ionicons name="chevron-back" size={20} color={C.cream} />
         </TouchableOpacity>
 
         <TouchableOpacity style={{ flex: 1 }} onPress={() => setCityOpen(v => !v)} activeOpacity={0.75}>
@@ -194,7 +193,7 @@ export default function JobsScreen({ navigation }) {
           onPress={() => { setActiveScope('all'); doFetch('all', activeCat); }}
           activeOpacity={0.75}
         >
-          <Ionicons name="globe-outline" size={16} color={activeScope === 'all' ? C.green : 'rgba(255,255,255,0.6)'} />
+          <Ionicons name="globe-outline" size={16} color={activeScope === 'all' ? C.green : C.c35} />
         </TouchableOpacity>
         <TouchableOpacity
           style={[s.mineBtn, activeScope === 'community' && { backgroundColor: C.green + '33', borderColor: C.green + '66' }]}
@@ -208,10 +207,10 @@ export default function JobsScreen({ navigation }) {
           onPress={() => setShowMine(v => !v)}
           activeOpacity={0.8}
         >
-          <Ionicons name="person-outline" size={15} color={showMine ? C.green : 'rgba(255,255,255,0.6)'} />
+          <Ionicons name="person-outline" size={15} color={showMine ? C.green : C.c35} />
         </TouchableOpacity>
         <TouchableOpacity style={s.postBtn} onPress={() => navigation.navigate('PostJob')} activeOpacity={0.85}>
-          <Ionicons name="add" size={18} color="#fff" />
+          <Ionicons name="add" size={18} color={C.cream} />
         </TouchableOpacity>
       </View>
 
@@ -365,13 +364,13 @@ export default function JobsScreen({ navigation }) {
 const getStyles = (C) => StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
 
-  header:   { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingTop: 10, paddingBottom: 10, backgroundColor: NAVY },
-  backBtn:  { width: 34, height: 34, borderRadius: 11, backgroundColor: 'rgba(255,255,255,0.12)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  title:    { fontSize: 15, fontWeight: '800', color: '#fff' },
+  header:   { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingTop: 10, paddingBottom: 10, backgroundColor: C.bg, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border },
+  backBtn:  { width: 34, height: 34, borderRadius: 11, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  title:    { fontSize: 15, fontWeight: '800', color: C.cream },
   cityRow:  { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 1 },
   cityTxt:  { fontSize: 11, fontWeight: '600', flex: 1 },
-  mineBtn:  { width: 32, height: 32, backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' },
-  postBtn:  { width: 34, height: 34, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 11, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)', alignItems: 'center', justifyContent: 'center' },
+  mineBtn:  { width: 32, height: 32, backgroundColor: C.card, borderRadius: 10, borderWidth: 1, borderColor: C.border, alignItems: 'center', justifyContent: 'center' },
+  postBtn:  { width: 34, height: 34, backgroundColor: C.card, borderRadius: 11, borderWidth: 1, borderColor: C.border, alignItems: 'center', justifyContent: 'center' },
 
   scopeFlagEmoji: { fontSize: 15 },
 

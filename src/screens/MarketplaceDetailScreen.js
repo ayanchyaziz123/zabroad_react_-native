@@ -5,8 +5,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import MapView, { Marker } from 'react-native-maps';
 import { useTheme } from '../theme/ThemeContext';
 import { useAuthStore } from '../store/authStore';
+import { formatPrice } from '../utils/formatPrice';
 import { MARKET_CATEGORIES } from './MarketplaceScreen';
 
 const ACCENT     = '#00B4D8';
@@ -48,7 +50,7 @@ export default function MarketplaceDetailScreen({ route, navigation }) {
 
   async function onShare() {
     await Share.share({
-      message: `${item.title}${item.price ? ` — ${item.price}` : ''} · Found on Zabroad Marketplace`,
+      message: `${item.title}${item.price ? ` — ${formatPrice(item.price, item.currency)}` : ''} · Found on Zabroad Marketplace`,
     });
   }
 
@@ -137,7 +139,7 @@ export default function MarketplaceDetailScreen({ route, navigation }) {
 
           <Text style={s.itemTitle}>{item.title}</Text>
           {item.price ? (
-            <Text style={s.itemPrice}>{item.price}</Text>
+            <Text style={s.itemPrice}>{formatPrice(item.price, item.currency)}</Text>
           ) : (
             <Text style={[s.itemPrice, { color: C.c35 }]}>Price on request</Text>
           )}
@@ -172,6 +174,34 @@ export default function MarketplaceDetailScreen({ route, navigation }) {
           <Text style={[s.description, { color: C.c60 }]}>
             {item.description || 'No description provided.'}
           </Text>
+
+          {(item.latitude != null && item.longitude != null) && (
+            <>
+              <View style={[s.divider, { backgroundColor: C.border }]} />
+              <Text style={s.sectionLabel}>LOCATION</Text>
+              <MapView
+                style={s.map}
+                region={{
+                  latitude:       Number(item.latitude),
+                  longitude:      Number(item.longitude),
+                  latitudeDelta:  0.008,
+                  longitudeDelta: 0.008,
+                }}
+                scrollEnabled={false}
+                zoomEnabled={false}
+                pitchEnabled={false}
+                rotateEnabled={false}
+              >
+                <Marker coordinate={{ latitude: Number(item.latitude), longitude: Number(item.longitude) }} />
+              </MapView>
+              {item.location ? (
+                <View style={s.mapLocRow}>
+                  <Ionicons name="location-outline" size={13} color={C.c35} />
+                  <Text style={[s.mapLocTxt, { color: C.c35 }]} numberOfLines={2}>{item.location}</Text>
+                </View>
+              ) : null}
+            </>
+          )}
 
           <View style={[s.divider, { backgroundColor: C.border }]} />
 
@@ -274,6 +304,9 @@ const getStyles = (C) => StyleSheet.create({
   divider:      { height: 1, marginVertical: 16 },
   sectionLabel: { fontSize: 10, fontWeight: '700', color: C.c35, letterSpacing: 1.5, marginBottom: 10 },
   description:  { fontSize: 14, lineHeight: 22 },
+  map:          { width: '100%', height: 180, borderRadius: 12, overflow: 'hidden', marginBottom: 8 },
+  mapLocRow:    { flexDirection: 'row', alignItems: 'flex-start', gap: 5, marginBottom: 4 },
+  mapLocTxt:    { fontSize: 12, flex: 1, lineHeight: 17 },
 
   sellerRow:      { flexDirection: 'row', alignItems: 'center', gap: 12 },
   sellerAv:       { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },

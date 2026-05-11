@@ -59,6 +59,7 @@ import EditJobScreen            from '../screens/EditJobScreen';
 import EditHousingScreen        from '../screens/EditHousingScreen';
 import ChatScreen               from '../screens/ChatScreen';
 import AllListingsScreen        from '../screens/AllListingsScreen';
+import CommunityPostsScreen    from '../screens/CommunityPostsScreen';
 
 const Tab   = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -74,6 +75,7 @@ function CustomTabBar({ state, navigation }) {
   const totalUnread = conversations.reduce((sum, c) => sum + (c.unread_count || 0), 0);
 
   if (inConversation) return null;
+  if (state.routes[state.index].name === 'AIAssistant') return null;
 
   const tabTranslate = barsHidden.interpolate({ inputRange: [0, 1], outputRange: [0, 90] });
 
@@ -82,14 +84,15 @@ function CustomTabBar({ state, navigation }) {
   const avatarName  = authUser?.profile?.full_name || authUser?.username || '';
 
   const allTabs = [
-    { type: 'tab', name: 'Home',    icon: 'home-outline',        iconActive: 'home',        label: 'Home'                     },
-    { type: 'tab', name: 'Chat',    icon: 'chatbubbles-outline', iconActive: 'chatbubbles', label: 'Messages', badge: totalUnread },
+    { type: 'tab',   name: 'Home',           icon: 'home-outline',        iconActive: 'home',        label: 'Home'      },
+    { type: 'stack', name: 'CommunityPosts', icon: 'people-outline',      iconActive: 'people',      label: 'Community' },
     { type: 'fab' },
-    { type: 'tab', name: 'Profile', icon: 'person-outline',      iconActive: 'person',      label: 'Profile'                  },
+    { type: 'tab',   name: 'Chat',           icon: 'chatbubbles-outline', iconActive: 'chatbubbles', label: 'Messages', badge: totalUnread },
+    { type: 'tab',   name: 'Profile',        icon: 'person-outline',      iconActive: 'person',      label: 'Profile'   },
   ];
 
   return (
-    <Animated.View style={{ transform: [{ translateY: tabTranslate }] }}>
+    <Animated.View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, transform: [{ translateY: tabTranslate }] }}>
       <View style={s.tabBar}>
         {allTabs.map((item) => {
           if (item.type === 'fab') {
@@ -104,6 +107,21 @@ function CustomTabBar({ state, navigation }) {
                   <Ionicons name="add" size={20} color="white" />
                 </View>
                 <Text style={s.fabLabel}>Post</Text>
+              </TouchableOpacity>
+            );
+          }
+          if (item.type === 'stack') {
+            return (
+              <TouchableOpacity
+                key={item.name}
+                style={s.tabItem}
+                onPress={() => navigation.navigate(item.name)}
+                activeOpacity={0.7}
+              >
+                <View style={s.iconWrap}>
+                  <Ionicons name={item.icon} size={22} color={C.c35} />
+                </View>
+                <Text style={s.tabLabel}>{item.label}</Text>
               </TouchableOpacity>
             );
           }
@@ -245,6 +263,7 @@ export default function AppNavigator() {
         <Stack.Screen name="EditJob"             component={EditJobScreen} />
         <Stack.Screen name="EditHousing"         component={EditHousingScreen} />
         <Stack.Screen name="AllListings"         component={AllListingsScreen} />
+        <Stack.Screen name="CommunityPosts"      component={CommunityPostsScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

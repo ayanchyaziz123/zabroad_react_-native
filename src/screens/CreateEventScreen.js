@@ -10,6 +10,7 @@ import * as ImagePicker from 'expo-image-picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useTheme } from '../theme/ThemeContext';
 import { useAuthStore } from '../store/authStore';
+import { sanitizePrice } from '../utils/formatPrice';
 
 const NAVY = '#1B3266';
 
@@ -382,7 +383,7 @@ export default function CreateEventScreen({ navigation }) {
               <Text style={s.fieldLabel}>PRICE</Text>
               <View style={s.inputRow}>
                 <Ionicons name="cash-outline" size={16} color={C.c35} />
-                <TextInput style={s.input} placeholder="e.g. $10" placeholderTextColor={C.c35} value={price} onChangeText={setPrice} keyboardType="decimal-pad" />
+                <TextInput style={s.input} placeholder="e.g. 10" placeholderTextColor={C.c35} value={price} onChangeText={v => setPrice(sanitizePrice(v))} keyboardType="decimal-pad" />
               </View>
             </View>
           )}

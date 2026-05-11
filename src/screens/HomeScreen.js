@@ -18,10 +18,11 @@ import UserAvatar from '../components/UserAvatar';
 import { barsHidden, showBars, hideBars } from '../utils/scrollAnim';
 
 const { width: SCREEN_W } = Dimensions.get('window');
-const CARD_GAP  = 12;
-const H_PAD     = 16;
-const H_CARD_W  = Math.round((SCREEN_W - H_PAD * 2) * 0.43);
-const HEADER_H  = 112;
+const CARD_GAP    = 12;
+const H_PAD       = 16;
+const H_CARD_W    = Math.round((SCREEN_W - H_PAD * 2) * 0.43);
+const POST_CARD_W = Math.round(SCREEN_W * 0.78);
+const HEADER_H    = 112;
 
 // ── City list (mirrors AppTopBar) ─────────────────────────────────────────────
 const CITIES = [
@@ -84,10 +85,10 @@ function getAvatarBg(handle) {
 // ── Category definitions ──────────────────────────────────────────────────────
 
 const CATEGORIES = [
-  { key: 'Jobs',        label: 'Jobs',       emoji: '💼', bg: '#1B4FA8', badge: '#F4A227' },
-  { key: 'Housing',     label: 'Housing',    emoji: '🏠', bg: '#1B4FA8', badge: '#F4A227' },
-  { key: 'Marketplace', label: 'Market',     emoji: '🛒', bg: '#E8871E', badge: '#fff'    },
-  { key: 'Events',      label: 'Events',     emoji: '🎉', bg: '#7B2FBE', badge: '#F4A227' },
+  { key: 'Jobs',        label: 'Jobs',       emoji: '💼', bg: '#2563EB', badge: '#F4A227' },
+  { key: 'Housing',     label: 'Housing',    emoji: '🏠', bg: '#D97706', badge: '#fff'    },
+  { key: 'Events',      label: 'Events',     emoji: '🎉', bg: '#9333EA', badge: '#F4A227' },
+  { key: 'Marketplace', label: 'Market',     emoji: '🛒', bg: '#16A34A', badge: '#fff'    },
 ];
 
 const TYPE_META = {
@@ -246,132 +247,48 @@ function ListingGridCard({ item, onPress, isCommunity, s }) {
   );
 }
 
-// ── Feed card ─────────────────────────────────────────────────────────────────
+// ── Post preview card (horizontal strip) ─────────────────────────────────────
 
-function FeedCard({ post, navigation, C, s, api, cityCoords }) {
-  const avatarBg  = getAvatarBg(post.author_handle);
-  const postDist  = formatDist(distanceMiles(cityCoords?.lat, cityCoords?.lng, post.latitude, post.longitude));
-  const [liked,  setLiked]  = useState(post.is_liked  || false);
-  const [likes,  setLikes]  = useState(post.likes_count || 0);
-  const [saved,  setSaved]  = useState(post.is_saved  || false);
-  const heartScale = useRef(new Animated.Value(1)).current;
-
-  async function onLike() {
-    const next = !liked;
-    setLiked(next);
-    setLikes(c => next ? c + 1 : c - 1);
-    Animated.sequence([
-      Animated.spring(heartScale, { toValue: 1.4, useNativeDriver: true, speed: 60, bounciness: 20 }),
-      Animated.spring(heartScale, { toValue: 1,   useNativeDriver: true, speed: 30 }),
-    ]).start();
-    try {
-      const res = await api(`/posts/${post.id}/like/`, { method: 'POST' });
-      setLiked(res.liked);
-      setLikes(res.likes_count);
-    } catch {
-      setLiked(liked);
-      setLikes(c => next ? c - 1 : c + 1);
-    }
-  }
-
-  function handlePress() { navigation.navigate('PostDetail', { post }); }
-
-  const timeStr = formatTime(post.created_at);
-
+function PostPreviewCard({ post, navigation, C, s }) {
   return (
-    <TouchableOpacity style={s.feedCard} onPress={handlePress} activeOpacity={0.92}>
-      {/* Header row */}
-      <View style={s.feedHeader}>
-        <TouchableOpacity
-          onPress={() => post.author_id && navigation.navigate('UserProfile', { userId: post.author_id })}
-          activeOpacity={0.85}
-        >
-          <View style={s.avatarRing}>
-            <UserAvatar
-              uri={post.author_avatar_url}
-              emoji={post.author_avatar}
-              name={post.author_name}
-              size={36}
-              bg={avatarBg}
-            />
-          </View>
-        </TouchableOpacity>
+    <TouchableOpacity
+      style={s.pCard}
+      onPress={() => navigation.navigate('PostDetail', { post })}
+      activeOpacity={0.88}
+    >
+      <View style={s.pCardTop}>
+        <UserAvatar
+          uri={post.author_avatar_url}
+          emoji={post.author_avatar}
+          name={post.author_name}
+          size={26}
+          bg={getAvatarBg(post.author_handle)}
+        />
         <View style={{ flex: 1 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-            <Text style={s.feedName}>{post.author_name}</Text>
-            {post.author_country_flag ? <Text style={{ fontSize: 13 }}>{post.author_country_flag}</Text> : null}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <Text style={s.pCardName} numberOfLines={1}>{post.author_name}</Text>
+            {post.author_country_flag ? <Text style={{ fontSize: 11 }}>{post.author_country_flag}</Text> : null}
           </View>
-          {postDist ? (
-            <Text style={s.feedMeta}>📡 {postDist}</Text>
-          ) : post.location ? (
-            <Text style={s.feedMeta}>📍 {post.location}</Text>
-          ) : null}
+          <Text style={s.pCardTime}>{formatTime(post.created_at)}</Text>
         </View>
-        <TouchableOpacity style={s.moreBtn} onPress={handlePress} activeOpacity={0.7}>
-          <Ionicons name="ellipsis-horizontal" size={20} color={C.c35} />
-        </TouchableOpacity>
       </View>
 
-      {/* Body */}
-      <Text style={s.feedBody} numberOfLines={5}>{post.body}</Text>
+      <Text style={s.pCardBody} numberOfLines={2}>{post.body}</Text>
 
-      {/* Image */}
-      {post.image_url ? (
-        <Image source={{ uri: post.image_url }} style={s.feedImage} resizeMode="cover" />
-      ) : null}
-
-      {/* Topics */}
       {post.topics_list?.length > 0 && (
-        <View style={s.topicsRow}>
-          {post.topics_list.map(t => (
-            <View key={t} style={[s.topicChip, { backgroundColor: C.card2, borderColor: C.border }]}>
-              <Text style={[s.topicChipTxt, { color: C.c35 }]}>#{t}</Text>
-            </View>
+        <View style={s.pCardTopics}>
+          {post.topics_list.slice(0, 2).map(t => (
+            <Text key={t} style={s.pCardTopic}>#{t}</Text>
           ))}
         </View>
       )}
 
-      {/* Footer */}
-      <View style={s.feedFooter}>
-        {/* Replies */}
-        <TouchableOpacity style={s.feedFooterBtn} onPress={handlePress} activeOpacity={0.75}>
-          <Ionicons name="chatbubble-ellipses-outline" size={14} color={C.c35} />
-          <Text style={s.feedFooterTxt}>
-            {post.comments_count > 0 ? `${post.comments_count} replies` : 'Reply'}
-          </Text>
-        </TouchableOpacity>
-
-        <Text style={s.feedFooterDot}>·</Text>
-
-        {/* Likes */}
-        <TouchableOpacity style={s.feedFooterBtn} onPress={onLike} activeOpacity={0.75}>
-          <Animated.View style={{ transform: [{ scale: heartScale }] }}>
-            <Ionicons
-              name={liked ? 'thumbs-up' : 'thumbs-up-outline'}
-              size={14}
-              color={liked ? '#F4A227' : C.c35}
-            />
-          </Animated.View>
-          <Text style={[s.feedFooterTxt, liked && { color: '#F4A227' }]}>
-            {likes > 0 ? `${likes} Helpful` : 'Helpful'}
-          </Text>
-        </TouchableOpacity>
-
-        <Text style={s.feedFooterDot}>·</Text>
-
-        {/* Save */}
-        <TouchableOpacity style={s.feedFooterBtn} onPress={async () => {
-          const next = !saved;
-          setSaved(next);
-          try { await api(`/posts/${post.id}/save/`, { method: 'POST' }); }
-          catch { setSaved(!next); }
-        }} activeOpacity={0.75}>
-          <Ionicons name={saved ? 'bookmark' : 'bookmark-outline'} size={14} color={saved ? '#3B8BF7' : C.c35} />
-          <Text style={[s.feedFooterTxt, saved && { color: '#3B8BF7' }]}>{saved ? 'Saved' : 'Save'}</Text>
-        </TouchableOpacity>
-
-        <View style={{ flex: 1 }} />
-        <Text style={s.feedTimeTxt}>{timeStr}</Text>
+      <View style={s.pCardFooter}>
+        <Ionicons name="chatbubble-ellipses-outline" size={11} color={C.c35} />
+        <Text style={s.pCardStat}>{post.comments_count || 0}</Text>
+        <Text style={s.pCardDot}>·</Text>
+        <Ionicons name="thumbs-up-outline" size={11} color={C.c35} />
+        <Text style={s.pCardStat}>{post.likes_count || 0}</Text>
       </View>
     </TouchableOpacity>
   );
@@ -400,9 +317,7 @@ export default function HomeScreen({ navigation }) {
   const [nextEvent,     setNextEvent]     = useState(null);
   const [activeScope,   setActiveScope]   = useState('country');
   const [posts,         setPosts]         = useState([]);
-  const [loading,       setLoading]       = useState(true);
   const [refreshing,    setRefreshing]    = useState(false);
-  const [fetchError,    setFetchError]    = useState('');
   const [cityModal,      setCityModal]     = useState(false);
   const [browseModal,    setBrowseModal]   = useState(false);
 
@@ -423,6 +338,7 @@ export default function HomeScreen({ navigation }) {
     }
   }, []);
 
+  const firstName      = authUser?.profile?.full_name?.split(' ')[0] || authUser?.username || '';
   const homeCountry    = authUser?.profile?.home_country || '';
   const countryFlag    = authUser?.profile?.country_flag || authUser?.profile?.home_country_flag || '';
   const cityShort      = currentCity.split(',')[0] || 'Set location';
@@ -437,8 +353,8 @@ export default function HomeScreen({ navigation }) {
     const cLng = cityCoords?.lng ?? null;
     const dist = (itemLat, itemLng) => distanceMiles(cLat, cLng, itemLat, itemLng);
 
-    const j = jobs.slice(0, 6).map(i => ({ ...i, _type: 'job',     sub: i.company,       distanceMi: dist(i.lat, i.lng) }));
-    const h = listings.slice(0, 6).map(i => ({ ...i, _type: 'housing', sub: i.price, hot: i.featured || false, distanceMi: dist(i.lat, i.lng) }));
+    const j = jobs.slice(0, 6).map(i => ({ ...i, _type: 'job',     sub: i.company,       distanceMi: dist(i.latitude, i.longitude) }));
+    const h = listings.slice(0, 6).map(i => ({ ...i, _type: 'housing', sub: i.price, hot: i.is_featured || false, distanceMi: dist(i.latitude, i.longitude) }));
     const m = marketPreview.slice(0, 6).map(i => ({
       ...i, id: String(i.id), _type: 'market',
       sub: i.price || null,
@@ -469,18 +385,12 @@ export default function HomeScreen({ navigation }) {
     return parts.length ? `/posts/?${parts.join('&')}` : '/posts/';
   }, [homeCountry, currentCity, gpsLat, gpsLng]);
 
-  const fetchPosts = useCallback(async (scope, isRefresh = false) => {
-    if (!isRefresh) setLoading(true);
-    setFetchError('');
+  const fetchPosts = useCallback(async (scope) => {
     try {
       const data = await api(buildUrl(scope));
       setPosts(Array.isArray(data) ? data : (data.results || []));
-    } catch (e) {
-      setFetchError(e.message || 'Failed to load posts.');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
+    } catch {}
+    finally { setRefreshing(false); }
   }, [api, buildUrl]);
 
   useFocusEffect(
@@ -587,14 +497,14 @@ export default function HomeScreen({ navigation }) {
           <TouchableOpacity style={s.locBar} onPress={() => setCityModal(true)} activeOpacity={0.8}>
             <Ionicons name="location-sharp" size={13} color="#F4A227" />
             <Text style={s.locBarTxt} numberOfLines={1}>{currentCity || 'Set location'}</Text>
-            <Ionicons name="chevron-down" size={11} color="rgba(255,255,255,0.45)" />
+            <Ionicons name="chevron-down" size={11} color={C.c35} />
           </TouchableOpacity>
           <View style={s.headerRight}>
             <TouchableOpacity style={s.headerIconBtn} onPress={() => navigation.navigate('Search')} activeOpacity={0.8}>
-              <Ionicons name="search-outline" size={18} color="#fff" />
+              <Ionicons name="search-outline" size={18} color={C.cream} />
             </TouchableOpacity>
             <TouchableOpacity style={s.headerIconBtn} onPress={() => navigation.navigate('Notifications')} activeOpacity={0.8}>
-              <Ionicons name="notifications-outline" size={18} color="#fff" />
+              <Ionicons name="notifications-outline" size={18} color={C.cream} />
               {unreadCount > 0 && (
                 <View style={s.notifDot}>
                   <Text style={s.notifDotTxt}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
@@ -602,7 +512,7 @@ export default function HomeScreen({ navigation }) {
               )}
             </TouchableOpacity>
             <TouchableOpacity style={s.headerIconBtn} onPress={() => navigation.navigate('AIAssistant')} activeOpacity={0.85}>
-              <Ionicons name="hardware-chip-outline" size={18} color="#fff" />
+              <Ionicons name="hardware-chip-outline" size={18} color={C.cream} />
             </TouchableOpacity>
           </View>
         </View>
@@ -633,11 +543,19 @@ export default function HomeScreen({ navigation }) {
       <ScrollView
         style={s.scroll}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingTop: HEADER_H, paddingBottom: 32 }}
+        contentContainerStyle={{ paddingTop: HEADER_H, paddingBottom: insets.bottom + 70 }}
         onScroll={handleScroll}
         scrollEventThrottle={16}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#3B8BF7" />}
       >
+
+        {/* ── GREETING ─────────────────────────────────────────── */}
+        {firstName ? (
+          <View style={s.greetingWrap}>
+            <Text style={s.greetingHi}>Hey, {firstName} 👋</Text>
+            <Text style={s.greetingBy}>What are you looking for today?</Text>
+          </View>
+        ) : null}
 
         {/* ── CATEGORY ICONS ──────────────────────────────────── */}
         <View style={s.catRow}>
@@ -656,127 +574,55 @@ export default function HomeScreen({ navigation }) {
           ))}
         </View>
 
-          {/* ── UPCOMING EVENT ────────────────────────────────── */}
-          {nextEvent && (() => {
-            const evtDate = new Date(nextEvent.date);
-            const dateStr = evtDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-            const timeStr = evtDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-            const catColors = { legal: '#3B8BF7', jobs: '#F4A227', community: '#28D99E', health: '#28D99E', cultural: '#A855F7', networking: '#3B8BF7' };
-            const catEmojis = { legal: '⚖️', jobs: '💼', community: '🤝', health: '🧠', cultural: '🎉', networking: '🌐' };
-            const color  = catColors[nextEvent.category] || '#3B8BF7';
-            const emoji  = catEmojis[nextEvent.category] || '🗓';
-            return (
-              <View style={[s.section, { marginTop: 16 }]}>
-                <View style={s.sectionHdr}>
-                  <Text style={s.sectionTitle}>🗓 Upcoming Event</Text>
-                  <TouchableOpacity style={s.seeAllBtn} onPress={() => navigation.navigate('Events')} activeOpacity={0.75}>
-                    <Text style={s.seeAllTxt}>See all</Text>
-                    <Ionicons name="chevron-forward" size={13} color="#3B8BF7" />
-                  </TouchableOpacity>
-                </View>
-                <TouchableOpacity
-                  style={[s.eventCard, { borderColor: color + '44' }]}
-                  onPress={() => navigation.navigate('EventDetail', { event: nextEvent })}
-                  activeOpacity={0.88}
-                >
-                  {/* ── Horizontal split: left column | right map ── */}
-                  <View style={s.eventBody}>
-
-                    {/* LEFT: image on top, info below */}
-                    <View style={s.eventBodyLeft}>
-                      {/* Image */}
-                      <View style={s.eventImgWrap}>
-                        {nextEvent.image_url ? (
-                          <Image source={{ uri: nextEvent.image_url }} style={s.eventImg} resizeMode="cover" />
-                        ) : (
-                          <View style={[s.eventImgPlaceholder, { backgroundColor: color + '22' }]}>
-                            <Text style={{ fontSize: 24 }}>{emoji}</Text>
-                          </View>
-                        )}
-                        {/* badges */}
-                        <View style={s.eventImgOverlay}>
-                          <View style={[s.eventCatChip, { backgroundColor: color }]}>
-                            <Text style={[s.eventCatTxt, { color: '#fff' }]}>{nextEvent.category?.toUpperCase()}</Text>
-                          </View>
-                          <View style={[s.freePill, { backgroundColor: nextEvent.is_free ? '#28D99E' : '#F4A227' }]}>
-                            <Text style={{ fontSize: 8, fontWeight: '800', color: '#fff' }}>
-                              {nextEvent.is_free ? 'FREE' : (nextEvent.price || 'PAID')}
-                            </Text>
-                          </View>
-                        </View>
-                      </View>
-
-                      {/* Info */}
-                      <View style={s.eventInfo}>
-                        <Text style={[s.eventImgTitle, { color: C.cream }]} numberOfLines={2}>
-                          {nextEvent.title}
-                        </Text>
-                        <View style={s.eventChipRow}>
-                          <View style={[s.eventInfoChip, { backgroundColor: C.card2 }]}>
-                            <Ionicons name="calendar-outline" size={9} color={color} />
-                            <Text style={[s.eventInfoTxt, { color: C.c60 }]}>{dateStr}</Text>
-                          </View>
-                          <View style={[s.eventInfoChip, { backgroundColor: C.card2 }]}>
-                            <Ionicons name="time-outline" size={9} color={color} />
-                            <Text style={[s.eventInfoTxt, { color: C.c60 }]}>{timeStr}</Text>
-                          </View>
-                        </View>
-                        <View style={s.eventRsvpRow}>
-                          <Text style={[s.eventAttendees, { color: C.c35 }]}>{nextEvent.rsvp_count} going</Text>
-                          <TouchableOpacity
-                            style={[s.rsvpPill, { backgroundColor: color }]}
-                            onPress={() => navigation.navigate('EventDetail', { event: nextEvent })}
-                            activeOpacity={0.85}
-                          >
-                            <Text style={s.rsvpPillTxt}>RSVP →</Text>
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                    </View>
-
-                    {/* RIGHT: full-height map */}
-                    <View style={s.eventMapWrap}>
-                      {nextEvent.latitude != null && nextEvent.longitude != null ? (
-                        <MapView
-                          style={s.eventMap}
-                          region={{
-                            latitude:      Number(nextEvent.latitude),
-                            longitude:     Number(nextEvent.longitude),
-                            latitudeDelta:  0.01,
-                            longitudeDelta: 0.01,
-                          }}
-                          scrollEnabled={false}
-                          zoomEnabled={false}
-                          pitchEnabled={false}
-                          rotateEnabled={false}
-                          pointerEvents="none"
-                        >
-                          <Marker coordinate={{ latitude: Number(nextEvent.latitude), longitude: Number(nextEvent.longitude) }} />
-                        </MapView>
-                      ) : (
-                        <View style={[s.eventMapPlaceholder, { backgroundColor: color + '15' }]}>
-                          <Ionicons name="location" size={20} color={color} />
-                          <Text style={[s.eventMapLocTxt, { color: C.c35 }]} numberOfLines={4}>
-                            {nextEvent.location}
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-
+          {/* ── COMMUNITY POSTS STRIP ────────────────────────── */}
+          {posts.length > 0 && (
+            <View style={[s.section, { marginTop: 12 }]}>
+              <View style={s.sectionHdr}>
+                <View style={s.sectionTitleWrap}>
+                  <View style={s.sectionAccent} />
+                  <View>
+                    <Text style={s.sectionTitle}>Community</Text>
+                    <Text style={s.sectionSub}>
+                      {activeScope === 'country' ? (countryFlag ? `${countryFlag} ${homeCountry}` : homeCountry) : '🌍 Everyone'}
+                    </Text>
                   </View>
+                </View>
+                <TouchableOpacity style={s.seeAllBtn} onPress={() => navigation.navigate('CommunityPosts', { scope: activeScope })} activeOpacity={0.75}>
+                  <Text style={s.seeAllTxt}>See all</Text>
+                  <Ionicons name="chevron-forward" size={13} color="#3B8BF7" />
                 </TouchableOpacity>
               </View>
-            );
-          })()}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                decelerationRate="fast"
+                snapToInterval={POST_CARD_W + 10}
+                snapToAlignment="start"
+                contentContainerStyle={{ paddingHorizontal: H_PAD, gap: 10 }}
+              >
+                {posts.slice(0, 8).map(post => (
+                  <PostPreviewCard key={post.id} post={post} navigation={navigation} C={C} s={s} />
+                ))}
+              </ScrollView>
+            </View>
+          )}
 
           {/* ── POPULAR LISTINGS ──────────────────────────────── */}
           <View style={s.section}>
             <View style={s.sectionHdr}>
-              <Text style={s.sectionTitle}>
-                {activeScope === 'country'
-                  ? `${homeCountry || 'Community'} Marketplace`
-                  : cityShort && cityShort !== 'Set location' ? `Near ${cityShort}` : 'Popular Listings'}
-              </Text>
+              <View style={s.sectionTitleWrap}>
+                <View style={s.sectionAccent} />
+                <View>
+                  <Text style={s.sectionTitle}>
+                    {activeScope === 'country'
+                      ? `${homeCountry || 'Community'} Marketplace`
+                      : cityShort && cityShort !== 'Set location' ? `Near ${cityShort}` : 'Popular Listings'}
+                  </Text>
+                  <Text style={s.sectionSub}>
+                    {activeScope === 'country' ? 'From your community' : 'Jobs, housing & more'}
+                  </Text>
+                </View>
+              </View>
               <TouchableOpacity style={s.seeAllBtn} onPress={() => setBrowseModal(true)} activeOpacity={0.75}>
                 <Text style={s.seeAllTxt}>See all</Text>
                 <Ionicons name="chevron-forward" size={13} color="#3B8BF7" />
@@ -821,46 +667,115 @@ export default function HomeScreen({ navigation }) {
             )}
           </View>
 
-          {/* ── COMMUNITY UPDATES ─────────────────────────────── */}
-          <View style={s.section}>
-            <View style={s.sectionHdr}>
-              <Text style={s.sectionTitle}>Community Updates</Text>
-            </View>
-            {loading && (
-              <View style={s.centerState}>
-                <ActivityIndicator size="large" color="#3B8BF7" />
-                <Text style={[s.emptySubtitle, { marginTop: 10 }]}>Loading posts…</Text>
-              </View>
-            )}
-            {!loading && fetchError ? (
-              <View style={s.centerState}>
-                <Text style={{ fontSize: 30 }}>⚠️</Text>
-                <Text style={s.emptyTitle}>{fetchError}</Text>
-                <TouchableOpacity onPress={() => fetchPosts(activeScope)} style={s.retryBtn}>
-                  <Text style={s.retryTxt}>Retry</Text>
+          {/* ── UPCOMING EVENT ────────────────────────────────── */}
+          {nextEvent && (() => {
+            const evtDate = new Date(nextEvent.date);
+            const dateStr = evtDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+            const timeStr = evtDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+            const catColors = { legal: '#3B8BF7', jobs: '#F4A227', community: '#28D99E', health: '#28D99E', cultural: '#A855F7', networking: '#3B8BF7' };
+            const catEmojis = { legal: '⚖️', jobs: '💼', community: '🤝', health: '🧠', cultural: '🎉', networking: '🌐' };
+            const color  = catColors[nextEvent.category] || '#3B8BF7';
+            const emoji  = catEmojis[nextEvent.category] || '🗓';
+            return (
+              <View style={[s.section, { marginTop: 16 }]}>
+                <View style={s.sectionHdr}>
+                  <View style={s.sectionTitleWrap}>
+                    <View style={[s.sectionAccent, { backgroundColor: color }]} />
+                    <View>
+                      <Text style={s.sectionTitle}>Upcoming Event</Text>
+                      <Text style={s.sectionSub}>{dateStr} · {nextEvent.category}</Text>
+                    </View>
+                  </View>
+                  <TouchableOpacity style={s.seeAllBtn} onPress={() => navigation.navigate('Events')} activeOpacity={0.75}>
+                    <Text style={s.seeAllTxt}>See all</Text>
+                    <Ionicons name="chevron-forward" size={13} color="#3B8BF7" />
+                  </TouchableOpacity>
+                </View>
+                <TouchableOpacity
+                  style={[s.eventCard, { borderColor: color + '44' }]}
+                  onPress={() => navigation.navigate('EventDetail', { event: nextEvent })}
+                  activeOpacity={0.88}
+                >
+                  <View style={s.eventBody}>
+                    <View style={s.eventBodyLeft}>
+                      <View style={s.eventImgWrap}>
+                        {nextEvent.image_url ? (
+                          <Image source={{ uri: nextEvent.image_url }} style={s.eventImg} resizeMode="cover" />
+                        ) : (
+                          <View style={[s.eventImgPlaceholder, { backgroundColor: color + '22' }]}>
+                            <Text style={{ fontSize: 24 }}>{emoji}</Text>
+                          </View>
+                        )}
+                        <View style={s.eventImgOverlay}>
+                          <View style={[s.eventCatChip, { backgroundColor: color }]}>
+                            <Text style={[s.eventCatTxt, { color: '#fff' }]}>{nextEvent.category?.toUpperCase()}</Text>
+                          </View>
+                          <View style={[s.freePill, { backgroundColor: nextEvent.is_free ? '#28D99E' : '#F4A227' }]}>
+                            <Text style={{ fontSize: 8, fontWeight: '800', color: '#fff' }}>
+                              {nextEvent.is_free ? 'FREE' : (nextEvent.price || 'PAID')}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+                      <View style={s.eventInfo}>
+                        <Text style={[s.eventImgTitle, { color: C.cream }]} numberOfLines={2}>
+                          {nextEvent.title}
+                        </Text>
+                        <View style={s.eventChipRow}>
+                          <View style={[s.eventInfoChip, { backgroundColor: C.card2 }]}>
+                            <Ionicons name="calendar-outline" size={9} color={color} />
+                            <Text style={[s.eventInfoTxt, { color: C.c60 }]}>{dateStr}</Text>
+                          </View>
+                          <View style={[s.eventInfoChip, { backgroundColor: C.card2 }]}>
+                            <Ionicons name="time-outline" size={9} color={color} />
+                            <Text style={[s.eventInfoTxt, { color: C.c60 }]}>{timeStr}</Text>
+                          </View>
+                        </View>
+                        <View style={s.eventRsvpRow}>
+                          <Text style={[s.eventAttendees, { color: C.c35 }]}>{nextEvent.rsvp_count} going</Text>
+                          <TouchableOpacity
+                            style={[s.rsvpPill, { backgroundColor: color }]}
+                            onPress={() => navigation.navigate('EventDetail', { event: nextEvent })}
+                            activeOpacity={0.85}
+                          >
+                            <Text style={s.rsvpPillTxt}>RSVP →</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    </View>
+                    <View style={s.eventMapWrap}>
+                      {nextEvent.latitude != null && nextEvent.longitude != null ? (
+                        <MapView
+                          style={s.eventMap}
+                          region={{
+                            latitude:      Number(nextEvent.latitude),
+                            longitude:     Number(nextEvent.longitude),
+                            latitudeDelta:  0.01,
+                            longitudeDelta: 0.01,
+                          }}
+                          scrollEnabled={false}
+                          zoomEnabled={false}
+                          pitchEnabled={false}
+                          rotateEnabled={false}
+                          pointerEvents="none"
+                        >
+                          <Marker coordinate={{ latitude: Number(nextEvent.latitude), longitude: Number(nextEvent.longitude) }} />
+                        </MapView>
+                      ) : (
+                        <View style={[s.eventMapPlaceholder, { backgroundColor: color + '15' }]}>
+                          <Ionicons name="location" size={20} color={color} />
+                          <Text style={[s.eventMapLocTxt, { color: C.c35 }]} numberOfLines={4}>
+                            {nextEvent.location}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  </View>
                 </TouchableOpacity>
               </View>
-            ) : null}
-            {!loading && !fetchError && posts.length === 0 && (
-              <View style={s.centerState}>
-                <Text style={{ fontSize: 36 }}>📭</Text>
-                <Text style={s.emptyTitle}>No posts yet</Text>
-                <Text style={s.emptySubtitle}>
-                  {activeScope === 'country'
-                    ? `No posts from ${homeCountry} community yet.`
-                    : cityShort && cityShort !== 'Set location'
-                      ? `No posts near ${cityShort} yet. Be the first!`
-                      : 'No posts yet. Be the first!'}
-                </Text>
-                <TouchableOpacity onPress={() => navigation.navigate('CreatePost')} style={s.retryBtn}>
-                  <Text style={s.retryTxt}>Create a post</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-            {!loading && posts.map(post => (
-              <FeedCard key={post.id} post={post} navigation={navigation} C={C} s={s} api={api} cityCoords={cityCoords} />
-            ))}
-          </View>
+            );
+          })()}
+
 
         </ScrollView>
 
@@ -875,10 +790,10 @@ const getStyles = (C) => StyleSheet.create({
   scroll: { flex: 1 },
 
   // ── Header ──────────────────────────────────────────────────────────────────
-  headerWrap: { backgroundColor: '#1B3266', paddingBottom: 12 },
+  headerWrap: { backgroundColor: C.bg, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border, paddingBottom: 12 },
 
   locBar:    { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 },
-  locBarTxt: { fontSize: 13, fontWeight: '700', color: '#fff', letterSpacing: -0.1 },
+  locBarTxt: { fontSize: 13, fontWeight: '700', color: C.cream, letterSpacing: -0.1 },
 
   // Row 1
   headerRow: {
@@ -886,32 +801,32 @@ const getStyles = (C) => StyleSheet.create({
     paddingHorizontal: 14, paddingTop: 10, paddingBottom: 8,
   },
   headerRight:    { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  headerIconBtn:  { width: 34, height: 34, borderRadius: 11, backgroundColor: 'rgba(255,255,255,0.12)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
+  headerIconBtn:  { width: 34, height: 34, borderRadius: 11, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, alignItems: 'center', justifyContent: 'center' },
   notifDot:       { position: 'absolute', top: -3, right: -3, minWidth: 15, height: 15, borderRadius: 8, backgroundColor: '#FF3B30', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2 },
   notifDotTxt:    { fontSize: 8, fontWeight: '800', color: '#fff' },
-  avatarBorder:   { borderRadius: 17, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.35)', overflow: 'hidden' },
+  avatarBorder:   { borderRadius: 17, borderWidth: 1.5, borderColor: C.border, overflow: 'hidden' },
   // Segmented scope control
-  segmentWrap:      { flexDirection: 'row', marginHorizontal: 14, marginBottom: 10, backgroundColor: 'rgba(0,0,0,0.2)', borderRadius: 14, padding: 3 },
+  segmentWrap:      { flexDirection: 'row', marginHorizontal: 14, marginBottom: 10, backgroundColor: C.card, borderRadius: 14, padding: 3, borderWidth: 1, borderColor: C.border },
   segmentBtn:       { flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: 11 },
-  segmentBtnActive: { backgroundColor: '#fff' },
-  segmentTxt:       { fontSize: 13, fontWeight: '700', color: 'rgba(255,255,255,0.55)' },
-  segmentTxtActive: { color: '#1B3266' },
+  segmentBtnActive: { backgroundColor: C.vividD },
+  segmentTxt:       { fontSize: 13, fontWeight: '700', color: C.c35 },
+  segmentTxtActive: { color: C.vivid },
 
   // ── Category bar ─────────────────────────────────────────────────────────────
   catRow: {
     flexDirection: 'row', justifyContent: 'space-around',
-    paddingHorizontal: H_PAD, paddingVertical: 12,
+    paddingHorizontal: H_PAD, paddingTop: 6, paddingBottom: 10,
     backgroundColor: C.bg,
   },
   catItem:   { alignItems: 'center', gap: 5, flex: 1 },
   catIconBox:{
-    width: 48, height: 48, borderRadius: 15,
+    width: 44, height: 44, borderRadius: 14,
     alignItems: 'center', justifyContent: 'center',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.14, shadowRadius: 4,
-    elevation: 3,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.18, shadowRadius: 6,
+    elevation: 4,
   },
-  catEmoji:  { fontSize: 22 },
-  catLabel:  { fontSize: 11, fontWeight: '700', textAlign: 'center' },
+  catEmoji:  { fontSize: 20 },
+  catLabel:  { fontSize: 10, fontWeight: '700', textAlign: 'center', letterSpacing: 0.1 },
 
   // ── Promo banners ─────────────────────────────────────────────────────────────
   bannersWrap: { paddingHorizontal: H_PAD, gap: 10, marginBottom: 4 },
@@ -925,12 +840,20 @@ const getStyles = (C) => StyleSheet.create({
   bannerSub:   { fontSize: 13, color: 'rgba(255,255,255,0.85)' },
   bannerEmoji: { fontSize: 34, marginLeft: 8 },
 
+  // ── Greeting ─────────────────────────────────────────────────────────────────
+  greetingWrap: { paddingHorizontal: H_PAD, paddingTop: 10, paddingBottom: 2 },
+  greetingHi:   { fontSize: 23, fontWeight: '800', color: C.cream, letterSpacing: -0.5 },
+  greetingBy:   { fontSize: 13, color: C.c35, marginTop: 3 },
+
   // ── Section ───────────────────────────────────────────────────────────────────
-  section:      { marginTop: 24 },
+  section:      { marginTop: 28 },
   sectionHdr:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: H_PAD, marginBottom: 14 },
-  sectionTitle: { fontSize: 17, fontWeight: '800', color: C.cream },
-  seeAllBtn:    { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  seeAllTxt:    { fontSize: 13, fontWeight: '700', color: '#3B8BF7' },
+  sectionTitle:    { fontSize: 17, fontWeight: '900', color: C.cream, letterSpacing: -0.3 },
+  sectionTitleWrap:{ flexDirection: 'row', alignItems: 'center', gap: 8 },
+  sectionAccent:   { width: 3, height: 16, borderRadius: 2, backgroundColor: '#3B8BF7' },
+  sectionSub:      { fontSize: 10, color: C.c35, marginTop: 2 },
+  seeAllBtn:       { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#3B8BF715', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
+  seeAllTxt:       { fontSize: 12, fontWeight: '700', color: '#3B8BF7' },
 
   // ── Listing grid (2-row horizontal scroll) ────────────────────────────────────
   hGridContent: { paddingHorizontal: H_PAD, gap: CARD_GAP, flexDirection: 'row', alignItems: 'flex-start' },
@@ -989,8 +912,7 @@ const getStyles = (C) => StyleSheet.create({
   feedTimeTxt:    { fontSize: 11, color: C.c35 },
 
   // ── Upcoming event card ───────────────────────────────────────────────────────
-  eventCard:           { marginHorizontal: H_PAD, borderRadius: 14, borderWidth: 1, overflow: 'hidden', backgroundColor: C.card, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 6, elevation: 2 },
-  eventImgWrap:        { width: '100%', height: 72, position: 'relative' },
+  eventCard:           { marginHorizontal: H_PAD, borderRadius: 16, borderWidth: 1, overflow: 'hidden', backgroundColor: C.card, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 8, elevation: 3 },
   eventImg:            { width: '100%', height: '100%' },
   eventImgPlaceholder: { width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' },
   eventImgOverlay:     { position: 'absolute', top: 6, left: 6, right: 6, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
@@ -1027,6 +949,18 @@ const getStyles = (C) => StyleSheet.create({
   retryTxt:      { fontSize: 13, fontWeight: '700', color: 'white' },
 
   iconBtn: { width: 34, height: 34, borderRadius: 11, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, alignItems: 'center', justifyContent: 'center' },
+
+  // ── Post preview strip ────────────────────────────────────────────────────
+  pCard:        { width: POST_CARD_W, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 14, padding: 10, gap: 6 },
+  pCardTop:     { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  pCardName:    { fontSize: 12, fontWeight: '700', color: C.cream },
+  pCardTime:    { fontSize: 10, color: C.c35 },
+  pCardBody:    { fontSize: 12, color: C.c60, lineHeight: 17 },
+  pCardTopics:  { flexDirection: 'row', gap: 5 },
+  pCardTopic:   { fontSize: 10, fontWeight: '600', color: '#3B8BF7' },
+  pCardFooter:  { flexDirection: 'row', alignItems: 'center', gap: 4, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.border, paddingTop: 6 },
+  pCardStat:    { fontSize: 11, fontWeight: '600', color: C.c35 },
+  pCardDot:     { fontSize: 10, color: C.c35 },
 
 });
 

@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../theme/ThemeContext';
 import { useAuthStore } from '../store/authStore';
+import { sanitizePrice } from '../utils/formatPrice';
 import { HOUSING_CATEGORIES } from './HousingScreen';
 
 const GOLD     = '#F5A623';
@@ -57,7 +58,7 @@ export default function EditHousingScreen({ route, navigation }) {
     if (!result.canceled) setImage(result.assets[0]);
   }
 
-  const canSave = title.trim().length > 2 && price.trim().length > 0 &&
+  const canSave = title.trim().length > 2 && parseFloat(price) > 0 &&
                   location.trim().length > 1 && desc.trim().length >= 10;
 
   async function handleSave() {
@@ -118,7 +119,7 @@ export default function EditHousingScreen({ route, navigation }) {
             <Text style={s.fieldLabel}>MONTHLY RENT *</Text>
             <View style={s.inputRow}>
               <Ionicons name="cash-outline" size={16} color={C.c35} />
-              <TextInput style={s.input} placeholder="e.g. $1,200/mo" placeholderTextColor={C.c35} value={price} onChangeText={setPrice} />
+              <TextInput style={s.input} placeholder="e.g. 1200" placeholderTextColor={C.c35} value={price} onChangeText={v => setPrice(sanitizePrice(v))} keyboardType="decimal-pad" />
             </View>
           </View>
 

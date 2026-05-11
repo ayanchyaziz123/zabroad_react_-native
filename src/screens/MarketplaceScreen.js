@@ -12,7 +12,6 @@ import { useAuthStore } from '../store/authStore';
 import { useLocationStore } from '../store/locationStore';
 import { SUGGESTED_CITIES } from '../components/AppTopBar';
 
-const NAVY       = '#1B3266';
 const ACCENT     = '#00B4D8';
 const ACCENT_DIM = '#00B4D81A';
 
@@ -213,7 +212,7 @@ export default function MarketplaceScreen({ navigation }) {
       {/* Header */}
       <View style={s.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={s.backBtn} activeOpacity={0.8}>
-          <Ionicons name="chevron-back" size={20} color="#fff" />
+          <Ionicons name="chevron-back" size={20} color={C.cream} />
         </TouchableOpacity>
 
         {/* Title + city picker */}
@@ -233,10 +232,10 @@ export default function MarketplaceScreen({ navigation }) {
           onPress={() => setShowMine(v => !v)}
           activeOpacity={0.8}
         >
-          <Ionicons name="person" size={15} color={showMine ? ACCENT : 'rgba(255,255,255,0.6)'} />
+          <Ionicons name="person" size={15} color={showMine ? ACCENT : C.c35} />
         </TouchableOpacity>
         <TouchableOpacity style={s.addBtn} onPress={() => navigation.navigate('PostMarketplace')} activeOpacity={0.85}>
-          <Ionicons name="add" size={18} color="#fff" />
+          <Ionicons name="add" size={18} color={C.cream} />
         </TouchableOpacity>
       </View>
 
@@ -247,7 +246,7 @@ export default function MarketplaceScreen({ navigation }) {
           onPress={() => handleScope('all')}
           activeOpacity={0.75}
         >
-          <Ionicons name="globe-outline" size={13} color={scope === 'all' ? '#fff' : 'rgba(255,255,255,0.5)'} />
+          <Ionicons name="globe-outline" size={13} color={scope === 'all' ? C.cream : C.c35} />
           <Text style={[s.scopePillTxt, scope === 'all' && s.scopePillTxtActive]}>Everyone nearby</Text>
         </TouchableOpacity>
         {homeCountry ? (
@@ -426,14 +425,14 @@ export default function MarketplaceScreen({ navigation }) {
 const getStyles = (C) => StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
 
-  header:    { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingTop: 10, paddingBottom: 10, backgroundColor: NAVY },
-  backBtn:   { width: 34, height: 34, borderRadius: 11, backgroundColor: 'rgba(255,255,255,0.12)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  title:     { fontSize: 15, fontWeight: '800', color: '#fff' },
+  header:    { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingTop: 10, paddingBottom: 10, backgroundColor: C.bg, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border },
+  backBtn:   { width: 34, height: 34, borderRadius: 11, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  title:     { fontSize: 15, fontWeight: '800', color: C.cream },
   cityRow:   { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 1 },
   cityTxt:   { fontSize: 11, fontWeight: '600', flex: 1 },
-  iconBtn:   { width: 32, height: 32, backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' },
+  iconBtn:   { width: 32, height: 32, backgroundColor: C.card, borderRadius: 10, borderWidth: 1, borderColor: C.border, alignItems: 'center', justifyContent: 'center' },
   flagEmoji: { fontSize: 15 },
-  addBtn:    { width: 34, height: 34, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 11, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)', alignItems: 'center', justifyContent: 'center' },
+  addBtn:    { width: 34, height: 34, backgroundColor: C.card, borderRadius: 11, borderWidth: 1, borderColor: C.border, alignItems: 'center', justifyContent: 'center' },
 
   cityOverlay:  { position: 'absolute', top: 0, left: -1000, right: -1000, bottom: -2000, zIndex: 49 },
   cityDropdown: { position: 'absolute', top: 62, left: H_PAD, right: H_PAD, zIndex: 50, borderWidth: 1, borderRadius: 18, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 12 },
@@ -442,11 +441,11 @@ const getStyles = (C) => StyleSheet.create({
   cityName:     { fontSize: 14, fontWeight: '700' },
   citySub:      { fontSize: 11, marginTop: 1 },
 
-  scopeRow:         { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingBottom: 10, backgroundColor: NAVY },
-  scopePill:        { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.08)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.14)' },
-  scopePillActive:  { backgroundColor: 'rgba(255,255,255,0.22)', borderColor: 'rgba(255,255,255,0.4)' },
-  scopePillTxt:     { fontSize: 11, fontWeight: '600', color: 'rgba(255,255,255,0.5)' },
-  scopePillTxtActive: { color: '#fff', fontWeight: '700' },
+  scopeRow:         { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingBottom: 10, backgroundColor: C.bg },
+  scopePill:        { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: C.card, borderWidth: 1, borderColor: C.border },
+  scopePillActive:  { backgroundColor: ACCENT + '22', borderColor: ACCENT + '55' },
+  scopePillTxt:     { fontSize: 11, fontWeight: '600', color: C.c35 },
+  scopePillTxtActive: { color: ACCENT, fontWeight: '700' },
 
   searchWrap:  { paddingHorizontal: H_PAD, paddingTop: 10, marginBottom: 8 },
   searchBox:   { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 14, paddingHorizontal: 14, height: 42 },

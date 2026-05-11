@@ -26,14 +26,13 @@ const TOPICS = [
 ];
 
 const SMART_ROUTES = [
-  { key: 'job',      icon: 'briefcase-outline',        label: 'Post a Job',       sub: 'Hiring with visa sponsorship', color: '#3B8BF7', route: 'PostJob'      },
-  { key: 'housing',  icon: 'home-outline',             label: 'List Housing',     sub: 'Room, apartment or sublet',    color: '#F4A227', route: 'PostHousing'  },
-  { key: 'market',   icon: 'storefront-outline',       label: 'Marketplace',      sub: 'Sell something to community',  color: '#28D99E', route: 'PostMarketplace' },
-  { key: 'attorney', icon: 'shield-checkmark-outline', label: 'List as Attorney', sub: 'Help immigrants legally',      color: '#9B72EF', route: 'ListAttorney' },
+  { key: 'job',    icon: 'briefcase-outline',  label: 'Post a Job',   sub: 'Hiring with visa sponsorship', color: '#3B8BF7', route: 'PostJob'         },
+  { key: 'housing',icon: 'home-outline',       label: 'List Housing', sub: 'Room, apartment or sublet',    color: '#F4A227', route: 'PostHousing'     },
+  { key: 'market', icon: 'storefront-outline', label: 'Marketplace',  sub: 'Sell something to community',  color: '#28D99E', route: 'PostMarketplace' },
+  { key: 'events', icon: 'calendar-outline',   label: 'Host an Event',sub: 'Share events with community',  color: '#9B72EF', route: 'CreateEvent'     },
 ];
 
-const MAX_CHARS  = 500;
-const MAX_IMAGES = 4;
+const MAX_CHARS = 500;
 
 export default function CreatePostScreen({ navigation }) {
   const { colors: C }  = useTheme();
@@ -63,27 +62,22 @@ export default function CreatePostScreen({ navigation }) {
     );
 
   const pickImages = async () => {
-    if (images.length >= MAX_IMAGES) {
-      Alert.alert('Limit reached', `You can attach up to ${MAX_IMAGES} images.`);
-      return;
-    }
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission needed', 'Please allow photo access to attach images.');
+      Alert.alert('Permission needed', 'Please allow photo access to attach an image.');
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
-      allowsMultipleSelection: true,
-      selectionLimit: MAX_IMAGES - images.length,
+      allowsMultipleSelection: false,
       quality: 0.85,
     });
     if (!result.canceled) {
-      setImages(prev => [...prev, ...result.assets].slice(0, MAX_IMAGES));
+      setImages([result.assets[0]]);
     }
   };
 
-  const removeImage = (index) => setImages(prev => prev.filter((_, i) => i !== index));
+  const removeImage = () => setImages([]);
 
   const getGpsData = async () => {
     try {
@@ -297,9 +291,6 @@ export default function CreatePostScreen({ navigation }) {
           <View style={[s.toolbar, { borderTopColor: C.border }]}>
             <TouchableOpacity style={[s.toolBtn, { backgroundColor: C.card, borderColor: C.border }]} onPress={pickImages} activeOpacity={0.75}>
               <Ionicons name="image-outline" size={18} color={images.length > 0 ? '#3B8BF7' : C.c35} />
-              {images.length > 0 && (
-                <View style={s.toolBadge}><Text style={s.toolBadgeTxt}>{images.length}</Text></View>
-              )}
             </TouchableOpacity>
             <TouchableOpacity style={[s.toolBtn, { backgroundColor: C.card, borderColor: C.border }]} activeOpacity={0.75}>
               <Ionicons name="at-outline" size={18} color={C.c35} />
@@ -311,21 +302,21 @@ export default function CreatePostScreen({ navigation }) {
             <Text style={[s.charInline, { color: charColor }]}>{charCount}/{MAX_CHARS}</Text>
           </View>
 
-          {/* ── Image previews ──────────────────────────────────────── */}
+          {/* ── Image preview ───────────────────────────────────────── */}
           {images.length > 0 && (
-            <View style={s.imgRow}>
-              {images.map((img, index) => (
-                <View key={index} style={s.imgWrap}>
-                  <Image source={{ uri: img.uri }} style={[s.imgThumb, { backgroundColor: C.card }]} resizeMode="cover" />
-                  <TouchableOpacity
-                    style={s.imgRemove}
-                    onPress={() => removeImage(index)}
-                    hitSlop={{ top: 6, right: 6, bottom: 6, left: 6 }}
-                  >
-                    <Ionicons name="close" size={10} color="#fff" />
-                  </TouchableOpacity>
-                </View>
-              ))}
+            <View style={s.imgWrap}>
+              <Image source={{ uri: images[0].uri }} style={[s.imgPreview, { backgroundColor: C.card }]} resizeMode="cover" />
+              <TouchableOpacity
+                style={s.imgRemove}
+                onPress={removeImage}
+                hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
+              >
+                <Ionicons name="close" size={12} color="#fff" />
+              </TouchableOpacity>
+              <TouchableOpacity style={s.imgChange} onPress={pickImages} activeOpacity={0.8}>
+                <Ionicons name="camera-outline" size={13} color="#fff" />
+                <Text style={s.imgChangeTxt}>Change</Text>
+              </TouchableOpacity>
             </View>
           )}
 
@@ -456,16 +447,15 @@ const getStyles = (C) => StyleSheet.create({
 
   // ── Toolbar ────────────────────────────────────────────────────────────────
   toolbar:    { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth },
-  toolBtn:    { width: 36, height: 36, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center', position: 'relative' },
-  toolBadge:  { position: 'absolute', top: 3, right: 3, width: 13, height: 13, borderRadius: 7, backgroundColor: '#3B8BF7', alignItems: 'center', justifyContent: 'center' },
-  toolBadgeTxt: { fontSize: 7, fontWeight: '800', color: '#fff' },
+  toolBtn:    { width: 36, height: 36, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   charInline: { fontSize: 12, fontWeight: '600' },
 
-  // ── Images ─────────────────────────────────────────────────────────────────
-  imgRow:  { flexDirection: 'row', gap: 10, paddingHorizontal: 16, paddingVertical: 12 },
-  imgWrap: { position: 'relative' },
-  imgThumb:{ width: 76, height: 76, borderRadius: 14 },
-  imgRemove: { position: 'absolute', top: -5, right: -5, width: 20, height: 20, borderRadius: 10, backgroundColor: '#FF4444', alignItems: 'center', justifyContent: 'center' },
+  // ── Image preview ──────────────────────────────────────────────────────────
+  imgWrap:      { marginHorizontal: 16, marginBottom: 12, borderRadius: 16, overflow: 'hidden', position: 'relative' },
+  imgPreview:   { width: '100%', height: 200 },
+  imgRemove:    { position: 'absolute', top: 10, right: 10, width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' },
+  imgChange:    { position: 'absolute', bottom: 10, right: 10, flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 6 },
+  imgChangeTxt: { fontSize: 12, fontWeight: '700', color: '#fff' },
 
   // ── Sections ───────────────────────────────────────────────────────────────
   section:       { paddingHorizontal: 16, paddingVertical: 18 },

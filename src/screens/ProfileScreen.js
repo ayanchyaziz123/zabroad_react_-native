@@ -32,10 +32,18 @@ const COUNTRIES = [
 
 
 const TABS = [
-  { key: 'Posts',    icon: 'grid-outline',     iconActive: 'grid' },
-  { key: 'Saved',    icon: 'bookmark-outline', iconActive: 'bookmark' },
-  { key: 'Settings', icon: 'settings-outline', iconActive: 'settings' },
+  { key: 'Posts',    icon: 'grid-outline',      iconActive: 'grid'      },
+  { key: 'Saved',    icon: 'bookmark-outline',  iconActive: 'bookmark'  },
+  { key: 'Listings', icon: 'pricetag-outline',  iconActive: 'pricetag'  },
+  { key: 'Settings', icon: 'settings-outline',  iconActive: 'settings'  },
 ];
+
+const LISTING_TYPE_META = {
+  job:         { icon: 'briefcase-outline',  color: '#3B8BF7', label: 'Job'     },
+  housing:     { icon: 'home-outline',        color: '#F4A227', label: 'Housing' },
+  marketplace: { icon: 'storefront-outline', color: '#28D99E', label: 'Market'  },
+  event:       { icon: 'calendar-outline',   color: '#A855F7', label: 'Event'   },
+};
 
 function formatTime(iso) {
   if (!iso) return '';
@@ -123,6 +131,53 @@ function PostCard({ post, isOwn, onDelete, navigation, C, s }) {
   );
 }
 
+// ── Saved Listing Card ────────────────────────────────────────────────────────
+function SavedListingCard({ item, navigation, C, s }) {
+  const meta = LISTING_TYPE_META[item.listing_type] || LISTING_TYPE_META.job;
+
+  function handlePress() {
+    if (item.listing_type === 'job')         navigation.navigate('JobDetail',         { job: item });
+    else if (item.listing_type === 'housing') navigation.navigate('HousingDetail',     { listing: item });
+    else if (item.listing_type === 'marketplace') navigation.navigate('MarketplaceDetail', { item });
+    else if (item.listing_type === 'event')  navigation.navigate('EventDetail',        { event: item });
+  }
+
+  const subText = item.company || item.price || '';
+
+  return (
+    <TouchableOpacity
+      style={[s.listingCard, { backgroundColor: C.card, borderColor: C.border }]}
+      onPress={handlePress}
+      activeOpacity={0.88}
+    >
+      <View style={[s.listingIconWrap, { backgroundColor: meta.color + '18' }]}>
+        <Ionicons name={meta.icon} size={22} color={meta.color} />
+      </View>
+      <View style={s.listingInfo}>
+        <View style={s.listingTopRow}>
+          <View style={[s.listingBadge, { backgroundColor: meta.color + '18' }]}>
+            <Text style={[s.listingBadgeTxt, { color: meta.color }]}>{meta.label}</Text>
+          </View>
+          {item.is_boosted ? <Text style={{ fontSize: 12 }}>🔥</Text> : null}
+        </View>
+        <Text style={[s.listingTitle, { color: C.cream }]} numberOfLines={1}>{item.title}</Text>
+        {subText ? (
+          <Text style={[s.listingSub, { color: C.c35 }]} numberOfLines={1}>{subText}</Text>
+        ) : null}
+        {item.location ? (
+          <View style={s.listingLocRow}>
+            <Ionicons name="location-outline" size={11} color={C.c35} />
+            <Text style={[s.listingLoc, { color: C.c35 }]} numberOfLines={1}>{item.location}</Text>
+          </View>
+        ) : null}
+      </View>
+      {item.image_url ? (
+        <Image source={{ uri: item.image_url }} style={s.listingThumb} />
+      ) : null}
+    </TouchableOpacity>
+  );
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function ProfileScreen({ navigation }) {
   const { colors: C } = useTheme();
@@ -132,15 +187,19 @@ export default function ProfileScreen({ navigation }) {
   // ── Tab & content state ───────────────────────────────────────────────────
   const [activeTab,    setActiveTab]    = useState('Posts');
   const [posts,        setPosts]        = useState([]);
-  const [savedPosts,   setSavedPosts]   = useState([]);
-  const [loadingPosts, setLoadingPosts] = useState(false);
-  const [loadingSaved, setLoadingSaved] = useState(false);
-  const [errorPosts,   setErrorPosts]   = useState(null);
-  const [errorSaved,   setErrorSaved]   = useState(null);
-  const [refreshing,   setRefreshing]   = useState(false);
+  const [savedPosts,          setSavedPosts]          = useState([]);
+  const [savedListings,       setSavedListings]       = useState([]);
+  const [loadingPosts,        setLoadingPosts]        = useState(false);
+  const [loadingSaved,        setLoadingSaved]        = useState(false);
+  const [loadingSavedListings, setLoadingSavedListings] = useState(false);
+  const [errorPosts,          setErrorPosts]          = useState(null);
+  const [errorSaved,          setErrorSaved]          = useState(null);
+  const [errorSavedListings,  setErrorSavedListings]  = useState(null);
+  const [refreshing,          setRefreshing]          = useState(false);
 
   // Track which tabs have been fetched so we don't refetch on tab switch
-  const hasFetchedSaved = useRef(false);
+  const hasFetchedSaved     = useRef(false);
+  const hasFetchedListings  = useRef(false);
 
   // ── Photo state ───────────────────────────────────────────────────────────
   const [avatarUri,       setAvatarUri]       = useState(null);
@@ -205,26 +264,44 @@ export default function ProfileScreen({ navigation }) {
     }
   }, [api]);
 
+  const fetchSavedListings = useCallback(async () => {
+    setLoadingSavedListings(true);
+    setErrorSavedListings(null);
+    try {
+      const data = await api('/listings/saved/');
+      setSavedListings(Array.isArray(data) ? data : (data.results ?? []));
+    } catch (e) {
+      setErrorSavedListings(e.message || 'Could not load saved listings.');
+    } finally {
+      setLoadingSavedListings(false);
+    }
+  }, [api]);
+
   // Refresh posts whenever the profile screen gains focus
   useFocusEffect(useCallback(() => {
     fetchMyPosts();
   }, [fetchMyPosts]));
 
-  // Lazy-load saved posts on first visit to that tab
+  // Lazy-load tabs on first visit
   useEffect(() => {
     if (activeTab === 'Saved' && !hasFetchedSaved.current) {
       hasFetchedSaved.current = true;
       fetchSavedPosts();
     }
-  }, [activeTab, fetchSavedPosts]);
+    if (activeTab === 'Listings' && !hasFetchedListings.current) {
+      hasFetchedListings.current = true;
+      fetchSavedListings();
+    }
+  }, [activeTab, fetchSavedPosts, fetchSavedListings]);
 
   // Pull-to-refresh
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    if (activeTab === 'Posts') await fetchMyPosts();
-    if (activeTab === 'Saved') await fetchSavedPosts();
+    if (activeTab === 'Posts')    await fetchMyPosts();
+    if (activeTab === 'Saved')    await fetchSavedPosts();
+    if (activeTab === 'Listings') await fetchSavedListings();
     setRefreshing(false);
-  }, [activeTab, fetchMyPosts, fetchSavedPosts]);
+  }, [activeTab, fetchMyPosts, fetchSavedPosts, fetchSavedListings]);
 
   // ── Delete post (optimistic) ──────────────────────────────────────────────
   const handleDeletePost = useCallback(async (postId) => {
@@ -505,9 +582,13 @@ export default function ProfileScreen({ navigation }) {
             <Text style={[s.statNum, { color: C.cream }]}>{loadingPosts ? '—' : posts.length}</Text>
             <Text style={[s.statLabel, { color: C.c35 }]}>Posts</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={s.statItem} onPress={() => setActiveTab('Saved')} activeOpacity={0.8}>
+          <TouchableOpacity style={[s.statItem, { borderRightWidth: 1, borderRightColor: C.border }]} onPress={() => setActiveTab('Saved')} activeOpacity={0.8}>
             <Text style={[s.statNum, { color: C.cream }]}>{loadingSaved ? '—' : savedPosts.length}</Text>
             <Text style={[s.statLabel, { color: C.c35 }]}>Saved</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={s.statItem} onPress={() => setActiveTab('Listings')} activeOpacity={0.8}>
+            <Text style={[s.statNum, { color: C.cream }]}>{loadingSavedListings ? '—' : savedListings.length}</Text>
+            <Text style={[s.statLabel, { color: C.c35 }]}>Listings</Text>
           </TouchableOpacity>
         </View>
 
@@ -540,6 +621,40 @@ export default function ProfileScreen({ navigation }) {
         {activeTab === 'Saved' && (
           <View style={s.section}>
             {renderPosts(savedPosts, loadingSaved, errorSaved, fetchSavedPosts, false)}
+          </View>
+        )}
+
+        {/* ── Listings tab ───────────────────────────────────────── */}
+        {activeTab === 'Listings' && (
+          <View style={s.section}>
+            {loadingSavedListings && (
+              <View style={s.centerState}>
+                <ActivityIndicator size="small" color={C.vivid} />
+              </View>
+            )}
+            {!loadingSavedListings && errorSavedListings && (
+              <View style={s.centerState}>
+                <Ionicons name="cloud-offline-outline" size={36} color={C.c35} />
+                <Text style={[s.emptyTxt, { color: C.cream }]}>Failed to load</Text>
+                <Text style={[s.emptySub, { color: C.c35 }]}>{errorSavedListings}</Text>
+                <TouchableOpacity style={[s.retryBtn, { backgroundColor: C.vividD, borderColor: C.vivid + '44' }]} onPress={fetchSavedListings} activeOpacity={0.85}>
+                  <Ionicons name="refresh" size={14} color={C.vivid} />
+                  <Text style={[s.retryBtnTxt, { color: C.vivid }]}>Retry</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+            {!loadingSavedListings && !errorSavedListings && savedListings.length === 0 && (
+              <View style={s.centerState}>
+                <View style={[s.emptyIcon, { backgroundColor: C.card }]}>
+                  <Ionicons name="pricetag-outline" size={28} color={C.c35} />
+                </View>
+                <Text style={[s.emptyTxt, { color: C.cream }]}>No saved listings</Text>
+                <Text style={[s.emptySub, { color: C.c35 }]}>Save jobs, housing, or marketplace items to find them here</Text>
+              </View>
+            )}
+            {!loadingSavedListings && savedListings.map(item => (
+              <SavedListingCard key={item.id} item={item} navigation={navigation} C={C} s={s} />
+            ))}
           </View>
         )}
 
@@ -939,6 +1054,19 @@ const getStyles = (C) => StyleSheet.create({
   postStat:     { flexDirection: 'row', alignItems: 'center', gap: 4 },
   postStatTxt:  { fontSize: 12, fontWeight: '600' },
   postTime:     { marginLeft: 'auto', fontSize: 11 },
+
+  // Saved listing cards
+  listingCard:    { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderRadius: 14, padding: 12, marginBottom: 10 },
+  listingIconWrap:{ width: 44, height: 44, borderRadius: 13, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  listingInfo:    { flex: 1, gap: 4 },
+  listingTopRow:  { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  listingBadge:   { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 },
+  listingBadgeTxt:{ fontSize: 10, fontWeight: '800', letterSpacing: 0.3 },
+  listingTitle:   { fontSize: 14, fontWeight: '700' },
+  listingSub:     { fontSize: 12, fontWeight: '600' },
+  listingLocRow:  { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  listingLoc:     { fontSize: 11 },
+  listingThumb:   { width: 54, height: 54, borderRadius: 10, flexShrink: 0 },
 
   // Settings
   menuCard:    { borderRadius: 18, borderWidth: 1, overflow: 'hidden' },

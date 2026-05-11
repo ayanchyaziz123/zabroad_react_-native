@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import MapView, { Marker } from 'react-native-maps';
 import { useTheme } from '../theme/ThemeContext';
 import { useAuthStore } from '../store/authStore';
 import { useJobsStore } from '../store/jobsStore';
@@ -127,6 +128,34 @@ export default function JobDetailScreen({ route, navigation }) {
           <Text style={s.descTxt}>{job.desc}</Text>
         </View>
 
+        {/* Location map */}
+        {(job.lat != null && job.lng != null) && (
+          <View style={s.section}>
+            <Text style={s.sectionTitle}>Location</Text>
+            <MapView
+              style={s.map}
+              region={{
+                latitude:       Number(job.lat),
+                longitude:      Number(job.lng),
+                latitudeDelta:  0.008,
+                longitudeDelta: 0.008,
+              }}
+              scrollEnabled={false}
+              zoomEnabled={false}
+              pitchEnabled={false}
+              rotateEnabled={false}
+            >
+              <Marker coordinate={{ latitude: Number(job.lat), longitude: Number(job.lng) }} />
+            </MapView>
+            {job.location ? (
+              <View style={s.mapLocRow}>
+                <Ionicons name="location-outline" size={13} color={C.c35} />
+                <Text style={[s.mapLocTxt, { color: C.c35 }]} numberOfLines={2}>{job.location}</Text>
+              </View>
+            ) : null}
+          </View>
+        )}
+
         {/* Posted by */}
         <View style={s.section}>
           <Text style={s.sectionTitle}>Posted by</Text>
@@ -232,6 +261,9 @@ const getStyles = (C) => StyleSheet.create({
   section:      { paddingHorizontal: 16, marginBottom: 20 },
   sectionTitle: { fontSize: 10, fontWeight: '800', color: C.c35, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 10 },
   descTxt:      { fontSize: 14, color: C.c60, lineHeight: 22 },
+  map:          { width: '100%', height: 180, borderRadius: 12, overflow: 'hidden', marginBottom: 8 },
+  mapLocRow:    { flexDirection: 'row', alignItems: 'flex-start', gap: 5, marginTop: 4 },
+  mapLocTxt:    { fontSize: 12, flex: 1, lineHeight: 17 },
 
   posterCard:   { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 16, padding: 14 },
   posterAv:     { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },

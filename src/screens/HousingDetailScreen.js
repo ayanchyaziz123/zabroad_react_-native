@@ -5,9 +5,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import MapView, { Marker } from 'react-native-maps';
 import { useTheme } from '../theme/ThemeContext';
 import { useAuthStore } from '../store/authStore';
 import { useHousingStore } from '../store/housingStore';
+import { formatPrice } from '../utils/formatPrice';
 import { HOUSING_CATEGORIES } from './HousingScreen';
 
 const GOLD     = '#F5A623';
@@ -52,7 +54,7 @@ export default function HousingDetailScreen({ route, navigation }) {
 
   async function onShare() {
     await Share.share({
-      message: `${listing.title}${listing.price ? ` — ${listing.price}` : ''} · Found on Zabroad Housing`,
+      message: `${listing.title}${listing.price ? ` — ${formatPrice(listing.price, listing.currency)}` : ''} · Found on Zabroad Housing`,
     });
   }
 
@@ -126,7 +128,7 @@ export default function HousingDetailScreen({ route, navigation }) {
         <View style={[s.mainCard, { backgroundColor: C.card, borderColor: C.border }]}>
 
           <Text style={s.itemTitle}>{listing.title}</Text>
-          <Text style={[s.itemPrice, { color: accent }]}>{listing.price || 'Price on request'}</Text>
+          <Text style={[s.itemPrice, { color: accent }]}>{formatPrice(listing.price, listing.currency) || 'Price on request'}</Text>
 
           {/* Chips */}
           <View style={s.chipsRow}>
@@ -168,6 +170,34 @@ export default function HousingDetailScreen({ route, navigation }) {
           <Text style={[s.description, { color: C.c60 }]}>
             {listing.desc || 'No description provided.'}
           </Text>
+
+          {(listing.lat != null && listing.lng != null) && (
+            <>
+              <View style={[s.divider, { backgroundColor: C.border }]} />
+              <Text style={s.sectionLabel}>LOCATION</Text>
+              <MapView
+                style={s.map}
+                region={{
+                  latitude:       Number(listing.lat),
+                  longitude:      Number(listing.lng),
+                  latitudeDelta:  0.008,
+                  longitudeDelta: 0.008,
+                }}
+                scrollEnabled={false}
+                zoomEnabled={false}
+                pitchEnabled={false}
+                rotateEnabled={false}
+              >
+                <Marker coordinate={{ latitude: Number(listing.lat), longitude: Number(listing.lng) }} />
+              </MapView>
+              {listing.location ? (
+                <View style={s.mapLocRow}>
+                  <Ionicons name="location-outline" size={13} color={C.c35} />
+                  <Text style={[s.mapLocTxt, { color: C.c35 }]} numberOfLines={2}>{listing.location}</Text>
+                </View>
+              ) : null}
+            </>
+          )}
 
           <View style={[s.divider, { backgroundColor: C.border }]} />
 
@@ -271,6 +301,9 @@ const getStyles = (C) => StyleSheet.create({
   divider:      { height: 1, marginVertical: 16 },
   sectionLabel: { fontSize: 10, fontWeight: '700', color: C.c35, letterSpacing: 1.5, marginBottom: 10 },
   description:  { fontSize: 14, lineHeight: 22 },
+  map:          { width: '100%', height: 180, borderRadius: 12, overflow: 'hidden', marginBottom: 8 },
+  mapLocRow:    { flexDirection: 'row', alignItems: 'flex-start', gap: 5, marginBottom: 4 },
+  mapLocTxt:    { fontSize: 12, flex: 1, lineHeight: 17 },
 
   posterRow:      { flexDirection: 'row', alignItems: 'center', gap: 12 },
   posterAv:       { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },

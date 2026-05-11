@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../theme/ThemeContext';
 import { useAuthStore } from '../store/authStore';
+import { sanitizePrice } from '../utils/formatPrice';
 import { MARKET_CATEGORIES } from './MarketplaceScreen';
 
 const ACCENT     = '#00B4D8';
@@ -132,11 +133,12 @@ export default function EditMarketplaceScreen({ route, navigation }) {
               <Ionicons name="pricetag-outline" size={16} color={C.c35} />
               <TextInput
                 style={[s.input, { color: C.cream }]}
-                placeholder='e.g. "$50", "Free", "Negotiable"'
+                placeholder="e.g. 50"
                 placeholderTextColor={C.c35}
                 value={price}
-                onChangeText={setPrice}
-                maxLength={50}
+                onChangeText={v => setPrice(sanitizePrice(v))}
+                keyboardType="decimal-pad"
+                maxLength={12}
               />
             </View>
           </View>
